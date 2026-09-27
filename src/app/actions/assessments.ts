@@ -6,13 +6,13 @@ import { createClient } from "@/lib/supabase/server";
 
 const SCORE_GAP_ALERT = Number(process.env.NEXT_PUBLIC_SCORE_GAP_ALERT || 20);
 
-export const ScoreInputSchema = z.object({
+const ScoreInputSchema = z.object({
   criterionId: z.string().uuid("ID Kriteria tidak valid"),
   score: z.number().min(0, "Nilai minimal 0").max(100, "Nilai maksimal 100"),
   comment: z.string().optional(),
 });
 
-export const SubmitAssessmentSchema = z.object({
+const SubmitAssessmentSchema = z.object({
   registrationId: z.string().uuid("ID Pendaftaran tidak valid"),
   competitionId: z.string().uuid("ID Lomba tidak valid"),
   scores: z.array(ScoreInputSchema).min(1, "Minimal harus ada 1 nilai kriteria"),

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const CriterionSchema = z.object({
+const CriterionSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(2, "Nama kriteria minimal 2 karakter"),
   description: z.string().optional(),
@@ -12,12 +12,12 @@ export const CriterionSchema = z.object({
   maxScore: z.number().default(100),
 });
 
-export const SaveCriteriaSchema = z.object({
+const SaveCriteriaSchema = z.object({
   competitionId: z.string().uuid("ID Lomba tidak valid"),
   criteria: z.array(CriterionSchema).min(1, "Minimal harus ada 1 kriteria"),
 });
 
-export const AssignJudgeSchema = z.object({
+const AssignJudgeSchema = z.object({
   competitionId: z.string().uuid("ID Lomba tidak valid"),
   judgeId: z.string().uuid("ID Juri tidak valid"),
   isChiefJudge: z.boolean().default(false),

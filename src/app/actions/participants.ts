@@ -9,7 +9,7 @@ const MAX_COMPETITION_PER_PARTICIPANT = Number(
   process.env.NEXT_PUBLIC_MAX_COMPETITION_PER_PARTICIPANT || 3
 );
 
-export const ParticipantSchema = z.object({
+const ParticipantSchema = z.object({
   fullName: z.string().min(3, "Nama lengkap minimal 3 karakter"),
   nickname: z.string().optional(),
   email: z.string().email("Format email tidak valid"),
@@ -19,7 +19,7 @@ export const ParticipantSchema = z.object({
   address: z.string().optional(),
 });
 
-export const RegistrationSchema = z.object({
+const RegistrationSchema = z.object({
   participantId: z.string().uuid("ID Peserta tidak valid"),
   competitionId: z.string().uuid("ID Lomba tidak valid"),
   teamName: z.string().optional(),
@@ -35,7 +35,7 @@ export const RegistrationSchema = z.object({
     .optional(),
 });
 
-export const VerifyDocumentSchema = z.object({
+const VerifyDocumentSchema = z.object({
   documentId: z.string().uuid("ID Dokumen tidak valid"),
   participantId: z.string().uuid("ID Peserta tidak valid"),
   status: z.enum(["valid", "tidak_valid"]),

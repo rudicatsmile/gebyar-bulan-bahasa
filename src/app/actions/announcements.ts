@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export const AnnouncementSchema = z.object({
+const AnnouncementSchema = z.object({
   id: z.string().optional(),
   title: z.string().min(5, "Judul pengumuman minimal 5 karakter"),
   category: z.enum(["umum", "jadwal", "pemenang", "penting", "media"]).default("umum"),

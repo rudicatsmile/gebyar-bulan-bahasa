@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const WinnerItemSchema = z.object({
+const WinnerItemSchema = z.object({
   registrationId: z.string().uuid(),
   participantId: z.string().uuid().optional(),
   winnerName: z.string().min(2),
@@ -16,7 +16,7 @@ export const WinnerItemSchema = z.object({
   prize: z.string().optional(),
 });
 
-export const PublishWinnersSchema = z.object({
+const PublishWinnersSchema = z.object({
   competitionId: z.string().uuid("ID Lomba tidak valid"),
   competitionName: z.string(),
   winners: z.array(WinnerItemSchema).min(1, "Minimal harus ada 1 pemenang"),

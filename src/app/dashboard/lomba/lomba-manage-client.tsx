@@ -84,9 +84,10 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
       setCompetitions((prev) =>
         prev.map((c) => (c.id === id ? { ...c, status: currentStatus as any } : c))
       );
+      const errorDetail = err instanceof Error ? err.message : String(err);
       setNotification({
         type: "error",
-        message: `Terjadi kendala jaringan saat memperbarui status ${competitionName}.`,
+        message: `Terjadi kendala saat memperbarui status ${competitionName}: ${errorDetail}`,
       });
     } finally {
       setIsUpdating(null);

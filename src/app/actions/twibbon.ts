@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export const UploadTwibbonSchema = z.object({
+const UploadTwibbonSchema = z.object({
   uploaderName: z.string().min(3, "Nama pengunggah minimal 3 karakter"),
   uploaderInstitution: z.string().min(2, "Nama instansi minimal 2 karakter"),
   caption: z.string().optional(),
@@ -12,7 +12,7 @@ export const UploadTwibbonSchema = z.object({
   participantNumber: z.string().optional(),
 });
 
-export const ModerateTwibbonSchema = z.object({
+const ModerateTwibbonSchema = z.object({
   twibbonId: z.string().uuid("ID Twibbon tidak valid"),
   status: z.enum(["disetujui", "ditolak"]),
   isFeatured: z.boolean().default(false),

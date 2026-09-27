@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export const UpdateMonitorConfigSchema = z.object({
+const UpdateMonitorConfigSchema = z.object({
   displaySlug: z.string().default("utama"),
   rotationIntervalSeconds: z.number().int().min(5).max(120),
   layoutType: z.enum(["rotasi", "tunggal"]).default("rotasi"),
@@ -12,14 +12,14 @@ export const UpdateMonitorConfigSchema = z.object({
   emergencyMessage: z.string().optional().nullable(),
 });
 
-export const PlaylistItemSchema = z.object({
+const PlaylistItemSchema = z.object({
   moduleKey: z.string(),
   durationSeconds: z.number().int().min(5).max(120),
   sortOrder: z.number().int(),
   isActive: z.boolean(),
 });
 
-export const SavePlaylistSchema = z.object({
+const SavePlaylistSchema = z.object({
   displayId: z.string().uuid("ID Display monitor tidak valid"),
   items: z.array(PlaylistItemSchema).min(1, "Playlist minimal harus memiliki 1 modul aktif"),
 });

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const ScheduleInputSchema = z.object({
+const ScheduleInputSchema = z.object({
   id: z.string().optional(),
   competitionId: z.string().uuid().optional().nullable(),
   title: z.string().min(3, "Judul jadwal minimal 3 karakter"),

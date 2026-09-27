@@ -4,12 +4,12 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export const ScanStandSchema = z.object({
+const ScanStandSchema = z.object({
   participantId: z.string().uuid("ID Peserta tidak valid"),
   standCode: z.string().min(4, "Kode stand minimal 4 karakter"),
 });
 
-export const SubmitProofSchema = z.object({
+const SubmitProofSchema = z.object({
   challengeId: z.string().uuid("ID Challenge tidak valid"),
   participantId: z.string().uuid("ID Peserta tidak valid"),
   proofUrl: z.string().min(5, "Tautan atau berkas bukti wajib dilampirkan"),
@@ -17,13 +17,13 @@ export const SubmitProofSchema = z.object({
   description: z.string().optional(),
 });
 
-export const AdjustPointsSchema = z.object({
+const AdjustPointsSchema = z.object({
   participantId: z.string().uuid("ID Peserta tidak valid"),
   points: z.number().int(),
   note: z.string().min(3, "Catatan penyesuaian poin wajib diisi"),
 });
 
-export const RedeemRewardSchema = z.object({
+const RedeemRewardSchema = z.object({
   participantId: z.string().uuid("ID Peserta tidak valid"),
   rewardId: z.string().uuid("ID Reward tidak valid"),
 });
