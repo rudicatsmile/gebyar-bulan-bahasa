@@ -1,12 +1,10 @@
-"use client";
-
 import * as React from "react";
 import Link from "next/link";
 import { PublicNavbar } from "@/components/layouts/PublicNavbar";
 import { PublicFooter } from "@/components/layouts/PublicFooter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -15,10 +13,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CHALLENGE_LEADERBOARD, REWARDS } from "@/lib/dummy-data";
-import { Trophy, Coins, Sparkles, Gift, ArrowRight, ShieldCheck } from "lucide-react";
+import { getChallengeLeaderboard } from "@/lib/supabase/queries";
+import { Trophy, Sparkles, ArrowRight } from "lucide-react";
 
-export default function LeaderboardPage() {
+export const revalidate = 60;
+
+export default async function LeaderboardPage() {
+  const leaderboard = await getChallengeLeaderboard();
+
+  const rank1 = leaderboard[0];
+  const rank2 = leaderboard[1];
+  const rank3 = leaderboard[2];
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <PublicNavbar />
@@ -55,61 +61,69 @@ export default function LeaderboardPage() {
           </div>
 
           {/* Top 3 Podium Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-            {/* Rank 2 */}
-            <Card className="order-2 md:order-1 border-muted-foreground/30 p-6 text-center space-y-3">
-              <span className="text-2xl">🥈</span>
-              <Badge variant="default" className="text-[10px]">
-                Peringkat #2
-              </Badge>
-              <h3 className="font-heading text-base font-bold text-foreground">
-                {CHALLENGE_LEADERBOARD[1].name}
-              </h3>
-              <p className="text-xs text-muted-foreground">{CHALLENGE_LEADERBOARD[1].institution}</p>
-              <div className="text-base font-mono font-bold text-accent">
-                {CHALLENGE_LEADERBOARD[1].points} Poin
-              </div>
-              <Badge variant="gold" className="text-[10px]">
-                {CHALLENGE_LEADERBOARD[1].badge}
-              </Badge>
-            </Card>
+          {leaderboard.length >= 3 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+              {/* Rank 2 */}
+              {rank2 && (
+                <Card className="order-2 md:order-1 border-muted-foreground/30 p-6 text-center space-y-3">
+                  <span className="text-2xl">🥈</span>
+                  <Badge variant="default" className="text-[10px]">
+                    Peringkat #2
+                  </Badge>
+                  <h3 className="font-heading text-base font-bold text-foreground">
+                    {rank2.name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">{rank2.institution}</p>
+                  <div className="text-base font-mono font-bold text-accent">
+                    {rank2.points} Poin
+                  </div>
+                  <Badge variant="gold" className="text-[10px]">
+                    {rank2.badge}
+                  </Badge>
+                </Card>
+              )}
 
-            {/* Rank 1 */}
-            <Card className="order-1 md:order-2 border-accent bg-accent/5 p-8 text-center space-y-4 md:-translate-y-3 shadow-xs">
-              <span className="text-3xl">🥇</span>
-              <Badge variant="gold" className="text-xs">
-                PEMIMPIN KLASEMEN (#1)
-              </Badge>
-              <h3 className="font-heading text-xl font-bold text-foreground">
-                {CHALLENGE_LEADERBOARD[0].name}
-              </h3>
-              <p className="text-xs text-muted-foreground">{CHALLENGE_LEADERBOARD[0].institution}</p>
-              <div className="text-2xl font-mono font-black text-accent">
-                {CHALLENGE_LEADERBOARD[0].points} Poin
-              </div>
-              <Badge variant="gold" className="text-[10px]">
-                {CHALLENGE_LEADERBOARD[0].badge}
-              </Badge>
-            </Card>
+              {/* Rank 1 */}
+              {rank1 && (
+                <Card className="order-1 md:order-2 border-accent bg-accent/5 p-8 text-center space-y-4 md:-translate-y-3 shadow-xs">
+                  <span className="text-3xl">🥇</span>
+                  <Badge variant="gold" className="text-xs">
+                    PEMIMPIN KLASEMEN (#1)
+                  </Badge>
+                  <h3 className="font-heading text-xl font-bold text-foreground">
+                    {rank1.name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">{rank1.institution}</p>
+                  <div className="text-2xl font-mono font-black text-accent">
+                    {rank1.points} Poin
+                  </div>
+                  <Badge variant="gold" className="text-[10px]">
+                    {rank1.badge}
+                  </Badge>
+                </Card>
+              )}
 
-            {/* Rank 3 */}
-            <Card className="order-3 border-amber-700/30 p-6 text-center space-y-3">
-              <span className="text-2xl">🥉</span>
-              <Badge variant="warning" className="text-[10px]">
-                Peringkat #3
-              </Badge>
-              <h3 className="font-heading text-base font-bold text-foreground">
-                {CHALLENGE_LEADERBOARD[2].name}
-              </h3>
-              <p className="text-xs text-muted-foreground">{CHALLENGE_LEADERBOARD[2].institution}</p>
-              <div className="text-base font-mono font-bold text-accent">
-                {CHALLENGE_LEADERBOARD[2].points} Poin
-              </div>
-              <Badge variant="gold" className="text-[10px]">
-                {CHALLENGE_LEADERBOARD[2].badge}
-              </Badge>
-            </Card>
-          </div>
+              {/* Rank 3 */}
+              {rank3 && (
+                <Card className="order-3 border-amber-700/30 p-6 text-center space-y-3">
+                  <span className="text-2xl">🥉</span>
+                  <Badge variant="warning" className="text-[10px]">
+                    Peringkat #3
+                  </Badge>
+                  <h3 className="font-heading text-base font-bold text-foreground">
+                    {rank3.name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">{rank3.institution}</p>
+                  <div className="text-base font-mono font-bold text-accent">
+                    {rank3.points} Poin
+                  </div>
+                  <Badge variant="gold" className="text-[10px]">
+                    {rank3.badge}
+                  </Badge>
+                </Card>
+              )}
+            </div>
+          )}
 
           {/* Table Leaderboard Lengkap */}
           <div className="space-y-4">
@@ -129,7 +143,7 @@ export default function LeaderboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {CHALLENGE_LEADERBOARD.map((item) => (
+                  {leaderboard.map((item) => (
                     <TableRow key={item.rank}>
                       <TableCell className="text-center font-mono font-bold text-xs">
                         #{item.rank}

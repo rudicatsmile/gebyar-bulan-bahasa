@@ -1,25 +1,23 @@
-"use client";
-
 import * as React from "react";
 import Link from "next/link";
 import { PublicNavbar } from "@/components/layouts/PublicNavbar";
 import { PublicFooter } from "@/components/layouts/PublicFooter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { STANDS, CHALLENGES, REWARDS } from "@/lib/dummy-data";
+import { Card } from "@/components/ui/card";
+import { getStands, getRewards } from "@/lib/supabase/queries";
 import {
-  Sparkles,
-  Store,
-  Gift,
   QrCode,
-  ArrowRight,
-  CheckCircle,
-  Coins,
-  Compass,
 } from "lucide-react";
 
-export default function ChallengeInfoPage() {
+export const revalidate = 60;
+
+export default async function ChallengeInfoPage() {
+  const [stands, rewards] = await Promise.all([
+    getStands(),
+    getRewards(),
+  ]);
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <PublicNavbar />
@@ -98,7 +96,7 @@ export default function ChallengeInfoPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {STANDS.map((stand) => (
+              {stands.map((stand) => (
                 <Card key={stand.id} className="p-4 space-y-2.5 hover:border-accent transition-colors">
                   <div className="flex items-center justify-between">
                     <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-primary text-accent">
@@ -134,7 +132,7 @@ export default function ChallengeInfoPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {REWARDS.map((rew) => {
+              {rewards.map((rew) => {
                 const sisa = rew.quota - rew.claimedCount;
                 return (
                   <Card key={rew.id} className="p-5 space-y-3">

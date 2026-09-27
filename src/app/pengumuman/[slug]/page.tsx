@@ -1,41 +1,31 @@
-"use client";
-
 import * as React from "react";
 import Link from "next/link";
-import { notFound, useParams } from "next/navigation";
+import { notFound } from "next/navigation";
 import { PublicNavbar } from "@/components/layouts/PublicNavbar";
 import { PublicFooter } from "@/components/layouts/PublicFooter";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ANNOUNCEMENTS } from "@/lib/dummy-data";
+import { getAnnouncementBySlug } from "@/lib/supabase/queries";
 import {
   ArrowLeft,
   Calendar,
   User,
-  Share2,
-  FileDown,
   Megaphone,
-  Check,
 } from "lucide-react";
 
-export default function PengumumanDetailPage() {
-  const params = useParams();
-  const slug = params?.slug as string;
-  const [copied, setCopied] = React.useState(false);
+export const revalidate = 60;
 
-  const announcement = ANNOUNCEMENTS.find((a) => a.slug === slug);
+interface PageProps {
+  params: Promise<{ slug: string }>;
+}
+
+export default async function PengumumanDetailPage({ params }: PageProps) {
+  const { slug } = await params;
+
+  const announcement = await getAnnouncementBySlug(slug);
   if (!announcement) {
     return notFound();
   }
-
-  const handleShare = () => {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -77,22 +67,12 @@ export default function PengumumanDetailPage() {
                 <User className="h-4 w-4 text-accent" />
                 <span>Diterbitkan oleh: <strong>{announcement.author}</strong></span>
               </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleShare}
-                className="text-xs gap-1.5 cursor-pointer"
-              >
-                {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Share2 className="h-3.5 w-3.5" />}
-                <span>{copied ? "Tautan Disalin!" : "Bagikan Pengumuman"}</span>
-              </Button>
             </div>
           </header>
 
           {/* Content Body */}
           <div className="prose prose-sm sm:prose-base dark:prose-invert max-w-none text-foreground leading-relaxed space-y-4">
-            <p className="text-base sm:text-lg leading-relaxed text-foreground/90">
+            <p className="text-base sm:text-lg leading-relaxed text-foreground/90 whitespace-pre-line">
               {announcement.body}
             </p>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
@@ -100,25 +80,20 @@ export default function PengumumanDetailPage() {
             </p>
           </div>
 
-          {/* Lampiran Dokumen Dummy */}
-          <Card className="border-border bg-card">
-            <CardContent className="p-4 sm:p-5 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 truncate">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <FileDown className="h-5 w-5 text-accent" />
-                </div>
-                <div className="truncate">
-                  <span className="text-xs font-semibold text-foreground block truncate">
-                    Surat_Edaran_Panitia_BulanBahasa_2025.pdf
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    Dokumen Resmi PDF • 1.2 MB
-                  </span>
-                </div>
+          {/* Banner Box */}
+          <Card className="border-accent/40 bg-accent/5 p-6">
+            <CardContent className="p-0 flex items-start gap-4">
+              <div className="h-10 w-10 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
+                <Megaphone className="h-5 w-5 text-accent" />
               </div>
-              <Button size="sm" variant="outline" className="text-xs shrink-0">
-                Unduh PDF
-              </Button>
+              <div className="space-y-1">
+                <h4 className="font-heading text-sm font-bold text-foreground">
+                  Informasi Resmi Gebyar Bulan Bahasa
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Pengumuman ini merupakan rilis resmi dari Seksi Acara & Media Center. Silakan periksa halaman jadwal secara berkala untuk perubahan waktu siaran panggung.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </article>
