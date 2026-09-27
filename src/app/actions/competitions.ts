@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const CriterionSchema = z.object({
   id: z.string().optional(),
@@ -40,7 +40,7 @@ export async function updateCompetitionCriteria(data: z.infer<typeof SaveCriteri
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // Hapus kriteria lama dan insert kriteria baru
     await supabase
@@ -64,7 +64,8 @@ export async function updateCompetitionCriteria(data: z.infer<typeof SaveCriteri
     }
 
     revalidatePath("/dashboard/kriteria");
-    revalidatePath("/dashboard/lomba");
+    revalidatePath(`/dashboard/lomba`);
+    revalidatePath(`/lomba`);
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal memperbarui kriteria.";
@@ -79,7 +80,7 @@ export async function assignJudgeToCompetition(data: z.infer<typeof AssignJudgeS
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // Cek jadwal lomba untuk mendeteksi potensi bentrok waktu juri
     const { data: currentSchedule } = await supabase
@@ -145,19 +146,29 @@ export async function toggleCompetitionStatus(
   status: "pendaftaran" | "berlangsung" | "selesai" | "draft"
 ) {
   try {
-    const supabase = await createClient();
-    const { error } = await supabase
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
       .from("competitions")
-      .update({ status })
-      .eq("id", competitionId);
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", competitionId)
+      .select();
 
     if (error) {
       return { success: false, error: error.message };
     }
 
+    if (!data || data.length === 0) {
+      return { success: false, error: "Cabang lomba tidak ditemukan di database." };
+    }
+
     revalidatePath("/dashboard/lomba");
+    revalidatePath(`/dashboard/lomba/${data[0].slug}`);
     revalidatePath("/lomba");
-    return { success: true };
+    revalidatePath(`/lomba/${data[0].slug}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/monitor");
+    revalidatePath("/");
+    return { success: true, data: data[0] };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal mengubah status lomba.";
     return { success: false, error: message };

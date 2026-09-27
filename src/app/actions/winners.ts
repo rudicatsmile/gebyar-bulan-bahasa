@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const WinnerItemSchema = z.object({
   registrationId: z.string().uuid(),
@@ -28,10 +29,12 @@ export async function publishCompetitionWinners(data: z.infer<typeof PublishWinn
   }
 
   try {
-    const supabase = await createClient();
+    const serverSupabase = await createClient();
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await serverSupabase.auth.getUser();
+
+    const supabase = createAdminClient();
 
     // Hapus pemenang lama untuk lomba ini jika ada (idempotent)
     await supabase.from("winners").delete().eq("competition_id", parsed.data.competitionId);

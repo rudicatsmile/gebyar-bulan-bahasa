@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const ScheduleInputSchema = z.object({
   id: z.string().optional(),
@@ -26,7 +26,7 @@ export async function upsertSchedule(data: z.infer<typeof ScheduleInputSchema>) 
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // Validasi Anti-Bentrok Panggung jika status = 'berlangsung'
     if (parsed.data.status === "berlangsung" && parsed.data.stage) {
@@ -88,7 +88,7 @@ export async function setScheduleStatus(
   status: "terjadwal" | "berlangsung" | "selesai"
 ) {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // Jika ingin dijadikan 'berlangsung', pastikan tidak ada bentrok di panggung yang sama
     if (status === "berlangsung") {
