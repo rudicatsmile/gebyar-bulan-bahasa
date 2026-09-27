@@ -237,66 +237,61 @@ export function DashboardLayout({
         {/* Sidebar Footer with Role Switcher Quick Links */}
         <div className="p-3 border-t border-border bg-muted/20">
           {!collapsed ? (
-            process.env.NODE_ENV === "development" ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-accent">Peran Demo (Dev Only):</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1 text-[11px]">
-                  <Link
-                    href="/dashboard"
-                    className={cn(
-                      "px-2 py-1 rounded text-center border transition-colors",
-                      role === "seksi_acara"
-                        ? "bg-primary text-primary-foreground border-primary font-bold"
-                        : "border-border text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    Acara
-                  </Link>
-                  <Link
-                    href="/juri"
-                    className={cn(
-                      "px-2 py-1 rounded text-center border transition-colors",
-                      role === "juri"
-                        ? "bg-primary text-primary-foreground border-primary font-bold"
-                        : "border-border text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    Juri
-                  </Link>
-                  <Link
-                    href="/media"
-                    className={cn(
-                      "px-2 py-1 rounded text-center border transition-colors",
-                      role === "media_center"
-                        ? "bg-primary text-primary-foreground border-primary font-bold"
-                        : "border-border text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    Media
-                  </Link>
-                  <Link
-                    href="/peserta"
-                    className={cn(
-                      "px-2 py-1 rounded text-center border transition-colors",
-                      role === "peserta"
-                        ? "bg-primary text-primary-foreground border-primary font-bold"
-                        : "border-border text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    Peserta
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between text-xs text-muted-foreground px-1 py-0.5">
-                <span className="font-heading text-[11px] truncate">Gebyar Bulan Bahasa</span>
-                <Link href="/" className="hover:text-foreground shrink-0" title="Ke Beranda Publik">
-                  <LogOut className="h-3.5 w-3.5" />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span className="font-semibold text-accent">Pindah Peran Acara:</span>
+                <Link href="/" title="Ke Beranda Publik" className="text-muted-foreground hover:text-foreground">
+                  <LogOut className="h-3 w-3" />
                 </Link>
               </div>
-            )
+              <div className="grid grid-cols-2 gap-1 text-[11px]">
+                <Link
+                  href="/dashboard"
+                  className={cn(
+                    "px-2 py-1 rounded text-center border transition-colors",
+                    role === "seksi_acara"
+                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  Acara
+                </Link>
+                <Link
+                  href="/juri"
+                  className={cn(
+                    "px-2 py-1 rounded text-center border transition-colors",
+                    role === "juri"
+                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  Juri
+                </Link>
+                <Link
+                  href="/media"
+                  className={cn(
+                    "px-2 py-1 rounded text-center border transition-colors",
+                    role === "media_center"
+                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  Media
+                </Link>
+                <Link
+                  href="/peserta"
+                  className={cn(
+                    "px-2 py-1 rounded text-center border transition-colors",
+                    role === "peserta"
+                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  Peserta
+                </Link>
+              </div>
+            </div>
+
           ) : (
             <div className="flex justify-center">
               <Link href="/" title="Ke Beranda Publik">
