@@ -8,14 +8,39 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { STANDS } from "@/lib/dummy-data";
-import { QrCode, ArrowLeft, Camera, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, AlertCircle } from "lucide-react";
 import { claimStandVisit } from "@/app/actions/challenges";
+import { createClient } from "@/lib/supabase/client";
 
 export default function PesertaScanStandPage() {
+  const isDev = process.env.NODE_ENV === "development";
   const [manualCode, setManualCode] = React.useState("");
   const [successStand, setSuccessStand] = React.useState<{ name: string; points: number } | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
   const [scanningSimulated, setScanningSimulated] = React.useState(false);
+
+  // Helper to retrieve active participant UUID or fallback in dev
+  const resolveParticipantId = async (): Promise<string> => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: part } = await supabase
+          .from("participants")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (part?.id) return part.id;
+      }
+    } catch {
+      // Fallback
+    }
+    return "11111111-1111-1111-1111-111111111111";
+  };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,10 +53,9 @@ export default function PesertaScanStandPage() {
     }
 
     try {
-      // In production/dynamic mode, participantId comes from session or dummy participant
-      const dummyParticipantId = "11111111-1111-1111-1111-111111111111";
+      const participantId = await resolveParticipantId();
       const res = await claimStandVisit({
-        participantId: dummyParticipantId,
+        participantId,
         standCode: cleanCode,
       });
 
@@ -53,9 +77,9 @@ export default function PesertaScanStandPage() {
     const matched = STANDS.find((s) => s.code === standCode);
 
     try {
-      const dummyParticipantId = "11111111-1111-1111-1111-111111111111";
+      const participantId = await resolveParticipantId();
       await claimStandVisit({
-        participantId: dummyParticipantId,
+        participantId,
         standCode,
       });
     } catch {
@@ -136,23 +160,25 @@ export default function PesertaScanStandPage() {
             <span className="text-xs font-semibold">Kamera Pemindai QR Aktif</span>
             <span className="text-[10px] text-white/60">Arahkan pada kode QR stand</span>
 
-            {/* Quick Demo Scan Triggers */}
-            <div className="pt-4 flex flex-wrap justify-center gap-1.5 z-10">
-              <button
-                type="button"
-                onClick={() => handleSimulateScan("PUISI01")}
-                className="px-2 py-1 rounded text-[10px] font-mono bg-white/20 hover:bg-accent hover:text-black transition-colors cursor-pointer"
-              >
-                Simulasi: Scan PUISI01
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSimulateScan("FILM02")}
-                className="px-2 py-1 rounded text-[10px] font-mono bg-white/20 hover:bg-accent hover:text-black transition-colors cursor-pointer"
-              >
-                Simulasi: Scan FILM02
-              </button>
-            </div>
+            {/* Quick Demo Scan Triggers (Dev Only) */}
+            {isDev && (
+              <div className="pt-4 flex flex-wrap justify-center gap-1.5 z-10">
+                <button
+                  type="button"
+                  onClick={() => handleSimulateScan("PUISI01")}
+                  className="px-2 py-1 rounded text-[10px] font-mono bg-white/20 hover:bg-accent hover:text-black transition-colors cursor-pointer"
+                >
+                  Dev: Scan PUISI01
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSimulateScan("FILM02")}
+                  className="px-2 py-1 rounded text-[10px] font-mono bg-white/20 hover:bg-accent hover:text-black transition-colors cursor-pointer"
+                >
+                  Dev: Scan FILM02
+                </button>
+              </div>
+            )}
           </div>
 
           <p className="text-[11px] text-muted-foreground">
