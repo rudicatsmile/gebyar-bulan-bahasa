@@ -277,6 +277,35 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
   }
 }
 
+export async function getCompetitionById(idOrSlug: string): Promise<Competition | null> {
+  try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+    const slug = compIdToSlug[idOrSlug] || idOrSlug;
+
+    const query = publicClient.from("competitions").select("*, competition_criteria(*)");
+    const { data, error } = isUuid
+      ? await query.eq("id", idOrSlug).maybeSingle()
+      : await query.eq("slug", slug).maybeSingle();
+
+    if (error || !data) {
+      return (
+        COMPETITIONS.find(
+          (c) => c.id === idOrSlug || c.slug === idOrSlug || c.slug === slug
+        ) || null
+      );
+    }
+    return formatCompetition(data as unknown as DbCompetitionWithCriteria);
+  } catch (err) {
+    console.error("Supabase getCompetitionById fallback:", err);
+    const slug = compIdToSlug[idOrSlug] || idOrSlug;
+    return (
+      COMPETITIONS.find(
+        (c) => c.id === idOrSlug || c.slug === idOrSlug || c.slug === slug
+      ) || null
+    );
+  }
+}
+
 export async function getSchedules(): Promise<ScheduleItem[]> {
   try {
     const { data, error } = await publicClient

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { notFound, useParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,17 +15,71 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { COMPETITIONS, SCORING_RECAPS, JUDGES } from "@/lib/dummy-data";
+import { COMPETITIONS, SCORING_RECAPS, type Competition } from "@/lib/dummy-data";
 import { ArrowLeft, CheckCircle2, AlertTriangle, ShieldCheck, Award } from "lucide-react";
+
+const compIdToSlug: Record<string, string> = {
+  "a0000000-0000-0000-0000-000000000001": "membaca-puisi",
+  "a0000000-0000-0000-0000-000000000002": "film-pendek",
+  "a0000000-0000-0000-0000-000000000003": "pidato",
+  "a0000000-0000-0000-0000-000000000004": "melukis-tas-kanvas",
+  "a0000000-0000-0000-0000-000000000005": "monolog",
+  "a0000000-0000-0000-0000-000000000006": "mc-formal",
+  "a0000000-0000-0000-0000-000000000007": "palang-pintu",
+  "a0000000-0000-0000-0000-000000000008": "vokal-grup",
+};
+
+const slugToDummyId: Record<string, string> = {
+  "membaca-puisi": "comp-1",
+  "film-pendek": "comp-2",
+  "pidato": "comp-3",
+  "melukis-tas-kanvas": "comp-4",
+  "monolog": "comp-5",
+  "mc-formal": "comp-6",
+  "palang-pintu": "comp-7",
+  "vokal-grup": "comp-8",
+};
 
 export default function DashboardPenilaianDetailPage() {
   const params = useParams();
-  const compId = params?.competitionId as string;
+  const rawCompId = (params?.competitionId as string) || "";
 
-  const comp = COMPETITIONS.find((c) => c.id === compId);
-  if (!comp) return notFound();
+  const targetSlug = compIdToSlug[rawCompId] || rawCompId;
+  const initialComp =
+    COMPETITIONS.find(
+      (c) =>
+        c.id === rawCompId ||
+        c.slug === rawCompId ||
+        c.slug === targetSlug ||
+        c.id === slugToDummyId[targetSlug]
+    ) || COMPETITIONS[0];
 
-  const recaps = SCORING_RECAPS[compId] || [];
+  const [comp, setComp] = React.useState<Competition>(initialComp);
+
+  // Sync with Supabase live data if available
+  React.useEffect(() => {
+    async function fetchLiveComp() {
+      try {
+        const { getCompetitionById } = await import("@/lib/supabase/queries");
+        const live = await getCompetitionById(rawCompId);
+        if (live) {
+          setComp(live);
+        }
+      } catch (err) {
+        console.error("Gagal memuat kompetisi dari Supabase:", err);
+      }
+    }
+    fetchLiveComp();
+  }, [rawCompId]);
+
+  const dummyKey = slugToDummyId[comp.slug] || rawCompId;
+  const recaps =
+    SCORING_RECAPS[rawCompId] ||
+    SCORING_RECAPS[comp.id] ||
+    SCORING_RECAPS[dummyKey] ||
+    SCORING_RECAPS["comp-1"] ||
+    [];
+
   const [isFinalized, setIsFinalized] = React.useState(false);
 
   // Ambang batas selisih antar-juri (20 poin)
@@ -98,8 +152,16 @@ export default function DashboardPenilaianDetailPage() {
                 <TableRow>
                   <TableHead className="w-16 text-center">Rank</TableHead>
                   <TableHead>Peserta & Instansi</TableHead>
-                  <TableHead className="text-center">Juri 1 (Siti)</TableHead>
-                  <TableHead className="text-center">Juri 2 (Farhan)</TableHead>
+                  <TableHead className="text-center">
+                    {recaps[0]?.scoresPerJudge[0]?.judgeName
+                      ? `Juri 1 (${recaps[0].scoresPerJudge[0].judgeName.split(" ")[0]})`
+                      : "Juri 1"}
+                  </TableHead>
+                  <TableHead className="text-center">
+                    {recaps[0]?.scoresPerJudge[1]?.judgeName
+                      ? `Juri 2 (${recaps[0].scoresPerJudge[1].judgeName.split(" ")[0]})`
+                      : "Juri 2"}
+                  </TableHead>
                   <TableHead className="text-center">Selisih Skor</TableHead>
                   <TableHead className="text-right">Skor Akhir (Agregat)</TableHead>
                   <TableHead className="text-center">Status Audit</TableHead>
@@ -107,8 +169,14 @@ export default function DashboardPenilaianDetailPage() {
               </TableHeader>
               <TableBody>
                 {recaps.map((item) => {
-                  const s1 = item.scoresPerJudge.find((j) => j.judgeId === "judge-1")?.weightedTotal || 0;
-                  const s2 = item.scoresPerJudge.find((j) => j.judgeId === "judge-8")?.weightedTotal || 0;
+                  const s1 =
+                    item.scoresPerJudge.find((j) => j.judgeId === "judge-1")?.weightedTotal ??
+                    item.scoresPerJudge[0]?.weightedTotal ??
+                    0;
+                  const s2 =
+                    item.scoresPerJudge.find((j) => j.judgeId === "judge-8")?.weightedTotal ??
+                    item.scoresPerJudge[1]?.weightedTotal ??
+                    s1;
                   const diff = Math.abs(s1 - s2);
                   const isGapExceeded = diff > THRESHOLD;
 

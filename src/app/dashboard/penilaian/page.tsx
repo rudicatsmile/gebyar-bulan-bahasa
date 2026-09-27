@@ -18,6 +18,34 @@ import { COMPETITIONS, SCORING_RECAPS } from "@/lib/dummy-data";
 import { Calculator, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function DashboardPenilaianPage() {
+  const [competitions, setCompetitions] = React.useState(COMPETITIONS);
+
+  React.useEffect(() => {
+    async function loadLiveComps() {
+      try {
+        const { getCompetitions } = await import("@/lib/supabase/queries");
+        const data = await getCompetitions();
+        if (data && data.length > 0) {
+          setCompetitions(data);
+        }
+      } catch (err) {
+        console.error("Gagal load kompetisi penilaian:", err);
+      }
+    }
+    loadLiveComps();
+  }, []);
+
+  const slugToDummyId: Record<string, string> = {
+    "membaca-puisi": "comp-1",
+    "film-pendek": "comp-2",
+    "pidato": "comp-3",
+    "melukis-tas-kanvas": "comp-4",
+    "monolog": "comp-5",
+    "mc-formal": "comp-6",
+    "palang-pintu": "comp-7",
+    "vokal-grup": "comp-8",
+  };
+
   return (
     <DashboardLayout role="seksi_acara">
       <div className="space-y-6">
@@ -40,8 +68,9 @@ export default function DashboardPenilaianPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {COMPETITIONS.map((comp) => {
-            const recaps = SCORING_RECAPS[comp.id] || [];
+          {competitions.map((comp) => {
+            const dummyId = slugToDummyId[comp.slug] || comp.id;
+            const recaps = SCORING_RECAPS[comp.id] || SCORING_RECAPS[dummyId] || [];
             const hasFinalScores = recaps.length > 0;
             const isLive = comp.status === "berlangsung";
 
