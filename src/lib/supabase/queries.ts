@@ -315,6 +315,25 @@ export async function getAnnouncements(): Promise<Announcement[]> {
   }
 }
 
+export async function getAllAnnouncements(): Promise<Announcement[]> {
+  try {
+    const { data, error } = await publicClient
+      .from("announcements")
+      .select("*")
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return ANNOUNCEMENTS;
+    }
+    return data.map(formatAnnouncement);
+  } catch (err) {
+    console.error("Supabase getAllAnnouncements fallback:", err);
+    return ANNOUNCEMENTS;
+  }
+}
+
+
 export async function getAnnouncementBySlug(slug: string): Promise<Announcement | null> {
   try {
     const { data, error } = await publicClient

@@ -2,29 +2,30 @@
 
 import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
-import { RealtimeChannel } from "@supabase/supabase-js";
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
-interface UseRealtimeOptions {
+interface UseRealtimeOptions<T extends Record<string, unknown> = Record<string, unknown>> {
   table: string;
   schema?: string;
   event?: "*" | "INSERT" | "UPDATE" | "DELETE";
   filter?: string;
-  onPayload?: (payload: any) => void;
+  onPayload?: (payload: RealtimePostgresChangesPayload<T>) => void;
 }
 
-export function useRealtimeTable({
+export function useRealtimeTable<T extends Record<string, unknown> = Record<string, unknown>>({
   table,
   schema = "public",
   event = "*",
   filter,
   onPayload,
-}: UseRealtimeOptions) {
+}: UseRealtimeOptions<T>) {
   const [status, setStatus] = React.useState<ConnectionStatus>("connecting");
   const [lastUpdate, setLastUpdate] = React.useState<Date | null>(null);
 
   React.useEffect(() => {
+    let isMounted = true;
     const supabase = createClient();
     let channel: RealtimeChannel | null = null;
 
@@ -34,14 +35,15 @@ export function useRealtimeTable({
       channel = supabase
         .channel(channelName)
         .on(
-          "postgres_changes" as any,
+          "postgres_changes" as "system",
           {
             event,
             schema,
             table,
             filter,
           },
-          (payload: any) => {
+          (payload: RealtimePostgresChangesPayload<T>) => {
+            if (!isMounted) return;
             setLastUpdate(new Date());
             if (onPayload) {
               onPayload(payload);
@@ -49,6 +51,7 @@ export function useRealtimeTable({
           }
         )
         .subscribe((subscriptionStatus) => {
+          if (!isMounted) return;
           if (subscriptionStatus === "SUBSCRIBED") {
             setStatus("connected");
           } else if (subscriptionStatus === "CLOSED") {
@@ -58,10 +61,15 @@ export function useRealtimeTable({
           }
         });
     } catch {
-      setStatus("disconnected");
+      if (isMounted) {
+        Promise.resolve().then(() => {
+          if (isMounted) setStatus("disconnected");
+        });
+      }
     }
 
     return () => {
+      isMounted = false;
       if (channel) {
         supabase.removeChannel(channel);
       }

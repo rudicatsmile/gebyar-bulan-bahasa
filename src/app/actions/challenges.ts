@@ -96,8 +96,9 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
         pointsAwarded: stand.points_per_visit,
       },
     };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal mengklaim poin stand." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mengklaim poin stand.";
+    return { success: false, error: message };
   }
 }
 
@@ -180,8 +181,9 @@ export async function redeemReward(data: z.infer<typeof RedeemRewardSchema>) {
     revalidatePath("/peserta");
     revalidatePath("/dashboard/challenge/reward");
     return { success: true, data: { pickupCode, rewardName: reward.name } };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal memproses penukaran reward." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memproses penukaran reward.";
+    return { success: false, error: message };
   }
 }
 
@@ -212,7 +214,8 @@ export async function adjustPointsByCommittee(data: z.infer<typeof AdjustPointsS
     revalidatePath("/dashboard/peserta");
     revalidatePath("/leaderboard");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal melakukan penyesuaian poin.";
+    return { success: false, error: message };
   }
 }

@@ -1,15 +1,10 @@
-"use client";
-
-import * as React from "react";
 import Link from "next/link";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  COMPETITIONS,
   PARTICIPANTS,
-  SCHEDULES,
   ACTIVITY_LOGS,
   JUDGES,
 } from "@/lib/dummy-data";
@@ -19,18 +14,59 @@ import {
   UserCheck,
   Flame,
   Clock,
-  ArrowRight,
-  ShieldCheck,
   AlertTriangle,
   Megaphone,
   Tv,
 } from "lucide-react";
+import { getCompetitions } from "@/lib/supabase/queries";
+import { publicClient } from "@/lib/supabase/public";
 
-export default function DashboardSeksiAcaraPage() {
-  const totalParticipants = PARTICIPANTS.length;
-  const verifiedParticipants = PARTICIPANTS.filter((p) => p.status === "terverifikasi").length;
-  const pendingParticipants = PARTICIPANTS.filter((p) => p.status === "menunggu_verifikasi").length;
-  const activeCompetitions = COMPETITIONS.filter((c) => c.status === "berlangsung").length;
+export const dynamic = "force-dynamic";
+
+export default async function DashboardSeksiAcaraPage() {
+  const competitions = await getCompetitions();
+
+  // Fetch counts from Supabase with graceful fallback
+  let totalParticipants = PARTICIPANTS.length;
+  let verifiedParticipants = PARTICIPANTS.filter((p) => p.status === "terverifikasi").length;
+  let pendingParticipants = PARTICIPANTS.filter((p) => p.status === "menunggu_verifikasi").length;
+  let activeJudges = JUDGES.length;
+  let activityLogs = ACTIVITY_LOGS;
+
+  try {
+    const [partRes, verRes, pendRes, judgeRes, logRes] = await Promise.all([
+      publicClient.from("participants").select("*", { count: "exact", head: true }),
+      publicClient.from("participants").select("*", { count: "exact", head: true }).eq("status", "terverifikasi"),
+      publicClient.from("participants").select("*", { count: "exact", head: true }).eq("status", "menunggu_verifikasi"),
+      publicClient.from("profiles").select("*", { count: "exact", head: true }).eq("role", "juri"),
+      publicClient.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(6),
+    ]);
+
+    if (partRes.count !== null && partRes.count > 0) {
+      totalParticipants = partRes.count;
+      verifiedParticipants = verRes.count ?? 0;
+      pendingParticipants = pendRes.count ?? 0;
+    }
+
+    if (judgeRes.count !== null && judgeRes.count > 0) {
+      activeJudges = judgeRes.count;
+    }
+
+    if (logRes.data && logRes.data.length > 0) {
+      activityLogs = logRes.data.map((l) => ({
+        id: l.id,
+        actor: l.actor_role?.toUpperCase() || "SISTEM",
+        role: l.actor_role || "seksi_acara",
+        action: l.action,
+        description: l.description || l.action,
+        timestamp: new Date(l.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB",
+      }));
+    }
+  } catch (err) {
+    console.error("Dashboard overview stats error, using cached fallback:", err);
+  }
+
+  const activeCompetitions = competitions.filter((c) => c.status === "berlangsung").length;
 
   return (
     <DashboardLayout role="seksi_acara">
@@ -42,7 +78,7 @@ export default function DashboardSeksiAcaraPage() {
               Ringkasan Operasional Acara
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Monitoring pelaksanaan 8 cabang lomba, dewan juri, dan verifikasi peserta Hari ke-2 (27 Okt 2025).
+              Monitoring pelaksanaan {competitions.length} cabang lomba, dewan juri, dan verifikasi peserta acara.
             </p>
           </div>
 
@@ -89,10 +125,10 @@ export default function DashboardSeksiAcaraPage() {
               <span className="font-mono text-3xl font-bold text-danger">
                 {activeCompetitions}
               </span>
-              <span className="text-xs text-muted-foreground">dari 8 Cabang</span>
+              <span className="text-xs text-muted-foreground">dari {competitions.length} Cabang</span>
             </div>
             <p className="text-[11px] text-muted-foreground pt-1 border-t border-border">
-              Membaca Puisi & Melukis Tas Kanvas
+              {activeCompetitions > 0 ? "Lomba sedang berlangsung di venue" : "Tidak ada lomba aktif saat ini"}
             </p>
           </Card>
 
@@ -103,12 +139,12 @@ export default function DashboardSeksiAcaraPage() {
             </div>
             <div className="flex items-baseline gap-2">
               <span className="font-mono text-3xl font-bold text-foreground">
-                {JUDGES.length}
+                {activeJudges}
               </span>
-              <span className="text-xs text-muted-foreground">Juri Aktif</span>
+              <span className="text-xs text-muted-foreground">Juri Terdaftar</span>
             </div>
             <p className="text-[11px] text-muted-foreground pt-1 border-t border-border">
-              2 juri sedang menilai di Stage A
+              Sistem penilaian real-time aktif
             </p>
           </Card>
 
@@ -132,14 +168,14 @@ export default function DashboardSeksiAcaraPage() {
           </Card>
         </div>
 
-        {/* Status Monitoring 8 Lomba & Activity Logs */}
+        {/* Status Monitoring Lomba & Activity Logs */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Status 8 Lomba */}
+          {/* Status Lomba */}
           <div className="lg:col-span-7 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-heading text-lg font-bold text-foreground flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-accent" />
-                <span>Monitoring Progres 8 Lomba</span>
+                <span>Monitoring Progres {competitions.length} Lomba</span>
               </h2>
               <Link href="/dashboard/lomba" className="text-xs text-accent hover:underline">
                 Kelola Semua →
@@ -147,7 +183,7 @@ export default function DashboardSeksiAcaraPage() {
             </div>
 
             <div className="rounded-xl border border-border bg-card divide-y divide-border">
-              {COMPETITIONS.map((comp) => {
+              {competitions.map((comp) => {
                 const statusVariant =
                   comp.status === "berlangsung"
                     ? "live"
@@ -202,7 +238,7 @@ export default function DashboardSeksiAcaraPage() {
             </div>
 
             <div className="rounded-xl border border-border bg-card p-4 space-y-3.5">
-              {ACTIVITY_LOGS.map((log) => (
+              {activityLogs.map((log) => (
                 <div key={log.id} className="text-xs space-y-1 pb-3 border-b border-border/60 last:border-0 last:pb-0">
                   <div className="flex items-center justify-between">
                     <strong className="text-foreground">{log.actor}</strong>

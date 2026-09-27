@@ -82,8 +82,9 @@ export async function registerParticipant(data: z.infer<typeof ParticipantSchema
 
     revalidatePath("/dashboard/peserta");
     return { success: true, data: participant };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal mendaftar peserta." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mendaftar peserta.";
+    return { success: false, error: message };
   }
 }
 
@@ -146,8 +147,9 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
     revalidatePath("/dashboard/pendaftaran");
     revalidatePath("/peserta/pendaftaran");
     return { success: true, data: reg };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal mendaftar lomba." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mendaftar lomba.";
+    return { success: false, error: message };
   }
 }
 
@@ -194,7 +196,8 @@ export async function verifyParticipantDocument(data: z.infer<typeof VerifyDocum
     revalidatePath("/dashboard/peserta/verifikasi");
     revalidatePath(`/dashboard/peserta/${parsed.data.participantId}`);
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal memverifikasi dokumen." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memverifikasi dokumen.";
+    return { success: false, error: message };
   }
 }

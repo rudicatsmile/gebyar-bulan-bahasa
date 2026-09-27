@@ -77,8 +77,9 @@ export async function upsertSchedule(data: z.infer<typeof ScheduleInputSchema>) 
     revalidatePath("/monitor");
     revalidatePath("/monitor/jadwal");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal menyimpan jadwal." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menyimpan jadwal.";
+    return { success: false, error: message };
   }
 }
 
@@ -126,7 +127,8 @@ export async function setScheduleStatus(
     revalidatePath("/jadwal");
     revalidatePath("/monitor");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memperbarui status jadwal.";
+    return { success: false, error: message };
   }
 }

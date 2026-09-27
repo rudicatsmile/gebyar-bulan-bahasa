@@ -78,7 +78,24 @@ export async function upsertAnnouncement(data: z.infer<typeof AnnouncementSchema
     revalidatePath("/pengumuman");
     revalidatePath("/monitor");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal menyimpan pengumuman." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menyimpan pengumuman.";
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteAnnouncement(id: string) {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from("announcements").delete().eq("id", id);
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/dashboard/pengumuman");
+    revalidatePath("/pengumuman");
+    revalidatePath("/monitor");
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menghapus pengumuman.";
+    return { success: false, error: message };
   }
 }

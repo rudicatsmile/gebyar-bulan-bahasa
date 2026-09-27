@@ -50,8 +50,9 @@ export async function updateMonitorConfig(data: z.infer<typeof UpdateMonitorConf
     revalidatePath("/media/monitor");
     revalidatePath("/dashboard/pengaturan");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal memperbarui konfigurasi monitor." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memperbarui konfigurasi monitor.";
+    return { success: false, error: message };
   }
 }
 
@@ -73,7 +74,8 @@ export async function setEmergencyAlert(message: string | null) {
     revalidatePath("/media/monitor");
     revalidatePath("/dashboard/broadcast");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mengatur siaran darurat.";
+    return { success: false, error: message };
   }
 }

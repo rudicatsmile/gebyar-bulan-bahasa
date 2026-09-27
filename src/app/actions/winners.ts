@@ -85,7 +85,8 @@ export async function publishCompetitionWinners(data: z.infer<typeof PublishWinn
     revalidatePath("/monitor");
     revalidatePath("/monitor/pemenang");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal mempublikasikan pemenang." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mempublikasikan pemenang.";
+    return { success: false, error: message };
   }
 }

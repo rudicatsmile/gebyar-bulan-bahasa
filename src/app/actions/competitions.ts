@@ -64,10 +64,11 @@ export async function updateCompetitionCriteria(data: z.infer<typeof SaveCriteri
     }
 
     revalidatePath("/dashboard/kriteria");
-    revalidatePath(`/dashboard/lomba`);
+    revalidatePath("/dashboard/lomba");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal memperbarui kriteria." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memperbarui kriteria.";
+    return { success: false, error: message };
   }
 }
 
@@ -89,7 +90,7 @@ export async function assignJudgeToCompetition(data: z.infer<typeof AssignJudgeS
 
     if (currentSchedule) {
       // Periksa apakah juri sudah bertugas di lomba lain pada tanggal & jam yang beririsan
-      const { data: otherAssignments } = await supabase
+      await supabase
         .from("competition_judges")
         .select(`
           competition_id,
@@ -104,8 +105,6 @@ export async function assignJudgeToCompetition(data: z.infer<typeof AssignJudgeS
         `)
         .eq("judge_id", parsed.data.judgeId)
         .eq("status", "aktif");
-
-      // Deteksi irisan waktu sederhana bila ada
     }
 
     // Jika ditandai sebagai Chief Judge, pastikan juri lain tidak ditandai chief judge
@@ -135,8 +134,9 @@ export async function assignJudgeToCompetition(data: z.infer<typeof AssignJudgeS
     revalidatePath("/dashboard/juri/penugasan");
     revalidatePath("/dashboard/lomba");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal menugaskan juri." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menugaskan juri.";
+    return { success: false, error: message };
   }
 }
 
@@ -158,7 +158,8 @@ export async function toggleCompetitionStatus(
     revalidatePath("/dashboard/lomba");
     revalidatePath("/lomba");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mengubah status lomba.";
+    return { success: false, error: message };
   }
 }

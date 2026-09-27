@@ -51,8 +51,9 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
     revalidatePath("/dashboard/twibbon");
     revalidatePath("/media/twibbon");
     return { success: true, data: twibbon };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal mengunggah twibbon." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mengunggah twibbon.";
+    return { success: false, error: message };
   }
 }
 
@@ -87,7 +88,8 @@ export async function moderateTwibbon(data: z.infer<typeof ModerateTwibbonSchema
     revalidatePath("/monitor");
     revalidatePath("/monitor/twibbon");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal memoderasi twibbon." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memoderasi twibbon.";
+    return { success: false, error: message };
   }
 }

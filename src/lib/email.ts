@@ -41,8 +41,9 @@ export async function sendEmail({
     }
 
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Kesalahan jaringan pengiriman email." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Kesalahan jaringan pengiriman email.";
+    return { success: false, error: message };
   }
 }
 

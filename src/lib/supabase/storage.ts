@@ -48,8 +48,9 @@ export async function uploadPublicFile(
     } = supabase.storage.from(bucket).getPublicUrl(data.path);
 
     return { url: publicUrl, error: null };
-  } catch (err: any) {
-    return { url: null, error: err.message || "Gagal mengunggah berkas." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mengunggah berkas.";
+    return { url: null, error: message };
   }
 }
 
@@ -68,7 +69,8 @@ export async function getPrivateDocumentSignedUrl(
     }
 
     return { url: data.signedUrl, error: null };
-  } catch (err: any) {
-    return { url: null, error: err.message || "Gagal mendapatkan tautan dokumen." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mendapatkan tautan dokumen.";
+    return { url: null, error: message };
   }
 }

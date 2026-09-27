@@ -114,8 +114,9 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
     revalidatePath("/dashboard/penilaian");
     revalidatePath("/papan-skor");
     return { success: true, data: { weightedTotal, status } };
-  } catch (err: any) {
-    return { success: false, error: err.message || "Gagal menyimpan penilaian." };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menyimpan penilaian.";
+    return { success: false, error: message };
   }
 }
 
@@ -153,7 +154,7 @@ export async function detectScoreGaps(competitionId: string) {
     }
 
     return { gaps };
-  } catch (err: any) {
+  } catch {
     return { gaps: [] };
   }
 }
@@ -191,7 +192,8 @@ export async function correctAssessmentByAdmin(
 
     revalidatePath("/dashboard/penilaian");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mengoreksi nilai.";
+    return { success: false, error: message };
   }
 }
