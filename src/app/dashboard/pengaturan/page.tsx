@@ -66,7 +66,6 @@ export default function DashboardPengaturanPage() {
       }
     } catch (err) {
       console.error("Gagal load settings:", err);
-      // Fallback Server Action jika fetch gagal
       try {
         const actionRes = await getEventSettings();
         if (actionRes.success && actionRes.settings) {
@@ -89,8 +88,15 @@ export default function DashboardPengaturanPage() {
     loadSettings();
   }, [loadSettings]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
+    if (!eventName.trim() || !eventTheme.trim()) {
+      setFeedback({
+        type: "error",
+        message: "Nama acara dan tema acara wajib diisi.",
+      });
+      return;
+    }
+
     setIsSaving(true);
     setFeedback(null);
 
@@ -104,7 +110,7 @@ export default function DashboardPengaturanPage() {
     };
 
     try {
-      // 1. Coba simpan via API Route /api/settings (REST, paling stabil)
+      // 1. Coba simpan via API Route /api/settings (REST, paling andal)
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -119,7 +125,6 @@ export default function DashboardPengaturanPage() {
             message: "Pengaturan acara berhasil disimpan ke tabel event_settings dan langsung diterapkan!",
           });
           setIsSaving(false);
-          // Auto dismiss success feedback
           setTimeout(() => {
             setFeedback((prev) => (prev?.type === "success" ? null : prev));
           }, 4500);
@@ -129,7 +134,7 @@ export default function DashboardPengaturanPage() {
         }
       }
 
-      // 2. Fallback via Server Action jika API route tidak tersedia
+      // 2. Fallback via Server Action
       const actionRes = await saveEventSettings(payload);
       if (!actionRes.success) {
         setFeedback({
@@ -150,7 +155,6 @@ export default function DashboardPengaturanPage() {
       }, 4500);
     } catch (err: unknown) {
       console.error("Gagal simpan pengaturan:", err);
-      // Fallback coba saveEventSettings
       try {
         const actionRes = await saveEventSettings(payload);
         if (actionRes.success) {
@@ -195,7 +199,7 @@ export default function DashboardPengaturanPage() {
             size="sm"
             onClick={loadSettings}
             disabled={isLoading || isSaving}
-            className="text-xs gap-1.5 shrink-0 self-start sm:self-auto"
+            className="text-xs gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
           >
             <RotateCcw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
             <span>Muat Ulang</span>
@@ -227,7 +231,13 @@ export default function DashboardPengaturanPage() {
               <p className="text-xs">Memuat konfigurasi dari database event_settings...</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSave();
+              }}
+              className="space-y-6"
+            >
               {/* Bagian 1 */}
               <div className="space-y-4">
                 <h3 className="font-heading text-base font-bold text-foreground border-b border-border pb-2 flex items-center justify-between">
@@ -235,6 +245,7 @@ export default function DashboardPengaturanPage() {
                   <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings (key: general)</span>
                 </h3>
                 <Input
+                  name="eventName"
                   label="Nama Acara *"
                   value={eventName}
                   onChange={(e) => setEventName(e.target.value)}
@@ -242,6 +253,7 @@ export default function DashboardPengaturanPage() {
                   required
                 />
                 <Textarea
+                  name="eventTheme"
                   label="Tema Peringatan Sumpah Pemuda *"
                   value={eventTheme}
                   onChange={(e) => setEventTheme(e.target.value)}
@@ -250,6 +262,7 @@ export default function DashboardPengaturanPage() {
                   required
                 />
                 <Input
+                  name="eventYear"
                   label="Tahun Penyelenggaraan *"
                   value={eventYear}
                   onChange={(e) => setEventYear(e.target.value)}
@@ -266,6 +279,7 @@ export default function DashboardPengaturanPage() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
+                    name="scoreGapThreshold"
                     label="Ambang Batas Selisih Skor Juri (Poin Alert) *"
                     type="number"
                     min={1}
@@ -276,6 +290,7 @@ export default function DashboardPengaturanPage() {
                     required
                   />
                   <Input
+                    name="maxCompetitions"
                     label="Batas Maksimal Lomba per Peserta *"
                     type="number"
                     min={1}
@@ -295,6 +310,7 @@ export default function DashboardPengaturanPage() {
                   <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings & monitor_displays (key: monitor)</span>
                 </h3>
                 <Input
+                  name="rotationInterval"
                   label="Durasi Rotasi Normal Modul Monitor (Detik) *"
                   type="number"
                   min={5}
@@ -310,10 +326,11 @@ export default function DashboardPengaturanPage() {
               <div className="pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <Button
                   id="btn-simpan-pengaturan"
-                  type="submit"
+                  type="button"
+                  onClick={handleSave}
                   size="lg"
                   disabled={isSaving || isLoading}
-                  className="text-xs font-semibold gap-2 min-w-[220px]"
+                  className="text-xs font-semibold gap-2 min-w-[220px] cursor-pointer"
                 >
                   {isSaving ? (
                     <>
