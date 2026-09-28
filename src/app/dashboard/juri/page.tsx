@@ -17,35 +17,131 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { JUDGES, Judge, COMPETITIONS } from "@/lib/dummy-data";
-import { UserCheck, UserPlus, ShieldCheck, Mail, Sliders } from "lucide-react";
+import { UserCheck, UserPlus, ShieldCheck, Mail, Sliders, Loader2, Pencil } from "lucide-react";
+import { getJudgeAssignmentData, createJudgeAccount, updateJudgeAccount } from "@/app/actions/competitions";
 
 export default function DashboardJuriPage() {
+  const [loading, setLoading] = React.useState(true);
   const [judges, setJudges] = React.useState<Judge[]>(JUDGES);
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  // Form states
+  // Form states (Tambah Juri)
   const [fullName, setFullName] = React.useState("");
   const [title, setTitle] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [expertise, setExpertise] = React.useState("Sastra & Puisi");
 
-  const handleAddJudge = (e: React.FormEvent) => {
+  // Form states (Edit Juri)
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [editingJudge, setEditingJudge] = React.useState<Judge | null>(null);
+  const [editFullName, setEditFullName] = React.useState("");
+  const [editTitle, setEditTitle] = React.useState("");
+  const [editEmail, setEditEmail] = React.useState("");
+  const [editExpertise, setEditExpertise] = React.useState("Sastra & Puisi");
+  const [isUpdating, setIsUpdating] = React.useState(false);
+
+  const loadJudges = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await getJudgeAssignmentData();
+      if (res.success && res.judges.length > 0) {
+        const mapped: Judge[] = res.judges.map((j, idx) => {
+          const dummy = JUDGES.find((dj) => dj.email === j.email || dj.fullName === j.fullName);
+          const assignedIds = res.assignments
+            .filter((a) => a.judgeId === j.id)
+            .map((a) => a.competitionId);
+          const isChief = res.assignments.some((a) => a.judgeId === j.id && a.isChiefJudge);
+
+          return {
+            id: j.id,
+            fullName: j.fullName,
+            title: j.title || dummy?.title || "Dewan Juri Ahli",
+            email: j.email,
+            expertise: j.expertise || dummy?.expertise || "Sastra & Puisi",
+            avatarUrl:
+              j.avatarUrl ||
+              dummy?.avatarUrl ||
+              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face",
+            assignedCompetitionIds: assignedIds.length > 0 ? assignedIds : dummy?.assignedCompetitionIds || [],
+            isChiefJudge: isChief,
+          };
+        });
+        setJudges(mapped);
+      }
+    } catch (err) {
+      console.error("Gagal memuat juri:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadJudges();
+  }, [loadJudges]);
+
+  const handleAddJudge = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newJudge: Judge = {
-      id: `judge-${Date.now()}`,
-      fullName,
-      title,
-      email,
-      expertise,
-      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face",
-      assignedCompetitionIds: ["comp-1"],
-      isChiefJudge: false,
-    };
-    setJudges((prev) => [...prev, newJudge]);
-    setDialogOpen(false);
-    setFullName("");
-    setTitle("");
-    setEmail("");
+    try {
+      setIsSubmitting(true);
+      const res = await createJudgeAccount({
+        fullName,
+        email,
+        expertise,
+        title,
+      });
+
+      if (res.success) {
+        await loadJudges();
+        setDialogOpen(false);
+        setFullName("");
+        setTitle("");
+        setEmail("");
+        setExpertise("Sastra & Puisi");
+      } else {
+        alert(res.error || "Gagal membuat akun dewan juri.");
+      }
+    } catch (err) {
+      alert("Terjadi kesalahan saat menambahkan juri.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenEditDialog = (j: Judge) => {
+    setEditingJudge(j);
+    setEditFullName(j.fullName);
+    setEditTitle(j.title || "");
+    setEditEmail(j.email || "");
+    setEditExpertise(j.expertise || "Sastra & Puisi");
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateJudge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingJudge) return;
+    try {
+      setIsUpdating(true);
+      const res = await updateJudgeAccount({
+        judgeId: editingJudge.id,
+        fullName: editFullName,
+        email: editEmail,
+        title: editTitle,
+        expertise: editExpertise,
+      });
+
+      if (res.success) {
+        await loadJudges();
+        setEditDialogOpen(false);
+        setEditingJudge(null);
+      } else {
+        alert(res.error || "Gagal memperbarui data dewan juri.");
+      }
+    } catch (err) {
+      alert("Terjadi kesalahan saat memperbarui data juri.");
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   return (
@@ -125,11 +221,22 @@ export default function DashboardJuriPage() {
                       {assignedCount} Cabang Lomba
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link href="/dashboard/juri/penugasan">
-                        <Button variant="outline" size="sm" className="text-xs h-8">
-                          Atur Tugas
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-8 gap-1.5 cursor-pointer hover:border-accent hover:text-accent"
+                          onClick={() => handleOpenEditDialog(j)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          <span>Edit</span>
                         </Button>
-                      </Link>
+                        <Link href="/dashboard/juri/penugasan">
+                          <Button variant="outline" size="sm" className="text-xs h-8">
+                            Atur Tugas
+                          </Button>
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -157,6 +264,24 @@ export default function DashboardJuriPage() {
             />
 
             <Input
+              label="Bidang Keahlian *"
+              placeholder="Contoh: Sastra & Puisi"
+              list="bidang-keahlian-list-add"
+              value={expertise}
+              onChange={(e) => setExpertise(e.target.value)}
+              required
+            />
+            <datalist id="bidang-keahlian-list-add">
+              <option value="Sastra & Puisi" />
+              <option value="Sinematografi & Film" />
+              <option value="Public Speaking & MC" />
+              <option value="Seni Rupa & Kriya" />
+              <option value="Teater & Monolog" />
+              <option value="Tradisi Betawi & Palang Pintu" />
+              <option value="Musik & Vokal" />
+            </datalist>
+
+            <Input
               label="Jabatan / Instansi / Portofolio *"
               placeholder="Contoh: Dosen Sastra Indonesia Universitas Negeri"
               value={title}
@@ -173,30 +298,98 @@ export default function DashboardJuriPage() {
               required
             />
 
-            <div className="space-y-1.5 text-left">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Bidang Keahlian Penilaian *
-              </label>
-              <select
-                value={expertise}
-                onChange={(e) => setExpertise(e.target.value)}
-                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
-              >
-                <option value="Sastra & Puisi">Sastra & Puisi</option>
-                <option value="Sinematografi & Film">Sinematografi & Film</option>
-                <option value="Public Speaking & MC">Public Speaking & MC</option>
-                <option value="Seni Rupa & Kriya">Seni Rupa & Kriya</option>
-                <option value="Teater & Monolog">Teater & Monolog</option>
-                <option value="Tradisi Betawi & Palang Pintu">Tradisi Betawi & Palang Pintu</option>
-                <option value="Musik & Vokal">Musik & Vokal</option>
-              </select>
-            </div>
-
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Batal
               </Button>
-              <Button type="submit">Buat Akun Juri</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    <span>Membuat Akun...</span>
+                  </>
+                ) : (
+                  "Buat Akun Juri"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Dialog>
+
+        {/* Modal Edit Juri */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <form onSubmit={handleUpdateJudge} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Edit Profil Dewan Juri</DialogTitle>
+              <DialogDescription>
+                Perbarui biodata, bidang keahlian, dan jabatan akun dewan juri.
+              </DialogDescription>
+            </DialogHeader>
+
+            <Input
+              label="Nama Lengkap Beserta Gelar *"
+              placeholder="Contoh: Dr. Siti Nurhaliza M.Pd."
+              value={editFullName}
+              onChange={(e) => setEditFullName(e.target.value)}
+              required
+            />
+
+            <Input
+              label="Bidang Keahlian *"
+              placeholder="Contoh: Sastra & Puisi"
+              list="bidang-keahlian-list-edit"
+              value={editExpertise}
+              onChange={(e) => setEditExpertise(e.target.value)}
+              required
+            />
+            <datalist id="bidang-keahlian-list-edit">
+              <option value="Sastra & Puisi" />
+              <option value="Sinematografi & Film" />
+              <option value="Public Speaking & MC" />
+              <option value="Seni Rupa & Kriya" />
+              <option value="Teater & Monolog" />
+              <option value="Tradisi Betawi & Palang Pintu" />
+              <option value="Musik & Vokal" />
+            </datalist>
+
+            <Input
+              label="Jabatan / Instansi / Portofolio *"
+              placeholder="Contoh: Dosen Sastra Indonesia Universitas Negeri"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              required
+            />
+
+            <Input
+              label="Alamat Email Akun *"
+              type="email"
+              placeholder="juri@instansi.ac.id"
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              required
+            />
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEditDialogOpen(false);
+                  setEditingJudge(null);
+                }}
+              >
+                Batal
+              </Button>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    <span>Menyimpan Perubahan...</span>
+                  </>
+                ) : (
+                  "Simpan Perubahan"
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </Dialog>

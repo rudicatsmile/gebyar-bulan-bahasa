@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -15,8 +17,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Competition } from "@/lib/dummy-data";
-import { toggleCompetitionStatus } from "@/app/actions/competitions";
-import { Sliders, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  toggleCompetitionStatus,
+  createCompetitionAdmin,
+  updateCompetitionAdmin,
+  deleteOrArchiveCompetitionAdmin,
+} from "@/app/actions/competitions";
+import {
+  Sliders,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Plus,
+  Edit2,
+  Trash2,
+  Archive,
+  Trophy,
+} from "lucide-react";
 
 interface LombaManageClientProps {
   initialCompetitions: Competition[];
@@ -30,6 +47,42 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // Modal Tambah Lomba
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [addName, setAddName] = React.useState("");
+  const [addShortName, setAddShortName] = React.useState("");
+  const [addCategory, setAddCategory] = React.useState<"individu" | "kelompok">("individu");
+  const [addMinMembers, setAddMinMembers] = React.useState(2);
+  const [addMaxMembers, setAddMaxMembers] = React.useState(10);
+  const [addVenue, setAddVenue] = React.useState("Panggung Utama");
+  const [addStage, setAddStage] = React.useState("");
+  const [addAggregation, setAddAggregation] = React.useState<"rata_rata" | "total" | "rata_rata_buang_ekstrem">("rata_rata");
+  const [addMaxParticipants, setAddMaxParticipants] = React.useState(20);
+  const [addDescription, setAddDescription] = React.useState("");
+  const [addStatus, setAddStatus] = React.useState<"draft" | "pendaftaran">("pendaftaran");
+  const [isSubmittingAdd, setIsSubmittingAdd] = React.useState(false);
+
+  // Modal Edit Lomba
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState<Competition | null>(null);
+  const [editName, setEditName] = React.useState("");
+  const [editShortName, setEditShortName] = React.useState("");
+  const [editCategory, setEditCategory] = React.useState<"individu" | "kelompok">("individu");
+  const [editMinMembers, setEditMinMembers] = React.useState(2);
+  const [editMaxMembers, setEditMaxMembers] = React.useState(10);
+  const [editVenue, setEditVenue] = React.useState("Panggung Utama");
+  const [editStage, setEditStage] = React.useState("");
+  const [editAggregation, setEditAggregation] = React.useState<"rata_rata" | "total" | "rata_rata_buang_ekstrem">("rata_rata");
+  const [editMaxParticipants, setEditMaxParticipants] = React.useState(20);
+  const [editDescription, setEditDescription] = React.useState("");
+  const [editStatus, setEditStatus] = React.useState<"draft" | "pendaftaran" | "berlangsung" | "selesai" | "dibatalkan">("pendaftaran");
+  const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
+
+  // Modal Hapus / Arsip
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState<Competition | null>(null);
+  const [isSubmittingDelete, setIsSubmittingDelete] = React.useState(false);
 
   // Sync state whenever initialCompetitions updates from server revalidation
   React.useEffect(() => {
@@ -63,7 +116,6 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
       const res = await toggleCompetitionStatus(id, nextStatus);
 
       if (!res.success) {
-        // Revert to original status if server action failed
         setCompetitions((prev) =>
           prev.map((c) => (c.id === id ? { ...c, status: currentStatus as any } : c))
         );
@@ -80,7 +132,6 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
       }
     } catch (err) {
       console.error("Gagal update status lomba:", err);
-      // Revert if network or unhandled error
       setCompetitions((prev) =>
         prev.map((c) => (c.id === id ? { ...c, status: currentStatus as any } : c))
       );
@@ -94,13 +145,145 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
     }
   };
 
+  // Open Edit Modal
+  const openEdit = (comp: Competition) => {
+    setEditTarget(comp);
+    setEditName(comp.name);
+    setEditShortName(comp.shortName);
+    setEditCategory(comp.category);
+    setEditMinMembers(comp.minMembers || 2);
+    setEditMaxMembers(comp.maxMembers || 10);
+    setEditVenue(comp.venue || "Panggung Utama");
+    setEditStage(comp.stage && comp.stage !== "Stage A" ? comp.stage : comp.stage || "");
+    setEditAggregation(comp.aggregation || "rata_rata");
+    setEditMaxParticipants(comp.maxParticipants || 20);
+    setEditDescription(comp.description || "");
+    const mappedStatus = comp.status === "terjadwal" ? "pendaftaran" : comp.status;
+    setEditStatus(mappedStatus);
+    setEditOpen(true);
+  };
+
+  // Handle Submit Edit
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget) return;
+
+    try {
+      setIsSubmittingEdit(true);
+      const combinedVenue = editStage.trim()
+        ? `${editVenue.trim()} | ${editStage.trim()}`
+        : editVenue.trim();
+
+      const res = await updateCompetitionAdmin({
+        id: editTarget.id,
+        name: editName,
+        shortName: editShortName,
+        slug: editTarget.slug,
+        category: editCategory,
+        minMembers: editMinMembers,
+        maxMembers: editMaxMembers,
+        venue: combinedVenue,
+        aggregation: editAggregation,
+        maxParticipants: editMaxParticipants,
+        description: editDescription,
+        status: editStatus,
+      });
+
+      if (res.success) {
+        setEditOpen(false);
+        setNotification({
+          type: "success",
+          message: `Perubahan cabang lomba "${editName}" berhasil disimpan!`,
+        });
+        router.refresh();
+      } else {
+        alert(res.error || "Gagal memperbarui data lomba.");
+      }
+    } catch {
+      alert("Terjadi kesalahan saat memperbarui data lomba.");
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  // Handle Submit Add
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsSubmittingAdd(true);
+      const combinedVenue = addStage.trim()
+        ? `${addVenue.trim()} | ${addStage.trim()}`
+        : addVenue.trim();
+
+      const res = await createCompetitionAdmin({
+        name: addName,
+        shortName: addShortName,
+        category: addCategory,
+        minMembers: addMinMembers,
+        maxMembers: addMaxMembers,
+        venue: combinedVenue,
+        aggregation: addAggregation,
+        maxParticipants: addMaxParticipants,
+        description: addDescription,
+        status: addStatus,
+      });
+
+      if (res.success) {
+        setAddOpen(false);
+        setAddName("");
+        setAddShortName("");
+        setAddDescription("");
+        setNotification({
+          type: "success",
+          message: `Cabang lomba baru "${addName}" berhasil ditambahkan ke database!`,
+        });
+        router.refresh();
+      } else {
+        alert(res.error || "Gagal menambahkan cabang lomba.");
+      }
+    } catch {
+      alert("Terjadi kesalahan saat menambahkan cabang lomba.");
+    } finally {
+      setIsSubmittingAdd(false);
+    }
+  };
+
+  // Handle Delete or Archive
+  const handleDeleteOrArchive = async (mode: "archive" | "delete") => {
+    if (!deleteTarget) return;
+
+    try {
+      setIsSubmittingDelete(true);
+      const res = await deleteOrArchiveCompetitionAdmin(deleteTarget.id, mode);
+
+      if (res.success) {
+        setDeleteOpen(false);
+        setNotification({
+          type: "success",
+          message:
+            mode === "archive"
+              ? `Cabang lomba "${deleteTarget.name}" berhasil diarsipkan / dibatalkan.`
+              : `Cabang lomba "${deleteTarget.name}" berhasil dihapus permanen.`,
+        });
+        router.refresh();
+      } else {
+        alert(res.error || "Gagal memproses penghapusan lomba.");
+      }
+    } catch {
+      alert("Terjadi kesalahan sistem saat memproses penghapusan.");
+    } finally {
+      setIsSubmittingDelete(false);
+    }
+  };
+
   return (
     <DashboardLayout role="seksi_acara">
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Monitoring 8 Cabang Lomba
+            <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+              <Trophy className="h-7 w-7 text-accent" />
+              <span>Monitoring Cabang Lomba</span>
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Kendali operasional, status pelaksanaan lomba real-time di Supabase, dan akses langsung ke rekapitulasi penilaian digital.
@@ -108,11 +291,19 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
           </div>
           <div className="flex items-center gap-2">
             <Link href="/dashboard/kriteria">
-              <Button variant="outline" size="sm" className="text-xs gap-1.5">
+              <Button variant="outline" size="sm" className="text-xs gap-1.5 cursor-pointer">
                 <Sliders className="h-3.5 w-3.5" />
                 <span>Kriteria Penilaian</span>
               </Button>
             </Link>
+            <Button
+              onClick={() => setAddOpen(true)}
+              size="sm"
+              className="text-xs gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Tambah Lomba Baru</span>
+            </Button>
           </div>
         </div>
 
@@ -138,7 +329,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
             <TableHeader>
               <TableRow>
                 <TableHead>Cabang Lomba</TableHead>
-                <TableHead>Kategori</TableHead>
+                <TableHead className="text-center w-28">Kategori</TableHead>
                 <TableHead>Venue & Panggung</TableHead>
                 <TableHead className="text-center">Kriteria</TableHead>
                 <TableHead className="text-center">Status</TableHead>
@@ -152,6 +343,10 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                     ? "live"
                     : comp.status === "selesai"
                     ? "success"
+                    : comp.status === "pendaftaran"
+                    ? "warning"
+                    : comp.status === "dibatalkan"
+                    ? "danger"
                     : "default";
 
                 return (
@@ -164,34 +359,55 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                         Agregasi: {comp.aggregation.replace(/_/g, " ")}
                       </span>
                     </TableCell>
-                    <TableCell className="capitalize text-xs font-mono">
-                      {comp.category}
+
+                    {/* Kolom Kategori dengan Badge jelas */}
+                    <TableCell className="text-center">
+                      <Badge
+                        variant={comp.category === "kelompok" ? "warning" : "default"}
+                        className="text-[10px] uppercase font-mono font-bold"
+                      >
+                        {comp.category}
+                      </Badge>
+                      {comp.category === "kelompok" && (
+                        <span className="block text-[10px] text-muted-foreground mt-0.5">
+                          {comp.minMembers}-{comp.maxMembers} org
+                        </span>
+                      )}
                     </TableCell>
+
                     <TableCell className="text-xs text-muted-foreground">
                       <strong className="text-foreground">{comp.venue}</strong>
-                      <span className="block text-[11px]">{comp.stage}</span>
+                      {comp.stage ? <span className="block text-[11px]">{comp.stage}</span> : null}
                     </TableCell>
+
                     <TableCell className="text-center font-mono text-xs">
                       {comp.criteria.length} kriteria (100%)
                     </TableCell>
+
                     <TableCell className="text-center">
                       <Badge variant={statusVariant} className="text-[10px]">
                         {comp.status === "berlangsung"
                           ? "LIVE SEKARANG"
                           : comp.status === "selesai"
                           ? "SELESAI"
-                          : "PENDAFTARAN DIBUKA"}
+                          : comp.status === "pendaftaran"
+                          ? "PENDAFTARAN DIBUKA"
+                          : comp.status === "dibatalkan"
+                          ? "DIBATALKAN"
+                          : "DRAFT"}
                       </Badge>
                     </TableCell>
+
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {/* Tombol Ubah Status */}
                         <Button
                           variant="ghost"
                           size="sm"
                           disabled={isUpdating === comp.id}
                           onClick={() => toggleStatus(comp.id, comp.status, comp.name)}
                           className="text-[11px] h-8 text-accent font-semibold cursor-pointer"
-                          title="Klik untuk ubah status lomba langsung di Supabase"
+                          title="Klik untuk rotasi status lomba"
                         >
                           {isUpdating === comp.id ? (
                             <span className="flex items-center gap-1">
@@ -202,6 +418,33 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                             "Ubah Status"
                           )}
                         </Button>
+
+                        {/* Tombol EDIT Lomba & Kategori */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEdit(comp)}
+                          className="text-xs h-8 gap-1 cursor-pointer"
+                          title="Edit nama, kategori individu/kelompok, dan konfigurasi lomba"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                          <span>Edit</span>
+                        </Button>
+
+                        {/* Tombol HAPUS / ARSIP */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setDeleteTarget(comp);
+                            setDeleteOpen(true);
+                          }}
+                          className="text-xs h-8 text-destructive hover:bg-destructive/10 cursor-pointer px-2"
+                          title="Arsipkan atau Hapus Lomba"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+
                         <Link href={`/dashboard/lomba/${comp.slug}`}>
                           <Button variant="outline" size="sm" className="text-xs h-8">
                             Pantau
@@ -220,10 +463,386 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
             </TableBody>
           </Table>
         </div>
+
+        {/* Modal TAMBAH Lomba Baru */}
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <form onSubmit={handleAdd} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Tambah Cabang Lomba Baru</DialogTitle>
+              <DialogDescription>
+                Daftarkan cabang perlombaan baru ke database acara Gebyar Bulan Bahasa.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <Input
+                label="Nama Lengkap Lomba *"
+                placeholder="Contoh: Cipta Puisi Digital"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                required
+              />
+              <Input
+                label="Nama Singkat / Label *"
+                placeholder="Contoh: Cipta Puisi"
+                value={addShortName}
+                onChange={(e) => setAddShortName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Kategori Perlombaan *
+                </label>
+                <select
+                  value={addCategory}
+                  onChange={(e) => setAddCategory(e.target.value as "individu" | "kelompok")}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
+                >
+                  <option value="individu">Individu (Peserta Tunggal)</option>
+                  <option value="kelompok">Kelompok / Beregu (Tim)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Metode Agregasi Nilai *
+                </label>
+                <select
+                  value={addAggregation}
+                  onChange={(e) => setAddAggregation(e.target.value as any)}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
+                >
+                  <option value="rata_rata">Rata-Rata Standar (Mean)</option>
+                  <option value="total">Total Akumulasi (Sum)</option>
+                  <option value="rata_rata_buang_ekstrem">Rata-Rata Buang Ekstrem (Olympic Scoring)</option>
+                </select>
+              </div>
+            </div>
+
+            {addCategory === "kelompok" && (
+              <div className="grid grid-cols-2 gap-3 text-left p-3 rounded-lg border border-accent/20 bg-accent/5">
+                <Input
+                  label="Minimal Anggota Tim *"
+                  type="number"
+                  min={2}
+                  max={20}
+                  value={addMinMembers}
+                  onChange={(e) => setAddMinMembers(Number(e.target.value))}
+                  required
+                />
+                <Input
+                  label="Maksimal Anggota Tim *"
+                  type="number"
+                  min={addMinMembers}
+                  max={30}
+                  value={addMaxMembers}
+                  onChange={(e) => setAddMaxMembers(Number(e.target.value))}
+                  required
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <Input
+                label="Venue / Ruangan *"
+                placeholder="Panggung Utama / Aula Serbaguna"
+                value={addVenue}
+                onChange={(e) => setAddVenue(e.target.value)}
+                required
+              />
+              <Input
+                label="Nama Panggung / Stage"
+                placeholder="Contoh: Stage A / Podium Utama"
+                value={addStage}
+                onChange={(e) => setAddStage(e.target.value)}
+              />
+            </div>
+
+            <div className="text-left">
+              <Input
+                label="Batas Maksimal Peserta / Tim"
+                type="number"
+                min={1}
+                max={100}
+                value={addMaxParticipants}
+                onChange={(e) => setAddMaxParticipants(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Deskripsi Singkat Lomba
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Ketentuan umum perlombaan..."
+                value={addDescription}
+                onChange={(e) => setAddDescription(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Status Awal Lomba *
+              </label>
+              <select
+                value={addStatus}
+                onChange={(e) => setAddStatus(e.target.value as any)}
+                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
+              >
+                <option value="pendaftaran">Pendaftaran Dibuka</option>
+                <option value="draft">Draft (Disembunyikan)</option>
+              </select>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
+                Batal
+              </Button>
+              <Button type="submit" disabled={isSubmittingAdd || !addName || !addShortName}>
+                {isSubmittingAdd ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    <span>Menambahkan...</span>
+                  </>
+                ) : (
+                  "Simpan Lomba Baru"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Dialog>
+
+        {/* Modal EDIT Lomba */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <form onSubmit={handleUpdate} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Edit Konfigurasi Cabang Lomba</DialogTitle>
+              <DialogDescription>
+                Ubah nama, kategori (individu/kelompok), venue, dan metode perhitungan skor lomba.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <Input
+                label="Nama Lengkap Lomba *"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                required
+              />
+              <Input
+                label="Nama Singkat / Label *"
+                value={editShortName}
+                onChange={(e) => setEditShortName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Kategori Perlombaan *
+                </label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value as "individu" | "kelompok")}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none font-semibold text-accent"
+                >
+                  <option value="individu">Individu (Peserta Tunggal)</option>
+                  <option value="kelompok">Kelompok / Beregu (Tim)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Metode Agregasi Nilai *
+                </label>
+                <select
+                  value={editAggregation}
+                  onChange={(e) => setEditAggregation(e.target.value as any)}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
+                >
+                  <option value="rata_rata">Rata-Rata Standar (Mean)</option>
+                  <option value="total">Total Akumulasi (Sum)</option>
+                  <option value="rata_rata_buang_ekstrem">Rata-Rata Buang Ekstrem (Olympic Scoring)</option>
+                </select>
+              </div>
+            </div>
+
+            {editCategory === "kelompok" && (
+              <div className="grid grid-cols-2 gap-3 text-left p-3 rounded-lg border border-accent/20 bg-accent/5">
+                <Input
+                  label="Minimal Anggota Tim *"
+                  type="number"
+                  min={2}
+                  max={20}
+                  value={editMinMembers}
+                  onChange={(e) => setEditMinMembers(Number(e.target.value))}
+                  required
+                />
+                <Input
+                  label="Maksimal Anggota Tim *"
+                  type="number"
+                  min={editMinMembers}
+                  max={30}
+                  value={editMaxMembers}
+                  onChange={(e) => setEditMaxMembers(Number(e.target.value))}
+                  required
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <Input
+                label="Venue / Ruangan *"
+                placeholder="Panggung Utama / Aula Serbaguna"
+                value={editVenue}
+                onChange={(e) => setEditVenue(e.target.value)}
+                required
+              />
+              <Input
+                label="Nama Panggung / Stage"
+                placeholder="Contoh: Stage A / Podium Utama / Zona B"
+                value={editStage}
+                onChange={(e) => setEditStage(e.target.value)}
+              />
+            </div>
+
+            <div className="text-left">
+              <Input
+                label="Batas Maksimal Peserta / Tim"
+                type="number"
+                min={1}
+                max={100}
+                value={editMaxParticipants}
+                onChange={(e) => setEditMaxParticipants(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Deskripsi Singkat Lomba
+              </label>
+              <textarea
+                rows={2}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Status Operasional Lomba *
+              </label>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value as any)}
+                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
+              >
+                <option value="pendaftaran">Pendaftaran Dibuka</option>
+                <option value="berlangsung">Sedang Berlangsung (Live)</option>
+                <option value="selesai">Selesai</option>
+                <option value="draft">Draft</option>
+                <option value="dibatalkan">Dibatalkan</option>
+              </select>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                Batal
+              </Button>
+              <Button type="submit" disabled={isSubmittingEdit || !editName || !editShortName}>
+                {isSubmittingEdit ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  "Simpan Perubahan Lomba"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Dialog>
+
+        {/* Modal HAPUS / ARSIP Lomba */}
+        <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <div className="space-y-4">
+            <DialogHeader>
+              <DialogTitle className="text-destructive flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                <span>Pengelolaan Hapus / Arsip Lomba</span>
+              </DialogTitle>
+              <DialogDescription>
+                Pilih tindakan yang ingin dilakukan untuk cabang lomba{" "}
+                <strong>&quot;{deleteTarget?.name}&quot;</strong>:
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 p-3.5 rounded-lg border border-border bg-muted/40 text-xs text-foreground">
+              <div className="flex gap-2">
+                <Archive className="h-4 w-4 text-accent shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block text-foreground">Opsi 1: Batalkan / Arsipkan Lomba (Sangat Direkomendasikan)</strong>
+                  <p className="text-muted-foreground">
+                    Status lomba diubah menjadi <em>Dibatalkan</em>. Data pendaftaran dan lembar penilaian juri tetap aman tersimpan di database sebagai arsip sejarah acara.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-border">
+                <Trash2 className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block text-destructive">Opsi 2: Hapus Permanen</strong>
+                  <p className="text-muted-foreground">
+                    Hanya dapat dilakukan jika belum ada peserta yang mendaftar pada cabang lomba ini. Jika sudah ada peserta, sistem akan memblokir penghapusan demi keamanan data.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeleteOpen(false)}
+                disabled={isSubmittingDelete}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handleDeleteOrArchive("archive")}
+                disabled={isSubmittingDelete}
+                className="text-xs gap-1"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                <span>Arsipkan / Batalkan</span>
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => handleDeleteOrArchive("delete")}
+                disabled={isSubmittingDelete}
+                className="text-xs gap-1"
+              >
+                {isSubmittingDelete ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                <span>Hapus Permanen</span>
+              </Button>
+            </DialogFooter>
+          </div>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
 }
-
-
-

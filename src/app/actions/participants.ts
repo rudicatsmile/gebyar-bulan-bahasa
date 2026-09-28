@@ -395,3 +395,402 @@ export async function verifyParticipantRegistration(
   }
 }
 
+export interface TeamRegistrationRow {
+  registrationId: string;
+  participantId: string;
+  registrationNumber: string;
+  teamName: string;
+  leaderName: string;
+  competitionId: string;
+  competitionName: string;
+  institution: string;
+  teamMembers: string[];
+  status: "menunggu_verifikasi" | "terverifikasi" | "ditolak";
+  registeredAt: string;
+}
+
+export interface GroupCompetitionItem {
+  id: string;
+  name: string;
+  shortName: string;
+  minMembers: number;
+  maxMembers: number;
+}
+
+export async function getTeamRegistrationsData(): Promise<{
+  success: boolean;
+  teams: TeamRegistrationRow[];
+  competitions: GroupCompetitionItem[];
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Ambil seluruh kompetisi kelompok
+    const { data: compRows, error: compErr } = await supabase
+      .from("competitions")
+      .select("id, name, short_name, min_team_members, max_team_members, type")
+      .eq("type", "kelompok")
+      .order("name");
+
+    if (compErr) throw compErr;
+
+    const groupComps: GroupCompetitionItem[] = (compRows || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      shortName: c.short_name || c.name,
+      minMembers: c.min_team_members || 2,
+      maxMembers: c.max_team_members || 10,
+    }));
+
+    // 2. Ambil data pendaftaran tim
+    let { data: regRows, error: regErr } = await supabase
+      .from("registrations")
+      .select(`
+        id,
+        competition_id,
+        team_name,
+        is_confirmed,
+        notes,
+        created_at,
+        competitions (
+          id,
+          name,
+          short_name,
+          type
+        ),
+        participants (
+          id,
+          registration_number,
+          full_name,
+          institution,
+          email,
+          phone,
+          status
+        ),
+        registration_members (
+          id,
+          member_name,
+          member_role,
+          is_leader
+        )
+      `)
+      .order("created_at", { ascending: false });
+
+    if (regErr) throw regErr;
+
+    let filtered = (regRows || []).filter(
+      (r: any) => r.competitions?.type === "kelompok" || Boolean(r.team_name)
+    );
+
+    const mappedTeams: TeamRegistrationRow[] = filtered.map((r: any) => {
+      const part = r.participants;
+      const comp = r.competitions;
+      const members: string[] = (r.registration_members || []).map((m: any) =>
+        m.is_leader ? `${m.member_name} (Ketua)` : m.member_name
+      );
+
+      return {
+        registrationId: r.id,
+        participantId: part?.id || "",
+        registrationNumber: part?.registration_number || `REG-${r.id.substring(0, 8)}`,
+        teamName: r.team_name || part?.full_name || "Tim Belum Bernama",
+        leaderName: part?.full_name || "Ketua Tim",
+        competitionId: r.competition_id || comp?.id || "",
+        competitionName: comp?.name || "Cabang Beregu",
+        institution: part?.institution || "-",
+        teamMembers: members.length > 0 ? members : [part?.full_name || "Ketua Tim"],
+        status: (part?.status || (r.is_confirmed ? "terverifikasi" : "menunggu_verifikasi")) as any,
+        registeredAt: r.created_at || new Date().toISOString(),
+      };
+    });
+
+    return {
+      success: true,
+      teams: mappedTeams,
+      competitions: groupComps,
+    };
+  } catch (err: unknown) {
+    console.error("Error getTeamRegistrationsData:", err);
+    return {
+      success: false,
+      teams: [],
+      competitions: [],
+      error: err instanceof Error ? err.message : "Gagal memuat data pendaftaran tim.",
+    };
+  }
+}
+
+export async function createTeamRegistrationAdmin(input: {
+  competitionId: string;
+  teamName: string;
+  leaderName: string;
+  institution: string;
+  email?: string;
+  phone?: string;
+  memberNames: string[];
+  status?: "menunggu_verifikasi" | "terverifikasi";
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data: comp, error: cErr } = await supabase
+      .from("competitions")
+      .select("id, name, short_name, min_team_members, max_team_members")
+      .eq("id", input.competitionId)
+      .maybeSingle();
+
+    if (cErr || !comp) {
+      return { success: false, error: "Cabang lomba tidak ditemukan." };
+    }
+
+    const shortCode = comp.short_name
+      ? comp.short_name.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3)
+      : "TIM";
+    const regNum = `GBB-${shortCode}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const email = input.email?.trim() || `tim.${Date.now()}@gebyarbulanbahasa.id`;
+    const phone = input.phone?.trim() || "081234567890";
+    const status = input.status || "terverifikasi";
+
+    // 1. Simpan ketua di participants
+    const { data: part, error: pErr } = await supabase
+      .from("participants")
+      .insert({
+        registration_number: regNum,
+        full_name: input.leaderName.trim(),
+        institution: input.institution.trim(),
+        email,
+        phone,
+        status,
+        total_points: 0,
+      })
+      .select()
+      .single();
+
+    if (pErr) return { success: false, error: pErr.message };
+
+    // 2. Simpan di registrations
+    const { data: reg, error: rErr } = await supabase
+      .from("registrations")
+      .insert({
+        participant_id: part.id,
+        competition_id: input.competitionId,
+        team_name: input.teamName.trim(),
+        is_confirmed: status === "terverifikasi",
+      })
+      .select()
+      .single();
+
+    if (rErr) return { success: false, error: rErr.message };
+
+    // 3. Simpan di registration_members
+    const membersToInsert = [
+      {
+        registration_id: reg.id,
+        member_name: input.leaderName.trim(),
+        member_role: "ketua",
+        is_leader: true,
+        institution: input.institution.trim(),
+      },
+      ...input.memberNames
+        .map((m) => m.trim())
+        .filter((m) => m.length > 0)
+        .map((m) => ({
+          registration_id: reg.id,
+          member_name: m,
+          member_role: "anggota",
+          is_leader: false,
+          institution: input.institution.trim(),
+        })),
+    ];
+
+    const { error: mErr } = await supabase.from("registration_members").insert(membersToInsert);
+    if (mErr) console.warn("Gagal simpan anggota:", mErr.message);
+
+    try {
+      await supabase.from("activity_logs").insert({
+        action: "create_team_registration",
+        entity: "registrations",
+        entity_id: reg.id,
+        description: `Pendaftaran tim baru "${input.teamName}" (${comp.name}) oleh Seksi Acara.`,
+      });
+    } catch {}
+
+    revalidatePath("/dashboard/pendaftaran");
+    revalidatePath("/dashboard/peserta");
+    revalidatePath("/dashboard/lomba");
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("Error createTeamRegistrationAdmin:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal mendaftarkan tim baru.",
+    };
+  }
+}
+
+export async function updateTeamRegistrationAdmin(input: {
+  registrationId: string;
+  competitionId: string;
+  teamName: string;
+  leaderName: string;
+  institution: string;
+  memberNames: string[];
+  status: "menunggu_verifikasi" | "terverifikasi" | "ditolak";
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Ambil pendaftaran
+    const { data: reg, error: rErr } = await supabase
+      .from("registrations")
+      .select("id, participant_id, competition_id")
+      .eq("id", input.registrationId)
+      .maybeSingle();
+
+    if (rErr || !reg) {
+      return { success: false, error: "Pendaftaran tidak ditemukan." };
+    }
+
+    // 2. Update registrations
+    const { error: upRegErr } = await supabase
+      .from("registrations")
+      .update({
+        team_name: input.teamName.trim(),
+        competition_id: input.competitionId,
+        is_confirmed: input.status === "terverifikasi",
+      })
+      .eq("id", input.registrationId);
+
+    if (upRegErr) return { success: false, error: upRegErr.message };
+
+    // 3. Update participant
+    if (reg.participant_id) {
+      const { error: upPartErr } = await supabase
+        .from("participants")
+        .update({
+          full_name: input.leaderName.trim(),
+          institution: input.institution.trim(),
+          status: input.status,
+        })
+        .eq("id", reg.participant_id);
+
+      if (upPartErr) return { success: false, error: upPartErr.message };
+    }
+
+    // 4. Update registration_members: hapus lama, pasang baru
+    await supabase.from("registration_members").delete().eq("registration_id", input.registrationId);
+
+    const membersToInsert = [
+      {
+        registration_id: input.registrationId,
+        member_name: input.leaderName.trim(),
+        member_role: "ketua",
+        is_leader: true,
+        institution: input.institution.trim(),
+      },
+      ...input.memberNames
+        .map((m) => m.trim())
+        .filter((m) => m.length > 0)
+        .map((m) => ({
+          registration_id: input.registrationId,
+          member_name: m,
+          member_role: "anggota",
+          is_leader: false,
+          institution: input.institution.trim(),
+        })),
+    ];
+
+    await supabase.from("registration_members").insert(membersToInsert);
+
+    try {
+      await supabase.from("activity_logs").insert({
+        action: "update_team_registration",
+        entity: "registrations",
+        entity_id: input.registrationId,
+        description: `Pembaruan data tim "${input.teamName}" oleh Seksi Acara.`,
+      });
+    } catch {}
+
+    revalidatePath("/dashboard/pendaftaran");
+    revalidatePath("/dashboard/peserta");
+    revalidatePath("/dashboard/lomba");
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("Error updateTeamRegistrationAdmin:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal memperbarui data tim.",
+    };
+  }
+}
+
+export async function deleteTeamRegistrationAdmin(
+  registrationId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data: reg, error: rErr } = await supabase
+      .from("registrations")
+      .select("id, participant_id, team_name")
+      .eq("id", registrationId)
+      .maybeSingle();
+
+    if (rErr || !reg) {
+      return { success: false, error: "Pendaftaran tim tidak ditemukan." };
+    }
+
+    // 1. Hapus anggota tim
+    await supabase
+      .from("registration_members")
+      .delete()
+      .eq("registration_id", registrationId);
+
+    // 2. Hapus pendaftaran
+    const { error: dErr } = await supabase
+      .from("registrations")
+      .delete()
+      .eq("id", registrationId);
+
+    if (dErr) return { success: false, error: dErr.message };
+
+    // 3. Hapus participant jika hanya terdaftar di pendaftaran ini
+    if (reg.participant_id) {
+      const { count } = await supabase
+        .from("registrations")
+        .select("id", { count: "exact", head: true })
+        .eq("participant_id", reg.participant_id);
+
+      if ((count || 0) === 0) {
+        await supabase
+          .from("participants")
+          .delete()
+          .eq("id", reg.participant_id);
+      }
+    }
+
+    try {
+      await supabase.from("activity_logs").insert({
+        action: "delete_team_registration",
+        entity: "registrations",
+        entity_id: registrationId,
+        description: `Penghapusan pendaftaran tim "${reg.team_name || "Tim"}" oleh Seksi Acara.`,
+      });
+    } catch {}
+
+    revalidatePath("/dashboard/pendaftaran");
+    revalidatePath("/dashboard/peserta");
+    revalidatePath("/dashboard/lomba");
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("Error deleteTeamRegistrationAdmin:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal menghapus pendaftaran tim.",
+    };
+  }
+}
+
+

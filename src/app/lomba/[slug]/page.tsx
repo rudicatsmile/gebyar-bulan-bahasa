@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCompetitionBySlug } from "@/lib/supabase/queries";
+import { getCompetitionJudgesBySlug } from "@/app/actions/competitions";
 import { LombaDetailClient } from "./lomba-detail-client";
 
 export const revalidate = 60;
@@ -16,5 +17,18 @@ export default async function LombaDetailPage({ params }: PageProps) {
     return notFound();
   }
 
-  return <LombaDetailClient competition={competition} />;
+  // Jika diakses menggunakan UUID, arahkan ke canonical slug URL
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+  if (isUuid && competition.slug && competition.slug !== slug) {
+    redirect(`/lomba/${competition.slug}`);
+  }
+
+  const assignedJudges = await getCompetitionJudgesBySlug(competition.slug || slug);
+
+  return (
+    <LombaDetailClient
+      competition={competition}
+      initialJudges={assignedJudges}
+    />
+  );
 }

@@ -96,8 +96,14 @@ function formatCompetition(row: DbCompetitionWithCriteria): Competition {
     category: (row.type as "individu" | "kelompok") || "individu",
     status,
     description: row.description || "",
-    venue: row.theme_link || "Panggung Utama",
-    stage: "Stage A",
+    venue: (() => {
+      const raw = row.theme_link || "";
+      return raw.includes(" | ") ? raw.split(" | ")[0].trim() : raw || "Panggung Utama";
+    })(),
+    stage: (() => {
+      const raw = row.theme_link || "";
+      return raw.includes(" | ") ? raw.split(" | ")[1].trim() : "";
+    })(),
     date: "27-28 Oktober 2025",
     time: "09:00 - 16:00 WIB",
     minMembers: row.min_team_members ?? 1,
@@ -264,19 +270,30 @@ export async function getCompetitions(): Promise<Competition[]> {
 
 export async function getCompetitionBySlug(slug: string): Promise<Competition | null> {
   try {
-    const { data, error } = await publicClient
-      .from("competitions")
-      .select("*, competition_criteria(*)")
-      .eq("slug", slug)
-      .maybeSingle();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+    const resolvedSlug = compIdToSlug[slug] || slug;
+
+    const query = publicClient.from("competitions").select("*, competition_criteria(*)");
+    const { data, error } = isUuid
+      ? await query.eq("id", slug).maybeSingle()
+      : await query.eq("slug", resolvedSlug).maybeSingle();
 
     if (error || !data) {
-      return COMPETITIONS.find((c) => c.slug === slug) || null;
+      return (
+        COMPETITIONS.find(
+          (c) => c.slug === resolvedSlug || c.slug === slug || c.id === slug
+        ) || null
+      );
     }
     return formatCompetition(data as unknown as DbCompetitionWithCriteria);
   } catch (err) {
     console.error("Supabase getCompetitionBySlug fallback:", err);
-    return COMPETITIONS.find((c) => c.slug === slug) || null;
+    const resolvedSlug = compIdToSlug[slug] || slug;
+    return (
+      COMPETITIONS.find(
+        (c) => c.slug === resolvedSlug || c.slug === slug || c.id === slug
+      ) || null
+    );
   }
 }
 

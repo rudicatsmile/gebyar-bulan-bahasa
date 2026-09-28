@@ -347,7 +347,10 @@ export function PesertaPendaftaranClient() {
                   Cabang Lomba yang Anda Ikuti
                 </h2>
                 {enrollments.map((enr) => {
-                  const dummy = COMPETITIONS.find((c) => c.id === enr.competitionId);
+                  const dummy = COMPETITIONS.find(
+                    (c) => c.id === enr.competitionId || (enr.competitionSlug && c.slug === enr.competitionSlug)
+                  );
+                  const targetSlug = enr.competitionSlug || dummy?.slug || enr.competitionId;
                   return (
                     <Card key={enr.registrationId} className="p-5 sm:p-6 space-y-3 border-success/40 bg-success/5">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -394,7 +397,7 @@ export function PesertaPendaftaranClient() {
                       )}
 
                       <Link
-                        href={`/lomba/${dummy?.slug ?? enr.competitionId}`}
+                        href={`/lomba/${targetSlug}`}
                         className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
                       >
                         <span>Lihat Detail & Kriteria Lomba</span>

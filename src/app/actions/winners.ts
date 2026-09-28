@@ -93,3 +93,112 @@ export async function publishCompetitionWinners(data: z.infer<typeof PublishWinn
     return { success: false, error: message };
   }
 }
+
+export interface DashboardWinnerItem {
+  id: string;
+  competitionId: string;
+  competitionName: string;
+  winnerName: string;
+  teamName?: string;
+  institution: string;
+  rank: number;
+  title: string;
+  finalScore: number;
+  prize: string;
+  isPublished: boolean;
+  announcedAt?: string | null;
+}
+
+export async function getDashboardWinners(): Promise<{
+  success: boolean;
+  winners: DashboardWinnerItem[];
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+
+    const { data, error } = await supabase
+      .from("winners")
+      .select("*, competitions(id, name, slug)")
+      .order("rank", { ascending: true });
+
+    if (error) throw error;
+
+    const mapped: DashboardWinnerItem[] = (data || []).map((w: any) => ({
+      id: w.id,
+      competitionId: w.competition_id || "",
+      competitionName: w.competitions?.name || "Cabang Lomba",
+      winnerName: w.winner_name,
+      teamName: undefined,
+      institution: w.institution || "-",
+      rank: Number(w.rank),
+      title: w.title || `Juara ${w.rank}`,
+      finalScore: Number(w.final_score) || 0,
+      prize: w.prize || "-",
+      isPublished: Boolean(w.is_published),
+      announcedAt: w.announced_at,
+    }));
+
+    return { success: true, winners: mapped };
+  } catch (err: unknown) {
+    console.error("Error getDashboardWinners:", err);
+    return {
+      success: false,
+      winners: [],
+      error: err instanceof Error ? err.message : "Gagal memuat daftar pemenang.",
+    };
+  }
+}
+
+export async function publishAllWinners(): Promise<{
+  success: boolean;
+  count?: number;
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("winners")
+      .update({ is_published: true, announced_at: new Date().toISOString() })
+      .select();
+
+    if (error) throw error;
+
+    revalidatePath("/dashboard/pemenang");
+    revalidatePath("/pemenang");
+    revalidatePath("/monitor");
+    return { success: true, count: data?.length || 0 };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal mempublikasikan pemenang.",
+    };
+  }
+}
+
+export async function saveTieBreakerNotes(notes: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const {
+      data: { user },
+    } = await (await createClient()).auth.getUser();
+
+    await supabase.from("activity_logs").insert({
+      actor_id: user?.id || null,
+      action: "tie_breaker_decision",
+      entity: "winners",
+      description: `Berita Acara Sidang Penetapan Juara Seri: ${notes}`,
+    });
+
+    revalidatePath("/dashboard/pemenang");
+    return { success: true };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal menyimpan berita acara.",
+    };
+  }
+}

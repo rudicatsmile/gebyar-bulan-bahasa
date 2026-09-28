@@ -14,6 +14,7 @@ Folder `docs/` ini memuat panduan operasional lengkap yang dibagi berdasarkan pe
 docs/
 ├── README.md                   # Dokumen Utama & Ringkasan Alur Bisnis (Dokumen Ini)
 ├── KREDENSIAL.md               # Daftar Akun Resmi, Email, Password, & Kode Stand
+├── sistem-penilaian.md         # Dokumentasi Lengkap Sistem Penilaian, Agregasi, & Audit Nilai
 ├── user-guide-seksi-acara.md   # Panduan Operasional: Seksi Acara & Super Admin
 ├── user-guide-juri.md          # Panduan Pengoperasian: Dewan Juri (Digital Scoring)
 ├── user-guide-media.md         # Panduan Pengoperasian: Tim Media Center & Monitor Venue

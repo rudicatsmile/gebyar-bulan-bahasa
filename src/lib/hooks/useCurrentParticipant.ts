@@ -8,6 +8,7 @@ import { PARTICIPANTS, COMPETITIONS, Participant } from "@/lib/dummy-data";
 export interface Enrollment {
   registrationId: string;
   competitionId: string;
+  competitionSlug?: string | null;
   competitionName: string | null;
   teamName: string | null;
   isConfirmed: boolean;
@@ -96,17 +97,21 @@ export function useCurrentParticipant() {
         if (participantRow?.id) {
           const { data: regRows } = await supabase
             .from("registrations")
-            .select("id, team_name, is_confirmed, competition_id, competitions(name)")
+            .select("id, team_name, is_confirmed, competition_id, competitions(name, slug)")
             .eq("participant_id", participantRow.id)
             .order("created_at", { ascending: true });
 
-          enrollments = (regRows ?? []).map((reg) => ({
-            registrationId: reg.id,
-            competitionId: reg.competition_id,
-            competitionName: (reg.competitions as { name?: string } | null)?.name ?? null,
-            teamName: reg.team_name,
-            isConfirmed: reg.is_confirmed,
-          }));
+          enrollments = (regRows ?? []).map((reg) => {
+            const comp = reg.competitions as { name?: string; slug?: string } | null;
+            return {
+              registrationId: reg.id,
+              competitionId: reg.competition_id,
+              competitionSlug: comp?.slug ?? null,
+              competitionName: comp?.name ?? null,
+              teamName: reg.team_name,
+              isConfirmed: reg.is_confirmed,
+            };
+          });
         }
 
         // Jika participantRow ditemukan di database

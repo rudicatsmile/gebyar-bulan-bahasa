@@ -16,20 +16,81 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { WINNERS, Winner, COMPETITIONS } from "@/lib/dummy-data";
-import { Trophy, Award, CheckCircle2, Megaphone, Tv, AlertCircle } from "lucide-react";
+import { Trophy, CheckCircle2, Megaphone, Loader2 } from "lucide-react";
+import {
+  getDashboardWinners,
+  publishAllWinners,
+  saveTieBreakerNotes,
+  type DashboardWinnerItem,
+} from "@/app/actions/winners";
 
 export default function DashboardPemenangPage() {
-  const [winners, setWinners] = React.useState<Winner[]>(WINNERS);
-  const [published, setPublished] = React.useState(true);
+  const [isMounted, setIsMounted] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [winners, setWinners] = React.useState<DashboardWinnerItem[]>([]);
+  const [isPublishing, setIsPublishing] = React.useState(false);
   const [publishNotice, setPublishNotice] = React.useState(false);
   const [tieBreakerOpen, setTieBreakerOpen] = React.useState(false);
   const [tieNotes, setTieNotes] = React.useState("");
+  const [isSavingTie, setIsSavingTie] = React.useState(false);
 
-  const handlePublish = () => {
-    setPublished(true);
-    setPublishNotice(true);
-    setTimeout(() => setPublishNotice(false), 3000);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const loadData = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await getDashboardWinners();
+      if (res.success) {
+        setWinners(res.winners);
+      }
+    } catch (err) {
+      console.error("Gagal memuat daftar pemenang:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handlePublish = async () => {
+    try {
+      setIsPublishing(true);
+      const res = await publishAllWinners();
+      if (res.success) {
+        await loadData();
+        setPublishNotice(true);
+        setTimeout(() => setPublishNotice(false), 4000);
+      } else {
+        alert(res.error || "Gagal mempublikasikan pemenang.");
+      }
+    } catch (err) {
+      alert("Terjadi kesalahan saat publikasi.");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleSaveTieNotes = async () => {
+    if (!tieNotes.trim()) return;
+    try {
+      setIsSavingTie(true);
+      const res = await saveTieBreakerNotes(tieNotes);
+      if (res.success) {
+        setTieBreakerOpen(false);
+        setTieNotes("");
+        alert("Berita acara sidang penetapan juara berhasil disimpan ke log sistem.");
+      } else {
+        alert(res.error || "Gagal menyimpan berita acara.");
+      }
+    } catch (err) {
+      alert("Terjadi kesalahan saat menyimpan berita acara.");
+    } finally {
+      setIsSavingTie(false);
+    }
   };
 
   return (
@@ -57,11 +118,17 @@ export default function DashboardPemenangPage() {
             </Button>
             <Button
               onClick={handlePublish}
+              disabled={isMounted ? (isPublishing || winners.length === 0) : false}
+              suppressHydrationWarning
               size="sm"
               variant="accent"
-              className="text-xs gap-1.5 cursor-pointer shadow-xs"
+              className="text-xs gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
             >
-              <Megaphone className="h-3.5 w-3.5" />
+              {isPublishing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Megaphone className="h-3.5 w-3.5" />
+              )}
               <span>Publikasikan Seluruh Pemenang</span>
             </Button>
           </div>
@@ -76,57 +143,72 @@ export default function DashboardPemenangPage() {
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-24 text-center">Gelar Juara</TableHead>
-                <TableHead>Cabang Lomba</TableHead>
-                <TableHead>Nama Juara / Tim</TableHead>
-                <TableHead>Sekolah / Sanggar</TableHead>
-                <TableHead className="text-center">Skor Akhir</TableHead>
-                <TableHead>Hadiah & Penghargaan</TableHead>
-                <TableHead className="text-center">Status Tayang</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {winners.map((win) => (
-                <TableRow key={win.id}>
-                  <TableCell className="text-center font-mono font-bold text-xs">
-                    <Badge variant={win.rank === 1 ? "gold" : "warning"} className="text-[10px]">
-                      {win.title}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs font-semibold text-foreground">
-                    {win.competitionName}
-                  </TableCell>
-                  <TableCell>
-                    <strong className="text-foreground text-xs sm:text-sm block">
-                      {win.winnerName}
-                    </strong>
-                    {win.teamName && (
-                      <span className="text-[11px] text-muted-foreground">{win.teamName}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {win.institution}
-                  </TableCell>
-                  <TableCell className="text-center font-mono font-bold text-accent text-sm">
-                    {win.finalScore.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {win.prize}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="success" className="text-[10px]">
-                      PUBLIK
-                    </Badge>
-                  </TableCell>
+        {loading ? (
+          <div className="py-20 flex flex-col items-center justify-center space-y-3 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin text-accent" />
+            <p className="text-xs">Memuat daftar juara resmi dari database...</p>
+          </div>
+        ) : winners.length > 0 ? (
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-24 text-center">Gelar Juara</TableHead>
+                  <TableHead>Cabang Lomba</TableHead>
+                  <TableHead>Nama Juara / Tim</TableHead>
+                  <TableHead>Sekolah / Sanggar</TableHead>
+                  <TableHead className="text-center">Skor Akhir</TableHead>
+                  <TableHead>Hadiah & Penghargaan</TableHead>
+                  <TableHead className="text-center">Status Tayang</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {winners.map((win) => (
+                  <TableRow key={win.id}>
+                    <TableCell className="text-center font-mono font-bold text-xs">
+                      <Badge variant={win.rank === 1 ? "gold" : "warning"} className="text-[10px]">
+                        {win.title}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs font-semibold text-foreground">
+                      {win.competitionName}
+                    </TableCell>
+                    <TableCell>
+                      <strong className="text-foreground text-xs sm:text-sm block">
+                        {win.winnerName}
+                      </strong>
+                      {win.teamName && (
+                        <span className="text-[11px] text-muted-foreground">{win.teamName}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {win.institution}
+                    </TableCell>
+                    <TableCell className="text-center font-mono font-bold text-accent text-sm">
+                      {win.finalScore.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {win.prize}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={win.isPublished ? "success" : "default"} className="text-[10px]">
+                        {win.isPublished ? "PUBLIK" : "DRAFT"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-2">
+            <Trophy className="h-10 w-10 text-muted-foreground mx-auto" />
+            <p className="text-sm font-semibold text-foreground">Belum Ada Juara Ditetapkan</p>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Belum ada data pemenang lomba yang tersimpan di database. Anda dapat menetapkan pemenang melalui halaman Rekapitulasi Penilaian.
+            </p>
+          </div>
+        )}
 
         {/* Modal Tie Breaker Manual */}
         <Dialog open={tieBreakerOpen} onOpenChange={setTieBreakerOpen}>
@@ -150,8 +232,19 @@ export default function DashboardPemenangPage() {
               <Button variant="outline" onClick={() => setTieBreakerOpen(false)}>
                 Batal
               </Button>
-              <Button onClick={() => setTieBreakerOpen(false)}>
-                Simpan Ketetapan Manual
+              <Button
+                onClick={handleSaveTieNotes}
+                disabled={isMounted ? (isSavingTie || !tieNotes.trim()) : false}
+                suppressHydrationWarning
+              >
+                {isSavingTie ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  "Simpan Ketetapan Manual"
+                )}
               </Button>
             </DialogFooter>
           </div>

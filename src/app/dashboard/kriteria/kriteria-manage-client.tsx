@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Sliders, Plus, AlertCircle, CheckCircle2, Trash2, Save, Loader2 } from "lucide-react";
+import { Sliders, Plus, AlertCircle, CheckCircle2, Trash2, Save, Loader2, Pencil } from "lucide-react";
 import { updateCompetitionCriteria } from "@/app/actions/competitions";
 import type { Competition, CompetitionCriterion } from "@/lib/dummy-data";
 
@@ -39,11 +39,19 @@ export function KriteriaManageClient({ initialCompetitions }: KriteriaManageClie
     }
   }, [initialCompetitions, selectedCompId]);
 
-  // Form states
+  // Form states (Tambah Kriteria)
   const [critName, setCritName] = React.useState("");
   const [critDesc, setCritDesc] = React.useState("");
   const [critWeight, setCritWeight] = React.useState("20");
   const [critMaxScore, setCritMaxScore] = React.useState("100");
+
+  // Form states (Edit Kriteria)
+  const [editingCriterion, setEditingCriterion] = React.useState<CompetitionCriterion | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [editCritName, setEditCritName] = React.useState("");
+  const [editCritDesc, setEditCritDesc] = React.useState("");
+  const [editCritWeight, setEditCritWeight] = React.useState("20");
+  const [editCritMaxScore, setEditCritMaxScore] = React.useState("100");
 
   const currentComp =
     competitionsData.find((c) => c.id === selectedCompId) || competitionsData[0] || {
@@ -77,6 +85,50 @@ export function KriteriaManageClient({ initialCompetitions }: KriteriaManageClie
     setCritName("");
     setCritDesc("");
     setNotification(null);
+  };
+
+  const handleOpenEditDialog = (crit: CompetitionCriterion) => {
+    setEditingCriterion(crit);
+    setEditCritName(crit.name);
+    setEditCritDesc(crit.description || "");
+    setEditCritWeight(crit.weight.toString());
+    setEditCritMaxScore(crit.maxScore.toString());
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEditCriterion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCriterion) return;
+
+    const updatedWeight = parseFloat(editCritWeight) || 0;
+    const updatedMaxScore = parseFloat(editCritMaxScore) || 100;
+
+    setCompetitionsData((prev) =>
+      prev.map((c) => {
+        if (c.id !== selectedCompId) return c;
+        return {
+          ...c,
+          criteria: c.criteria.map((cr) =>
+            cr.id === editingCriterion.id
+              ? {
+                  ...cr,
+                  name: editCritName.trim(),
+                  description: editCritDesc.trim(),
+                  weight: updatedWeight,
+                  maxScore: updatedMaxScore,
+                }
+              : cr
+          ),
+        };
+      })
+    );
+
+    setEditDialogOpen(false);
+    setEditingCriterion(null);
+    setNotification({
+      type: "success",
+      message: `Kriteria "${editCritName.trim()}" berhasil diperbarui. Pastikan total bobot tepat 100%, lalu klik "Simpan ke Database".`,
+    });
   };
 
   const handleDeleteCriterion = (critId: string) => {
@@ -239,7 +291,7 @@ export function KriteriaManageClient({ initialCompetitions }: KriteriaManageClie
               <TableHead>Deskripsi & Indikator</TableHead>
               <TableHead className="text-center w-28">Skor Maks</TableHead>
               <TableHead className="text-right w-28">Bobot (%)</TableHead>
-              <TableHead className="text-right w-20">Hapus</TableHead>
+              <TableHead className="text-center w-28">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -265,14 +317,23 @@ export function KriteriaManageClient({ initialCompetitions }: KriteriaManageClie
                   <TableCell className="text-right font-mono font-bold text-accent text-sm">
                     {crit.weight}%
                   </TableCell>
-                  <TableCell className="text-right">
-                    <button
-                      onClick={() => handleDeleteCriterion(crit.id)}
-                      className="p-1 rounded text-muted-foreground hover:text-danger hover:bg-muted cursor-pointer transition-colors"
-                      title="Hapus Kriteria"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditDialog(crit)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
+                        title="Edit Kriteria"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCriterion(crit.id)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-danger hover:bg-danger/10 cursor-pointer transition-colors"
+                        title="Hapus Kriteria"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -332,6 +393,61 @@ export function KriteriaManageClient({ initialCompetitions }: KriteriaManageClie
               Batal
             </Button>
             <Button type="submit">Tambahkan Kriteria</Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
+      {/* Modal Edit Kriteria */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <form onSubmit={handleSaveEditCriterion} className="space-y-4">
+          <DialogHeader>
+            <DialogTitle>Edit Kriteria Penilaian</DialogTitle>
+            <DialogDescription>
+              Perbarui parameter kriteria untuk cabang lomba <strong>{currentComp.name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Input
+            label="Nama Kriteria *"
+            placeholder="Contoh: Penghayatan & Emosi Karakter"
+            value={editCritName}
+            onChange={(e) => setEditCritName(e.target.value)}
+            required
+            minLength={2}
+          />
+
+          <Input
+            label="Deskripsi Indikator Penilaian *"
+            placeholder="Aspek ekspresi wajah, penjiwaan pesan, artikulasi kata..."
+            value={editCritDesc}
+            onChange={(e) => setEditCritDesc(e.target.value)}
+            required
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Persentase Bobot (%) *"
+              type="number"
+              min={1}
+              max={100}
+              value={editCritWeight}
+              onChange={(e) => setEditCritWeight(e.target.value)}
+              required
+            />
+            <Input
+              label="Skor Maksimal *"
+              type="number"
+              value={editCritMaxScore}
+              onChange={(e) => setEditCritMaxScore(e.target.value)}
+              required
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Batal
+            </Button>
+            <Button type="submit">Simpan Perubahan</Button>
           </DialogFooter>
         </form>
       </Dialog>

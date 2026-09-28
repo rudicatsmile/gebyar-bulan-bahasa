@@ -22,6 +22,7 @@ import {
   SCORING_RECAPS,
   type Competition,
 } from "@/lib/dummy-data";
+import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import {
   MapPin,
   Calendar,
@@ -39,8 +40,17 @@ import {
   Loader2,
 } from "lucide-react";
 
+export interface PublicJudgeItem {
+  id: string;
+  fullName: string;
+  expertise: string;
+  avatarUrl: string;
+  isChiefJudge: boolean;
+}
+
 interface LombaDetailClientProps {
   competition: Competition;
+  initialJudges?: PublicJudgeItem[];
 }
 
 /* Pemeta status lomba -> konfigurasi CTA pendaftaran */
@@ -113,9 +123,25 @@ function resolveRegistrationCta(status: Competition["status"]): RegistrationCta 
   }
 }
 
-export function LombaDetailClient({ competition }: LombaDetailClientProps) {
+export function LombaDetailClient({ competition, initialJudges }: LombaDetailClientProps) {
   const { role, loading: roleLoading } = useDashboardRole();
+  const { participant, loading: participantLoading } = useCurrentParticipant();
   const cta = resolveRegistrationCta(competition.status);
+
+  // Periksa apakah peserta aktif saat ini sudah terdaftar di cabang lomba ini
+  const userEnrollment = React.useMemo(() => {
+    if (!participant?.enrollments) return null;
+    return (
+      participant.enrollments.find(
+        (enr) =>
+          enr.competitionId === competition.id ||
+          (enr.competitionSlug && enr.competitionSlug === competition.slug) ||
+          (enr.competitionName && enr.competitionName.toLowerCase() === competition.name.toLowerCase())
+      ) || null
+    );
+  }, [participant, competition]);
+
+  const isAlreadyRegistered = Boolean(userEnrollment);
 
   // Guest (role === null) diarahkan ke pembuatan akun peserta lebih dulu,
   // peserta login diarahkan langsung ke formulir pendaftaran lomba.
@@ -126,12 +152,11 @@ export function LombaDetailClient({ competition }: LombaDetailClientProps) {
       ? `/peserta/pendaftaran?lomba=${competition.slug}`
       : `/daftar?lomba=${competition.slug}`;
 
-  // Juri yang ditugaskan
-  const assignedJudges = JUDGES.filter(
-    (j) =>
-      j.assignedCompetitionIds.includes(competition.id) ||
-      j.expertise.toLowerCase().includes(competition.shortName.toLowerCase())
-  );
+  // Juri yang ditugaskan (prioritaskan dari database competition_judges)
+  const assignedJudges =
+    initialJudges && initialJudges.length > 0
+      ? initialJudges
+      : JUDGES.filter((j) => j.assignedCompetitionIds.includes(competition.id));
 
   // Rekap penilaian untuk lomba ini (jika ada)
   const scoringData = SCORING_RECAPS[competition.id] || SCORING_RECAPS["comp-1"] || [];
@@ -276,12 +301,20 @@ export function LombaDetailClient({ competition }: LombaDetailClientProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {assignedJudges.map((judge) => (
               <Card key={judge.id} className="p-4 flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full overflow-hidden shrink-0 border border-border bg-muted flex items-center justify-center font-bold text-sm text-foreground">
-                  {judge.fullName.slice(0, 2).toUpperCase()}
-                </div>
+                {judge.avatarUrl ? (
+                  <img
+                    src={judge.avatarUrl}
+                    alt={judge.fullName}
+                    className="h-12 w-12 rounded-full object-cover shrink-0 border border-border"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-full overflow-hidden shrink-0 border border-border bg-muted flex items-center justify-center font-bold text-sm text-foreground">
+                    {judge.fullName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div className="truncate">
                   <span className="text-[10px] font-mono uppercase text-accent font-bold block">
-                    {judge.isChiefJudge ? "Juri Utama" : "Anggota Juri"}
+                    {judge.isChiefJudge ? "★ Juri Utama" : "Anggota Dewan Juri"}
                   </span>
                   <h4 className="font-heading text-sm font-bold text-foreground truncate">
                     {judge.fullName}
@@ -368,64 +401,101 @@ export function LombaDetailClient({ competition }: LombaDetailClientProps) {
         </div>
       )}
 
-      {/* CTA Daftar / Informasi — perilaku mengikuti status lomba */}
-      <div className={`p-6 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${cta.panelClass}`}>
-        <div className="space-y-1 text-center sm:text-left">
-          <h3 className="font-heading text-lg font-bold text-foreground">
-            {cta.headline.replace("{name}", competition.name)}
-          </h3>
-          <p id="cta-registration-note" className="text-xs text-muted-foreground">
-            {cta.note}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {cta.mode === "open" && roleLoading && (
-            <Button disabled className="text-xs font-semibold gap-1.5">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Memeriksa Akun...</span>
-            </Button>
-          )}
-
-          {cta.mode === "open" && !roleLoading && canRegister && (
-            <Link href={registerHref}>
-              <Button className="text-xs font-semibold gap-1.5">
-                <Trophy className="h-4 w-4" />
-                <span>{isGuest ? "Daftar & Masuk Dulu" : cta.label}</span>
-              </Button>
-            </Link>
-          )}
-
-          {/* Peran non-peserta hanya boleh memantau; jangan tawarkan aksi yang pasti gagal */}
-          {cta.mode === "open" && !roleLoading && !canRegister && (
-            <p className="text-xs text-muted-foreground max-w-[15rem] text-center sm:text-right">
-              Halaman ini bersifat informasional untuk peran {role}. Pendaftaran hanya tersedia untuk akun peserta.
-            </p>
-          )}
-
-          {(cta.mode === "upcoming" || cta.mode === "closed" || cta.mode === "cancelled") && (
-            <Button disabled aria-describedby="cta-registration-note" className="text-xs font-semibold gap-1.5">
-              {cta.mode === "upcoming" ? (
-                <Clock className="h-4 w-4" />
-              ) : cta.mode === "cancelled" ? (
-                <Ban className="h-4 w-4" />
-              ) : (
-                <Lock className="h-4 w-4" />
+      {/* CTA Daftar / Informasi — perilaku mengikuti status pendaftaran peserta */}
+      {isAlreadyRegistered ? (
+        <div className="p-6 rounded-xl border border-success/40 bg-success/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="space-y-1.5 text-center sm:text-left">
+            <div className="flex items-center gap-2 justify-center sm:justify-start">
+              <Badge variant="success" className="text-[10px]">
+                SUDAH TERDAFTAR
+              </Badge>
+              {participant?.registrationNumber && (
+                <span className="text-xs font-mono text-muted-foreground">
+                  No. Registrasi: <strong className="text-accent">{participant.registrationNumber}</strong>
+                </span>
               )}
-              <span>{cta.label}</span>
-            </Button>
-          )}
+            </div>
+            <h3 className="font-heading text-lg font-bold text-foreground">
+              Anda Telah Terdaftar di Cabang {competition.name}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Status pendaftaran Anda saat ini:{" "}
+              <strong className={userEnrollment?.isConfirmed ? "text-success font-semibold" : "text-amber-500 font-semibold"}>
+                {userEnrollment?.isConfirmed ? "Terkonfirmasi" : "Menunggu Verifikasi Berkas"}
+              </strong>
+              {userEnrollment?.teamName ? ` • Nama Tim: ${userEnrollment.teamName}` : ""}.
+              Formulir dan berkas Anda telah tercatat di sistem panitia.
+            </p>
+          </div>
 
-          {/* Aksi alternatif: tetap beri jalan keluar saat pendaftaran sudah tidak mungkin */}
-          {cta.mode !== "open" && cta.altHref && (
-            <Link href={cta.altHref}>
-              <Button variant="outline" className="text-xs font-semibold gap-1.5">
-                <Trophy className="h-4 w-4" />
-                <span>{cta.altLabel}</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link href="/peserta/pendaftaran">
+              <Button className="text-xs font-semibold gap-1.5 bg-success text-success-foreground hover:bg-success/90">
+                <CheckCircle className="h-4 w-4" />
+                <span>Lihat Status Pendaftaran Saya</span>
               </Button>
             </Link>
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className={`p-6 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${cta.panelClass}`}>
+          <div className="space-y-1 text-center sm:text-left">
+            <h3 className="font-heading text-lg font-bold text-foreground">
+              {cta.headline.replace("{name}", competition.name)}
+            </h3>
+            <p id="cta-registration-note" className="text-xs text-muted-foreground">
+              {cta.note}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {cta.mode === "open" && (roleLoading || participantLoading) && (
+              <Button disabled className="text-xs font-semibold gap-1.5">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Memeriksa Akun...</span>
+              </Button>
+            )}
+
+            {cta.mode === "open" && !roleLoading && !participantLoading && canRegister && (
+              <Link href={registerHref}>
+                <Button className="text-xs font-semibold gap-1.5">
+                  <Trophy className="h-4 w-4" />
+                  <span>{isGuest ? "Daftar & Masuk Dulu" : cta.label}</span>
+                </Button>
+              </Link>
+            )}
+
+            {/* Peran non-peserta hanya boleh memantau; jangan tawarkan aksi yang pasti gagal */}
+            {cta.mode === "open" && !roleLoading && !participantLoading && !canRegister && (
+              <p className="text-xs text-muted-foreground max-w-[15rem] text-center sm:text-right">
+                Halaman ini bersifat informasional untuk peran {role}. Pendaftaran hanya tersedia untuk akun peserta.
+              </p>
+            )}
+
+            {(cta.mode === "upcoming" || cta.mode === "closed" || cta.mode === "cancelled") && (
+              <Button disabled aria-describedby="cta-registration-note" className="text-xs font-semibold gap-1.5">
+                {cta.mode === "upcoming" ? (
+                  <Clock className="h-4 w-4" />
+                ) : cta.mode === "cancelled" ? (
+                  <Ban className="h-4 w-4" />
+                ) : (
+                  <Lock className="h-4 w-4" />
+                )}
+                <span>{cta.label}</span>
+              </Button>
+            )}
+
+            {/* Aksi alternatif: tetap beri jalan keluar saat pendaftaran sudah tidak mungkin */}
+            {cta.mode !== "open" && cta.altHref && (
+              <Link href={cta.altHref}>
+                <Button variant="outline" className="text-xs font-semibold gap-1.5">
+                  <Trophy className="h-4 w-4" />
+                  <span>{cta.altLabel}</span>
+                </Button>
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 
