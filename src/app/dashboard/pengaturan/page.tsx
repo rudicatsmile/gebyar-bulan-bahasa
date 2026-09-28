@@ -33,21 +33,53 @@ export default function DashboardPengaturanPage() {
     message: string;
   } | null>(null);
 
-  // Load data awal dari Supabase tabel event_settings
+  // Load data awal dari API / Database
   const loadSettings = React.useCallback(async () => {
     setIsLoading(true);
+    setFeedback(null);
     try {
-      const res = await getEventSettings();
-      if (res.success && res.settings) {
-        setEventName(res.settings.eventName);
-        setEventTheme(res.settings.eventTheme);
-        setEventYear(res.settings.eventYear);
-        setScoreGapThreshold(res.settings.scoreGapThreshold);
-        setMaxCompetitions(res.settings.maxCompetitions);
-        setRotationInterval(res.settings.rotationInterval);
+      // Prioritaskan direct API route
+      const res = await fetch("/api/settings", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.settings) {
+          setEventName(data.settings.eventName);
+          setEventTheme(data.settings.eventTheme);
+          setEventYear(data.settings.eventYear);
+          setScoreGapThreshold(String(data.settings.scoreGapThreshold));
+          setMaxCompetitions(String(data.settings.maxCompetitions));
+          setRotationInterval(String(data.settings.rotationInterval));
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Fallback via Server Action
+      const actionRes = await getEventSettings();
+      if (actionRes.success && actionRes.settings) {
+        setEventName(actionRes.settings.eventName);
+        setEventTheme(actionRes.settings.eventTheme);
+        setEventYear(actionRes.settings.eventYear);
+        setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
+        setMaxCompetitions(String(actionRes.settings.maxCompetitions));
+        setRotationInterval(String(actionRes.settings.rotationInterval));
       }
     } catch (err) {
       console.error("Gagal load settings:", err);
+      // Fallback Server Action jika fetch gagal
+      try {
+        const actionRes = await getEventSettings();
+        if (actionRes.success && actionRes.settings) {
+          setEventName(actionRes.settings.eventName);
+          setEventTheme(actionRes.settings.eventTheme);
+          setEventYear(actionRes.settings.eventYear);
+          setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
+          setMaxCompetitions(String(actionRes.settings.maxCompetitions));
+          setRotationInterval(String(actionRes.settings.rotationInterval));
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback load failed:", fallbackErr);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -62,35 +94,77 @@ export default function DashboardPengaturanPage() {
     setIsSaving(true);
     setFeedback(null);
 
+    const payload = {
+      eventName: eventName.trim(),
+      eventTheme: eventTheme.trim(),
+      eventYear: String(eventYear).trim(),
+      scoreGapThreshold: Number(scoreGapThreshold) || 20,
+      maxCompetitions: Number(maxCompetitions) || 3,
+      rotationInterval: Number(rotationInterval) || 15,
+    };
+
     try {
-      const res = await saveEventSettings({
-        eventName,
-        eventTheme,
-        eventYear,
-        scoreGapThreshold: Number(scoreGapThreshold),
-        maxCompetitions: Number(maxCompetitions),
-        rotationInterval: Number(rotationInterval),
+      // 1. Coba simpan via API Route /api/settings (REST, paling stabil)
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
-      if (!res.success) {
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setFeedback({
+            type: "success",
+            message: "Pengaturan acara berhasil disimpan ke tabel event_settings dan langsung diterapkan!",
+          });
+          setIsSaving(false);
+          // Auto dismiss success feedback
+          setTimeout(() => {
+            setFeedback((prev) => (prev?.type === "success" ? null : prev));
+          }, 4500);
+          return;
+        } else {
+          throw new Error(data.error || "Gagal menyimpan pengaturan.");
+        }
+      }
+
+      // 2. Fallback via Server Action jika API route tidak tersedia
+      const actionRes = await saveEventSettings(payload);
+      if (!actionRes.success) {
         setFeedback({
           type: "error",
-          message: res.error || "Gagal menyimpan pengaturan acara.",
+          message: actionRes.error || "Gagal menyimpan ke tabel event_settings.",
         });
+        setIsSaving(false);
         return;
       }
 
       setFeedback({
         type: "success",
-        message: "Pengaturan acara berhasil disimpan ke database dan langsung disinkronkan ke seluruh sistem!",
+        message: "Pengaturan acara berhasil disimpan ke tabel event_settings dan langsung diterapkan!",
       });
 
-      // Auto dismiss success feedback after 4 seconds
       setTimeout(() => {
         setFeedback((prev) => (prev?.type === "success" ? null : prev));
-      }, 4000);
+      }, 4500);
     } catch (err: unknown) {
       console.error("Gagal simpan pengaturan:", err);
+      // Fallback coba saveEventSettings
+      try {
+        const actionRes = await saveEventSettings(payload);
+        if (actionRes.success) {
+          setFeedback({
+            type: "success",
+            message: "Pengaturan acara berhasil disimpan ke tabel event_settings!",
+          });
+          setIsSaving(false);
+          return;
+        }
+      } catch {
+        // Abaikan
+      }
+
       const msg = err instanceof Error ? err.message : "Terjadi kendala saat menyimpan pengaturan.";
       setFeedback({
         type: "error",
@@ -150,7 +224,7 @@ export default function DashboardPengaturanPage() {
           {isLoading ? (
             <div className="py-16 flex flex-col items-center justify-center gap-3 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin text-accent" />
-              <p className="text-xs">Memuat konfigurasi dari database...</p>
+              <p className="text-xs">Memuat konfigurasi dari database event_settings...</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -235,15 +309,16 @@ export default function DashboardPengaturanPage() {
               {/* Action Button & Bottom Feedback */}
               <div className="pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <Button
+                  id="btn-simpan-pengaturan"
                   type="submit"
                   size="lg"
                   disabled={isSaving || isLoading}
-                  className="text-xs font-semibold gap-2 min-w-[200px]"
+                  className="text-xs font-semibold gap-2 min-w-[220px]"
                 >
                   {isSaving ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin text-accent" />
-                      <span>Menyimpan Seluruh Pengaturan...</span>
+                      <span>Menyimpan Pengaturan...</span>
                     </>
                   ) : (
                     <>
@@ -253,11 +328,21 @@ export default function DashboardPengaturanPage() {
                   )}
                 </Button>
 
-                {feedback?.type === "success" && (
-                  <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-medium">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span>Perubahan tersimpan ke database</span>
-                  </span>
+                {/* Feedback Langsung di Samping Tombol */}
+                {feedback && (
+                  <div className="flex items-center gap-2">
+                    {feedback.type === "success" ? (
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-medium animate-in fade-in-50">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span>Tersimpan ke tabel event_settings!</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-destructive flex items-center gap-1.5 font-medium animate-in fade-in-50">
+                        <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                        <span>{feedback.message}</span>
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </form>
