@@ -14,11 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PARTICIPANTS, Participant } from "@/lib/dummy-data";
+import type { Participant } from "@/lib/dummy-data";
 import { Users, Search, Download, FileCheck, Eye, Plus, RotateCcw, Loader2 } from "lucide-react";
 
 export default function DashboardPesertaPage() {
-  const [participants, setParticipants] = React.useState<Participant[]>(PARTICIPANTS);
+  const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("semua");

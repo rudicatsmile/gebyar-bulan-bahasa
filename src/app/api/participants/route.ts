@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PARTICIPANTS, Participant } from "@/lib/dummy-data";
+import type { Participant } from "@/lib/dummy-data";
 
 export async function GET() {
   try {
@@ -49,8 +49,11 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.warn("API GET /api/participants fallback to dummy data:", error.message);
-      return NextResponse.json({ success: true, participants: PARTICIPANTS, count: PARTICIPANTS.length });
+      console.error("API GET /api/participants error:", error.message);
+      return NextResponse.json(
+        { success: false, error: error.message, participants: [], count: 0 },
+        { status: 500 }
+      );
     }
 
     // Map database participants to Participant model
@@ -79,9 +82,6 @@ export async function GET() {
       }));
 
       // Status pendaftaran:
-      // Jika peserta memiliki pendaftaran lomba yang belum dikonfirmasi (is_confirmed: false),
-      // status di manajemen data lomba adalah 'menunggu_verifikasi'.
-      // Jika peserta sendiri statusnya 'menunggu_verifikasi', tetap 'menunggu_verifikasi'.
       let effectiveStatus = row.status || "menunggu_verifikasi";
       if (firstReg && !firstReg.is_confirmed && effectiveStatus === "terverifikasi") {
         effectiveStatus = "menunggu_verifikasi";
@@ -115,35 +115,21 @@ export async function GET() {
       };
     });
 
-    // Gabungkan: jika ada peserta dummy yang id/email-nya belum ada di DB, sertakan sebagai demo data
-    const existingEmails = new Set(
-      mappedDbParticipants.map((p) => p.email.toLowerCase().trim())
-    );
-    const existingRegNos = new Set(
-      mappedDbParticipants.map((p) => p.registrationNumber.toUpperCase().trim())
-    );
-
-    const mergedParticipants = [...mappedDbParticipants];
-
-    PARTICIPANTS.forEach((dummyP) => {
-      const emailLower = dummyP.email.toLowerCase().trim();
-      const regNoUpper = dummyP.registrationNumber.toUpperCase().trim();
-      if (!existingEmails.has(emailLower) && !existingRegNos.has(regNoUpper)) {
-        mergedParticipants.push(dummyP);
-      }
-    });
-
     return NextResponse.json({
       success: true,
-      participants: mergedParticipants,
-      count: mergedParticipants.length,
+      participants: mappedDbParticipants,
+      count: mappedDbParticipants.length,
     });
   } catch (err: unknown) {
     console.error("API GET /api/participants exception:", err);
-    return NextResponse.json({
-      success: true,
-      participants: PARTICIPANTS,
-      count: PARTICIPANTS.length,
-    });
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Gagal mengambil data peserta",
+        participants: [],
+        count: 0,
+      },
+      { status: 500 }
+    );
   }
 }

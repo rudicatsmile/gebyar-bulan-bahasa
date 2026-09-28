@@ -5,17 +5,39 @@ import Link from "next/link";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { PARTICIPANTS, Participant } from "@/lib/dummy-data";
-import { FileCheck, CheckCircle2, XCircle, FileText, ArrowLeft, AlertCircle } from "lucide-react";
+import type { Participant } from "@/lib/dummy-data";
+import { FileCheck, CheckCircle2, XCircle, FileText, ArrowLeft, Loader2 } from "lucide-react";
 
 export default function DashboardVerifikasiBerkasPage() {
-  const [participants, setParticipants] = React.useState<Participant[]>(PARTICIPANTS);
+  const [participants, setParticipants] = React.useState<Participant[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [selectedParticipant, setSelectedParticipant] = React.useState<Participant | null>(null);
   const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
   const [rejectionReason, setRejectionReason] = React.useState("");
+
+  const fetchParticipants = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/participants", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.participants)) {
+          setParticipants(data.participants);
+        }
+      }
+    } catch (err) {
+      console.error("Gagal mengambil data peserta:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchParticipants();
+  }, [fetchParticipants]);
 
   const pendingList = participants.filter((p) => p.status === "menunggu_verifikasi");
 
@@ -70,7 +92,12 @@ export default function DashboardVerifikasiBerkasPage() {
           </div>
         </div>
 
-        {pendingList.length > 0 ? (
+        {isLoading ? (
+          <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-3">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-accent" />
+            <p className="text-xs text-muted-foreground">Memuat berkas peserta...</p>
+          </div>
+        ) : pendingList.length > 0 ? (
           <div className="space-y-4">
             {pendingList.map((p) => (
               <Card key={p.id} className="p-6 space-y-4 border-accent/40 bg-accent/5">
@@ -119,29 +146,33 @@ export default function DashboardVerifikasiBerkasPage() {
                   <span className="text-xs font-semibold text-foreground">
                     Lampiran Dokumen Unggahan:
                   </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {p.documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="p-3 rounded-lg border border-border bg-card flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <FileText className="h-4 w-4 text-accent shrink-0" />
-                          <div className="truncate">
-                            <span className="text-xs font-medium text-foreground block truncate">
-                              {doc.fileName}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase font-mono">
-                              {doc.type.replace(/_/g, " ")}
-                            </span>
+                  {p.documents && p.documents.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {p.documents.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="p-3 rounded-lg border border-border bg-card flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <FileText className="h-4 w-4 text-accent shrink-0" />
+                            <div className="truncate">
+                              <span className="text-xs font-medium text-foreground block truncate">
+                                {doc.fileName}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                                {doc.type.replace(/_/g, " ")}
+                              </span>
+                            </div>
                           </div>
+                          <Button size="sm" variant="ghost" className="text-xs h-7 text-accent">
+                            Lihat
+                          </Button>
                         </div>
-                        <Button size="sm" variant="ghost" className="text-xs h-7 text-accent">
-                          Lihat
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Belum ada berkas yang diunggah.</p>
+                  )}
                 </div>
               </Card>
             ))}
