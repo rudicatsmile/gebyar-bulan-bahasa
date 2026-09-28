@@ -17,7 +17,7 @@ export interface Competition {
   name: string;
   shortName: string;
   category: "individu" | "kelompok";
-  status: "pendaftaran" | "berlangsung" | "selesai" | "draft" | "terjadwal";
+  status: "pendaftaran" | "berlangsung" | "selesai" | "draft" | "terjadwal" | "dibatalkan";
   description: string;
   venue: string;
   stage: string;

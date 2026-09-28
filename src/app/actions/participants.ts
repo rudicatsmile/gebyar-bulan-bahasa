@@ -97,6 +97,77 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
   try {
     const supabase = await createClient();
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: "Sesi tidak valid. Silakan masuk kembali sebagai peserta." };
+    }
+
+    // Kepemilikan: policy RLS hanya menjamin "auth.uid() is not null", jadi validasi
+    // bahwa participantId benar-benar milik akun ini harus dilakukan di sini.
+    const { data: ownParticipant, error: ownErr } = await supabase
+      .from("participants")
+      .select("id, status")
+      .eq("id", parsed.data.participantId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (ownErr) {
+      return { success: false, error: ownErr.message };
+    }
+    if (!ownParticipant) {
+      return {
+        success: false,
+        error:
+          "Data peserta Anda belum terdaftar pada sistem kepanitiaan. Lengkapi profil peserta atau hubungi panitia.",
+      };
+    }
+    if (ownParticipant.status === "ditolak") {
+      return { success: false, error: "Pendaftaran ditolak. Perbarui berkas persyaratan Anda lebih dulu." };
+    }
+
+    // Gerbang status: UI menyembunyikan tombol saat lomba tidak dibuka, namun
+    // perintah langsung tetap harus ditolak agar status 'draft'/'selesai' tak bisa diselipki.
+    const { data: competition, error: compErr } = await supabase
+      .from("competitions")
+      .select("id, name, status, type, min_team_members, max_team_members")
+      .eq("id", parsed.data.competitionId)
+      .maybeSingle();
+
+    if (compErr) {
+      return { success: false, error: compErr.message };
+    }
+    if (!competition) {
+      return { success: false, error: "Cabang lomba tidak ditemukan." };
+    }
+    if (competition.status !== "pendaftaran") {
+      return {
+        success: false,
+        error: `Pendaftaran lomba "${competition.name}" sedang tidak dibuka (status: ${competition.status}).`,
+      };
+    }
+
+    // Validasi kuota tim untuk lomba berkelompok
+    if (competition.type === "kelompok") {
+      const memberCount = parsed.data.teamMembers?.length ?? 0;
+      if (!parsed.data.teamName?.trim()) {
+        return { success: false, error: "Nama tim wajib diisi untuk lomba berkelompok." };
+      }
+      if (memberCount < competition.min_team_members) {
+        return {
+          success: false,
+          error: `Tim wajib memiliki minimal ${competition.min_team_members} anggota.`,
+        };
+      }
+      if (competition.max_team_members > 0 && memberCount > competition.max_team_members) {
+        return {
+          success: false,
+          error: `Tim boleh berisi maksimal ${competition.max_team_members} anggota.`,
+        };
+      }
+    }
+
     // Validasi batas maksimal lomba per peserta
     const { count, error: countErr } = await supabase
       .from("registrations")
@@ -114,6 +185,19 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
       };
     }
 
+    // Cegah duplikasi lebih awal: unique (participant_id, competition_id) ada di database,
+    // tapi pesan galinya perlu diterjemahkan agar dapat dimengerti peserta.
+    const { data: duplicate } = await supabase
+      .from("registrations")
+      .select("id")
+      .eq("participant_id", parsed.data.participantId)
+      .eq("competition_id", parsed.data.competitionId)
+      .maybeSingle();
+
+    if (duplicate) {
+      return { success: false, error: "Anda sudah terdaftar pada cabang lomba ini." };
+    }
+
     // Insert pendaftaran
     const { data: reg, error: regErr } = await supabase
       .from("registrations")
@@ -127,6 +211,10 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
       .single();
 
     if (regErr) {
+      // 23505 = unique_violation (balapan submit ganda dari dua tab)
+      if (regErr.code === "23505") {
+        return { success: false, error: "Anda sudah terdaftar pada cabang lomba ini." };
+      }
       return { success: false, error: regErr.message };
     }
 
@@ -146,6 +234,8 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
 
     revalidatePath("/dashboard/pendaftaran");
     revalidatePath("/peserta/pendaftaran");
+    revalidatePath("/peserta");
+    revalidatePath("/lomba");
     return { success: true, data: reg };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal mendaftar lomba.";

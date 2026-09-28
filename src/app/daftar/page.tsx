@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,11 @@ import { ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { registerUser } from "@/app/actions/auth";
 
-export default function DaftarPage() {
+function DaftarForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Slug lomba yang dibawa dari halaman detail (/daftar?lomba=membaca-puisi)
+  const lombaParam = searchParams.get("lomba");
   const [fullName, setFullName] = React.useState("");
   const [institution, setInstitution] = React.useState("");
   const [phone, setPhone] = React.useState("");
@@ -62,8 +65,11 @@ export default function DaftarPage() {
         return;
       }
 
-      // 3. Alihkan langsung ke dashboard peserta dengan fresh page load
-      window.location.href = "/peserta";
+      // 3. Alihkan ke dashboard peserta; bila ada konteks lomba, lanjutkan ke formulir
+      //    pendaftaran lomba agar alur "klik Daftar Sekarang" tidak berakhir buntu.
+      window.location.href = lombaParam
+        ? `/peserta/pendaftaran?lomba=${encodeURIComponent(lombaParam)}&auto=1`
+        : "/peserta";
     } catch (err: unknown) {
       console.error("Gagal submit pendaftaran:", err);
       const msg = err instanceof Error ? err.message : "Terjadi kendala jaringan saat mendaftar.";
@@ -163,5 +169,14 @@ export default function DaftarPage() {
         </div>
       </form>
     </AuthLayout>
+  );
+}
+
+// useSearchParams() harus dibungkus Suspense agar halaman bisa di-prerender saat build
+export default function DaftarPage() {
+  return (
+    <React.Suspense>
+      <DaftarForm />
+    </React.Suspense>
   );
 }

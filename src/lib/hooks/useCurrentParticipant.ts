@@ -4,6 +4,15 @@ import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { PARTICIPANTS, COMPETITIONS, Participant } from "@/lib/dummy-data";
 
+/** Satu baris public.registrations milik peserta aktif */
+export interface Enrollment {
+  registrationId: string;
+  competitionId: string;
+  competitionName: string | null;
+  teamName: string | null;
+  isConfirmed: boolean;
+}
+
 export interface CurrentParticipant {
   id: string;
   userId: string | null;
@@ -16,6 +25,17 @@ export interface CurrentParticipant {
   status: "menunggu_verifikasi" | "terverifikasi" | "ditolak";
   competitionId?: string;
   competitionName?: string;
+  /**
+   * Daftar seluruh cabang lomba yang sudah diikuti (maks. MAX_COMPETITION_PER_PARTICIPANT).
+   * competitionId/competitionName tetap dipertahankan di atas untuk kompatibilitas halaman lama.
+   */
+  enrollments?: Enrollment[];
+  /**
+   * public.participants.id asli (satu-satunya nilai yang valid sebagai FK registrations.participant_id).
+   * `null` bila baris peserta belum ada di database (akun baru / fallback demo), sehingga
+   * aksi pendaftaran lomba harus diblokir sebelum menembus constraint.
+   */
+  participantRowId?: string | null;
   isDemoFallback: boolean;
   avatarUrl?: string;
 }
@@ -68,21 +88,25 @@ export function useCurrentParticipant() {
           .eq("id", user.id)
           .maybeSingle();
 
-        // 4. Cek apakah ada pendaftaran lomba (registrations)
-        let compId: string | undefined;
-        let compName: string | undefined;
+        // 4. Ambil SELURUH pendaftaran lomba (registrations) milik peserta.
+        //    Satu peserta boleh mengikuti beberapa cabang lomba, jadi jangan pakai
+        //    maybeSingle(): dengan 2+ baris hasilnya null dan status tampak "belum mendaftar".
+        let enrollments: Enrollment[] = [];
 
         if (participantRow?.id) {
-          const { data: regRow } = await supabase
+          const { data: regRows } = await supabase
             .from("registrations")
-            .select("competition_id, competitions(name)")
+            .select("id, team_name, is_confirmed, competition_id, competitions(name)")
             .eq("participant_id", participantRow.id)
-            .maybeSingle();
+            .order("created_at", { ascending: true });
 
-          if (regRow) {
-            compId = regRow.competition_id;
-            compName = (regRow.competitions as any)?.name;
-          }
+          enrollments = (regRows ?? []).map((reg) => ({
+            registrationId: reg.id,
+            competitionId: reg.competition_id,
+            competitionName: (reg.competitions as { name?: string } | null)?.name ?? null,
+            teamName: reg.team_name,
+            isConfirmed: reg.is_confirmed,
+          }));
         }
 
         // Jika participantRow ditemukan di database
@@ -114,8 +138,10 @@ export function useCurrentParticipant() {
                 : participantRow.status === "menunggu_verifikasi"
                 ? "menunggu_verifikasi"
                 : "terverifikasi",
-            competitionId: compId,
-            competitionName: compName,
+            competitionId: enrollments[0]?.competitionId,
+            competitionName: enrollments[0]?.competitionName ?? undefined,
+            enrollments,
+            participantRowId: participantRow.id,
             isDemoFallback: false,
           });
           setLoading(false);
@@ -135,6 +161,9 @@ export function useCurrentParticipant() {
             registrationNumber: regNumber,
             totalPoints: 0,
             status: "terverifikasi",
+            enrollments: [],
+            // profiles.id BUKAN participants.id — tidak boleh dipakai sebagai FK registrations
+            participantRowId: null,
             isDemoFallback: false,
           });
           setLoading(false);
@@ -159,6 +188,16 @@ export function useCurrentParticipant() {
             status: dummyDemo.status,
             competitionId: dummyDemo.competitionId,
             competitionName: comp?.name || "Membaca Puisi",
+            enrollments: [
+              {
+                registrationId: "demo-reg",
+                competitionId: dummyDemo.competitionId,
+                competitionName: comp?.name || "Membaca Puisi",
+                teamName: dummyDemo.teamName ?? null,
+                isConfirmed: true,
+              },
+            ],
+            participantRowId: null,
             isDemoFallback: true,
           });
           setLoading(false);
@@ -181,6 +220,9 @@ export function useCurrentParticipant() {
           registrationNumber: fallbackReg,
           totalPoints: 0,
           status: "terverifikasi",
+          enrollments: [],
+          // Belum ada baris participants -> pendaftar lomba wajib dilengkapi lebih dulu
+          participantRowId: null,
           isDemoFallback: false,
         });
         setLoading(false);
@@ -203,6 +245,8 @@ export function useCurrentParticipant() {
         status: demo.status,
         competitionId: demo.competitionId,
         competitionName: comp?.name || "Membaca Puisi",
+        enrollments: [],
+        participantRowId: null,
         isDemoFallback: true,
       });
       setLoading(false);
@@ -223,6 +267,8 @@ export function useCurrentParticipant() {
         status: demo.status,
         competitionId: demo.competitionId,
         competitionName: "Membaca Puisi",
+        enrollments: [],
+        participantRowId: null,
         isDemoFallback: true,
       });
       setLoading(false);

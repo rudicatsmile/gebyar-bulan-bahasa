@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { PublicNavbar } from "@/components/layouts/PublicNavbar";
 import { PublicFooter } from "@/components/layouts/PublicFooter";
+import { DashboardLayout } from "@/components/layouts/DashboardLayout";
+import { useDashboardRole } from "@/lib/hooks/useDashboardRole";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +16,7 @@ import {
   Users,
   ChevronRight,
   Filter,
+  ArrowLeft,
 } from "lucide-react";
 
 interface LombaClientProps {
@@ -23,6 +26,7 @@ interface LombaClientProps {
 export function LombaClient({ initialCompetitions }: LombaClientProps) {
   const [selectedCategory, setSelectedCategory] = React.useState<string>("semua");
   const [selectedStatus, setSelectedStatus] = React.useState<string>("semua");
+  const { role, loading: roleLoading } = useDashboardRole();
 
   const filteredCompetitions = initialCompetitions.filter((comp) => {
     const matchCategory =
@@ -32,13 +36,11 @@ export function LombaClient({ initialCompetitions }: LombaClientProps) {
     return matchCategory && matchStatus;
   });
 
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <PublicNavbar />
+  const isDashboard = !roleLoading && role !== null;
 
-      <main className="flex-1 py-12 sm:py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          {/* Header */}
+  /* Konten katalog (dipakai bersama oleh layout publik maupun dashboard) */
+  const catalogContent = (
+    <div className="space-y-10">
           <div className="space-y-4 max-w-3xl">
             <Badge variant="gold" className="text-xs">
               Katalog Perlombaan Resmi
@@ -182,6 +184,35 @@ export function LombaClient({ initialCompetitions }: LombaClientProps) {
               <p className="text-xs text-muted-foreground">Coba ubah kombinasi filter kategori atau status.</p>
             </div>
           )}
+    </div>
+  );
+
+  /* User login: tetap pakai DashboardLayout agar sidebar konsisten */
+  if (isDashboard && role) {
+    return (
+      <DashboardLayout role={role}>
+        <div className="space-y-6">
+          <Link
+            href={role === "peserta" ? "/peserta/pendaftaran" : `/${role === "seksi_acara" ? "dashboard" : role}`}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Kembali</span>
+          </Link>
+          {catalogContent}
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  /* Pengunjung publik: layout navbar + footer seperti semula */
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <PublicNavbar />
+
+      <main className="flex-1 py-12 sm:py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {catalogContent}
         </div>
       </main>
 

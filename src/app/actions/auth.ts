@@ -162,16 +162,46 @@ export async function updateParticipantProfile(formData: {
       return { success: false, error: "Gagal memperbarui profil: " + profileError.message };
     }
 
-    // 2. Perbarui tabel public.participants jika ada baris untuk user_id ini
-    await adminSupabase
+    // 2. Sinkronkan baris public.participants: perbarui bila sudah ada, buat bila belum ada.
+    //    Tanpa penciptaan baris ini, peserta yang insert awalnya gagal tidak akan pernah
+    //    memiliki participants.id — satu-satunya nilai yang valid untuk FK
+    //    registrations.participant_id — sehingga pendaftaran lomba selamanya ditolak.
+    const { data: existingParticipant } = await adminSupabase
       .from("participants")
-      .update({
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existingParticipant) {
+      const { error: participantUpdateError } = await adminSupabase
+        .from("participants")
+        .update({
+          full_name: fullName.trim(),
+          institution: institution.trim(),
+          phone: phone?.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingParticipant.id);
+
+      if (participantUpdateError) {
+        console.warn("Notice: Gagal memperbarui entitas participants:", participantUpdateError.message);
+      }
+    } else {
+      const { error: participantInsertError } = await adminSupabase.from("participants").insert({
+        user_id: userId,
+        registration_number: `GBB-2025-${Math.floor(1000 + Math.random() * 9000)}`,
         full_name: fullName.trim(),
-        institution: institution.trim(),
+        email: null,
         phone: phone?.trim() || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
+        institution: institution.trim(),
+        status: "menunggu_verifikasi",
+        total_points: 0,
+      });
+
+      if (participantInsertError) {
+        console.warn("Notice: Gagal membuat entitas participants:", participantInsertError.message);
+      }
+    }
 
     // 3. Perbarui auth metadata & kata sandi bila diminta
     if (password && password.trim().length >= 8) {

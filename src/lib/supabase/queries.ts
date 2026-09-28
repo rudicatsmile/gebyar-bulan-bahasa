@@ -80,8 +80,11 @@ function formatCompetition(row: DbCompetitionWithCriteria): Competition {
       : [];
 
   const rawStatus = row.status;
-  const status: "pendaftaran" | "berlangsung" | "selesai" | "draft" | "terjadwal" =
-    rawStatus === "berlangsung" || rawStatus === "selesai" || rawStatus === "draft"
+  const status: Competition["status"] =
+    rawStatus === "berlangsung" ||
+    rawStatus === "selesai" ||
+    rawStatus === "draft" ||
+    rawStatus === "dibatalkan"
       ? rawStatus
       : "pendaftaran";
 
