@@ -60,7 +60,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "OPERASIONAL LOMBA", href: "#", icon: Trophy, isHeader: true },
   { title: "Monitoring Lomba", href: "/dashboard/lomba", icon: Trophy },
   { title: "Peserta & Berkas", href: "/dashboard/peserta", icon: Users },
-  { title: "Verifikasi Berkas", href: "/dashboard/peserta/verifikasi", icon: FileCheck, badge: "1" },
+  { title: "Verifikasi Berkas", href: "/dashboard/peserta/verifikasi", icon: FileCheck },
   { title: "Pendaftaran Tim", href: "/dashboard/pendaftaran", icon: ClipboardList },
   { title: "Manajemen Jadwal", href: "/dashboard/jadwal", icon: Calendar },
   { title: "PENJURIAN & NILAI", href: "#", icon: UserCheck, isHeader: true },
@@ -124,6 +124,36 @@ export function DashboardLayout({
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [internalPoints, setInternalPoints] = React.useState<number | null>(null);
+  const [pendingVerificationCount, setPendingVerificationCount] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (role === "seksi_acara") {
+      const supabase = createClient();
+      supabase
+        .from("participants")
+        .select("id, status, registrations(is_confirmed)")
+        .then(({ data, error }) => {
+          if (!error && Array.isArray(data)) {
+            const count = data.filter((row: any) => {
+              const firstReg = row.registrations && row.registrations[0];
+              const isUnconfirmed = firstReg && !firstReg.is_confirmed;
+              return row.status === "menunggu_verifikasi" || isUnconfirmed;
+            }).length;
+            setPendingVerificationCount(count);
+          } else {
+            supabase
+              .from("participants")
+              .select("id", { count: "exact", head: true })
+              .eq("status", "menunggu_verifikasi")
+              .then(({ count }) => {
+                if (count !== null && count !== undefined) {
+                  setPendingVerificationCount(count);
+                }
+              });
+          }
+        });
+    }
+  }, [role, pathname]);
 
   React.useEffect(() => {
     if (role === "peserta" && participantPoints === undefined) {
@@ -161,14 +191,30 @@ export function DashboardLayout({
     window.location.href = "/masuk";
   };
 
-  const navItems =
-    role === "seksi_acara"
-      ? SEKSI_ACARA_NAV
-      : role === "juri"
-      ? JURI_NAV
-      : role === "media_center"
-      ? MEDIA_NAV
-      : PESERTA_NAV;
+  const navItems = React.useMemo(() => {
+    let baseItems =
+      role === "seksi_acara"
+        ? SEKSI_ACARA_NAV
+        : role === "juri"
+        ? JURI_NAV
+        : role === "media_center"
+        ? MEDIA_NAV
+        : PESERTA_NAV;
+
+    if (role === "seksi_acara" && pendingVerificationCount !== null) {
+      baseItems = baseItems.map((item) => {
+        if (item.href === "/dashboard/peserta/verifikasi") {
+          return {
+            ...item,
+            badge: pendingVerificationCount > 0 ? String(pendingVerificationCount) : undefined,
+          };
+        }
+        return item;
+      });
+    }
+
+    return baseItems;
+  }, [role, pendingVerificationCount]);
 
   const roleLabel =
     role === "seksi_acara"
@@ -455,6 +501,11 @@ export function DashboardLayout({
                   >
                     <Icon className="h-4 w-4" />
                     <span>{item.title}</span>
+                    {item.badge && (
+                      <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-accent text-accent-foreground">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

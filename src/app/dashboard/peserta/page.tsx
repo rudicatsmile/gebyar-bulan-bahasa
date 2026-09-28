@@ -20,6 +20,7 @@ import { Users, Search, Download, FileCheck, Eye, Plus, RotateCcw, Loader2 } fro
 export default function DashboardPesertaPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isMounted, setIsMounted] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("semua");
 
@@ -38,6 +39,10 @@ export default function DashboardPesertaPage() {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  React.useEffect(() => {
+    setIsMounted(true);
   }, []);
 
   React.useEffect(() => {
@@ -90,17 +95,18 @@ export default function DashboardPesertaPage() {
               size="sm"
               variant="outline"
               onClick={fetchParticipants}
-              disabled={isLoading}
+              disabled={isMounted ? isLoading : false}
+              suppressHydrationWarning
               className="text-xs gap-1.5 cursor-pointer"
               title="Segarkan data"
             >
-              <RotateCcw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+              <RotateCcw className={`h-3.5 w-3.5 ${isMounted && isLoading ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
             <Link href="/dashboard/peserta/verifikasi">
-              <Button size="sm" variant="accent" className="text-xs gap-1.5">
+              <Button size="sm" variant="accent" className="text-xs gap-1.5" suppressHydrationWarning>
                 <FileCheck className="h-3.5 w-3.5" />
-                <span>Antrean Verifikasi ({pendingCount})</span>
+                <span>Antrean Verifikasi ({isMounted ? pendingCount : 0})</span>
               </Button>
             </Link>
             <Button

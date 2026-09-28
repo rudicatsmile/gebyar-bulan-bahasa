@@ -16,8 +16,7 @@ export async function GET(
     }
 
     const supabase = createAdminClient();
-    const { data: row, error } = await supabase
-      .from("participants")
+    const { data: row, error } = await (supabase.from("participants") as any)
       .select(`
         id,
         user_id,
@@ -84,6 +83,7 @@ export async function GET(
       id: d.id,
       type: (d.doc_type || "kartu_pelajar") as "kartu_pelajar" | "surat_izin" | "karya",
       fileName: d.file_name || "Dokumen Persyaratan",
+      fileUrl: d.file_url || undefined,
       status: (d.status === "valid" ? "valid" : d.status === "tidak_valid" ? "tidak_valid" : "menunggu") as "valid" | "menunggu" | "tidak_valid",
     }));
 

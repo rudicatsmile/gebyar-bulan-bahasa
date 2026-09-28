@@ -18,12 +18,13 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
+import type { Participant } from "@/lib/dummy-data";
 
 export default function DashboardPesertaDetailPage() {
   const params = useParams();
   const id = params?.id as string;
 
-  const [participant, setParticipant] = React.useState(null);
+  const [participant, setParticipant] = React.useState<Participant | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   const fetchParticipant = React.useCallback(async () => {
@@ -191,38 +192,55 @@ export default function DashboardPesertaDetailPage() {
                 <span>Berkas Persyaratan yang Diunggah</span>
               </h3>
               <div className="space-y-3">
-                {participant.documents.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="p-3.5 rounded-lg border border-border bg-card flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-3 truncate">
-                      <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
+                {participant.documents && participant.documents.length > 0 ? (
+                  participant.documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="p-3.5 rounded-lg border border-border bg-card flex items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3 truncate">
+                        <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="truncate">
+                          <span className="text-xs font-semibold text-foreground block truncate">
+                            {doc.fileName}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground uppercase font-mono">
+                            Tipe: {doc.type.replace(/_/g, " ")}
+                          </span>
+                        </div>
                       </div>
-                      <div className="truncate">
-                        <span className="text-xs font-semibold text-foreground block truncate">
-                          {doc.fileName}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground uppercase font-mono">
-                          Tipe: {doc.type.replace(/_/g, " ")}
-                        </span>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      <Badge
-                        variant={doc.status === "valid" ? "success" : "warning"}
-                        className="text-[10px]"
-                      >
-                        {doc.status.toUpperCase()}
-                      </Badge>
-                      <Button size="sm" variant="outline" className="text-xs h-7">
-                        Pratinjau
-                      </Button>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <Badge
+                          variant={doc.status === "valid" ? "success" : "warning"}
+                          className="text-[10px]"
+                        >
+                          {doc.status.toUpperCase()}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 cursor-pointer"
+                          onClick={() => {
+                            if (doc.fileUrl) {
+                              window.open(doc.fileUrl, "_blank");
+                            } else {
+                              alert("Tautan berkas tidak tersedia.");
+                            }
+                          }}
+                        >
+                          Pratinjau
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground italic py-3 text-center border border-dashed rounded-lg">
+                    Peserta ini belum mengunggah dokumen persyaratan fisik.
+                  </p>
+                )}
               </div>
             </Card>
           </div>

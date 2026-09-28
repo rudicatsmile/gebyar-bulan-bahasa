@@ -78,6 +78,7 @@ export async function GET() {
         id: d.id,
         type: (d.doc_type || "kartu_pelajar") as "kartu_pelajar" | "surat_izin" | "karya",
         fileName: d.file_name || "Dokumen Persyaratan",
+        fileUrl: d.file_url || undefined,
         status: (d.status === "valid" ? "valid" : d.status === "tidak_valid" ? "tidak_valid" : "menunggu") as "valid" | "menunggu" | "tidak_valid",
       }));
 

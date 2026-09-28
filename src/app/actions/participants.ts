@@ -291,3 +291,107 @@ export async function verifyParticipantDocument(data: z.infer<typeof VerifyDocum
     return { success: false, error: message };
   }
 }
+
+export async function verifyParticipantRegistration(
+  participantId: string,
+  action: "approve" | "reject",
+  rejectionReason?: string
+) {
+  try {
+    const supabase = createAdminClient();
+
+    if (action === "approve") {
+      const { data: updatedPart, error: partErr } = await supabase
+        .from("participants")
+        .update({
+          status: "terverifikasi",
+          verified_at: new Date().toISOString(),
+          rejection_reason: null,
+        })
+        .eq("id", participantId)
+        .select();
+
+      if (partErr) {
+        return { success: false, error: partErr.message };
+      }
+
+      const { error: regErr } = await supabase
+        .from("registrations")
+        .update({ is_confirmed: true })
+        .eq("participant_id", participantId);
+
+      if (regErr) {
+        console.error("Gagal update registrations:", regErr.message);
+      }
+
+      await supabase
+        .from("participant_documents")
+        .update({
+          status: "valid",
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq("participant_id", participantId);
+
+      try {
+        await supabase.from("activity_logs").insert({
+          action: "approve_participant",
+          entity: "participant",
+          entity_id: participantId,
+          description: "Berkas dan pendaftaran peserta berhasil disetujui.",
+        });
+      } catch (logErr) {
+        console.warn("Log activity error:", logErr);
+      }
+    } else {
+      const reason = rejectionReason || "Berkas persyaratan tidak lengkap atau tidak valid.";
+
+      const { error: partErr } = await supabase
+        .from("participants")
+        .update({
+          status: "ditolak",
+          rejection_reason: reason,
+        })
+        .eq("id", participantId);
+
+      if (partErr) {
+        return { success: false, error: partErr.message };
+      }
+
+      await supabase
+        .from("registrations")
+        .update({ is_confirmed: false })
+        .eq("participant_id", participantId);
+
+      await supabase
+        .from("participant_documents")
+        .update({
+          status: "tidak_valid",
+          note: reason,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq("participant_id", participantId);
+
+      try {
+        await supabase.from("activity_logs").insert({
+          action: "reject_participant",
+          entity: "participant",
+          entity_id: participantId,
+          description: `Pendaftaran dan berkas peserta ditolak. Alasan: ${reason}`,
+        });
+      } catch (logErr) {
+        console.warn("Log activity error:", logErr);
+      }
+    }
+
+    revalidatePath("/dashboard/peserta");
+    revalidatePath("/dashboard/peserta/verifikasi");
+    revalidatePath(`/dashboard/peserta/${participantId}`);
+    revalidatePath("/peserta/pendaftaran");
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memproses verifikasi berkas.";
+    return { success: false, error: message };
+  }
+}
+

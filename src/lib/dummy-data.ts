@@ -52,6 +52,7 @@ export interface Participant {
     id: string;
     type: "kartu_pelajar" | "surat_izin" | "karya";
     fileName: string;
+    fileUrl?: string;
     status: "valid" | "menunggu" | "tidak_valid";
   }[];
 }

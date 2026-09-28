@@ -19,6 +19,7 @@ import { useCurrentParticipant, Enrollment } from "@/lib/hooks/useCurrentPartici
 import { enrollCompetition } from "@/app/actions/participants";
 import { createClient } from "@/lib/supabase/client";
 import { COMPETITIONS, PARTICIPANTS } from "@/lib/dummy-data";
+import { BerkasUploadSection } from "@/components/peserta/BerkasUploadSection";
 import type { CompetitionStatus, CompetitionType } from "@/types/database.types";
 import {
   Trophy,
@@ -428,6 +429,16 @@ export function PesertaPendaftaranClient() {
                   </Link>
                 </div>
               </Card>
+            )}
+
+            {/* Bagian Unggah Berkas Persyaratan */}
+            {participant?.participantRowId && (
+              <div className="pt-2">
+                <BerkasUploadSection
+                  participantId={participant.participantRowId}
+                  onUploadSuccess={refetch}
+                />
+              </div>
             )}
 
             {/* Panel pendaftaran lomba tujuan (dari ?lomba=slug) */}
