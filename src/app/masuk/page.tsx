@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +11,24 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function MasukPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = React.useState("acara@gebyarbulanbahasa.id");
   const [password, setPassword] = React.useState("rahasia123");
   const [selectedRole, setSelectedRole] = React.useState<string>("seksi_acara");
   const [isLoading, setIsLoading] = React.useState(false);
-  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(() => {
+    return null; // diisi oleh useEffect setelah mount
+  });
+
+  // Tampilkan pesan error dari middleware (misal: akun nonaktif diarahkan ke /masuk?error=nonaktif)
+  React.useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam === "nonaktif") {
+      setErrorMsg(
+        "Akun Anda telah dinonaktifkan oleh administrator. Silakan hubungi panitia untuk informasi lebih lanjut."
+      );
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,14 +52,26 @@ export default function MasukPage() {
       });
 
       if (!error && data.user) {
-        // Ambil peran resmi dari tabel public.profiles
+        // Ambil peran resmi DAN status keaktifan dari tabel public.profiles
         const { data: profile } = await supabase
           .from("profiles")
-          .select("role")
+          .select("role, is_active")
           .eq("id", data.user.id)
           .maybeSingle();
 
         const userRole = profile?.role || selectedRole;
+        const isActive = profile?.is_active ?? true;
+
+        // Blokir akun nonaktif (kecuali super_admin agar tidak terjadi lockout sistem)
+        if (!isActive && userRole !== "super_admin") {
+          await supabase.auth.signOut();
+          setErrorMsg(
+            "Akun Anda telah dinonaktifkan oleh administrator. Silakan hubungi panitia untuk informasi lebih lanjut."
+          );
+          setIsLoading(false);
+          return;
+        }
+
         const targetUrl =
           userRole === "seksi_acara" || userRole === "super_admin"
             ? "/dashboard"

@@ -57,15 +57,26 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // If logged in, check role for route authorization
+  // If logged in, check role and active status for route authorization
   if (user && isProtectedRoute) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, is_active")
       .eq("id", user.id)
       .single();
 
     const role = profile?.role || "peserta";
+    const isActive = profile?.is_active ?? true;
+
+    // Blokir akun nonaktif (kecuali super_admin agar tidak terjadi lockout sistem)
+    if (!isActive && role !== "super_admin") {
+      // Paksa sign out di sisi server agar session token tidak bisa dipakai lagi
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/masuk";
+      url.searchParams.set("error", "nonaktif");
+      return NextResponse.redirect(url);
+    }
 
     // RBAC logic
     if (pathname.startsWith("/dashboard") && role !== "seksi_acara" && role !== "super_admin") {
