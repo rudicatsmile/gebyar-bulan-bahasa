@@ -6,57 +6,86 @@ import { useRouter } from "next/navigation";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { registerUser } from "@/app/actions/auth";
 
 export default function DaftarPage() {
   const router = useRouter();
   const [fullName, setFullName] = React.useState("");
   const [institution, setInstitution] = React.useState("");
+  const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({
+      // 1. Eksekusi pendaftaran via Server Action (auto-confirm & save ke profiles + participants)
+      const res = await registerUser({
+        fullName,
+        institution,
+        phone: phone || null,
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-            institution,
-            role: "peserta",
-          },
-        },
       });
 
-      if (error && !error.message.includes("placeholder")) {
-        console.warn("Supabase SignUp notice:", error.message);
+      if (!res.success) {
+        setErrorMsg(res.error || "Gagal melakukan pendaftaran. Silakan periksa data Anda.");
+        setIsLoading(false);
+        return;
       }
-    } catch {
-      // Graceful fallback for offline demo
-    }
 
-    setIsLoading(false);
-    router.push("/verifikasi-email");
+      setSuccessMsg(`Pendaftaran berhasil! Nomor Peserta Anda: ${res.registrationNumber}. Menghubungkan sesi...`);
+
+      // 2. Langsung login otomatis via Supabase SSR client agar cookie sesi aktif di browser
+      const supabase = createClient();
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
+        password,
+      });
+
+      if (loginError) {
+        console.warn("Auto-login notice:", loginError.message);
+        // Fallback jika signIn browser terhambat, arahkan ke login dengan pesan sukses
+        router.push("/masuk?registered=true");
+        return;
+      }
+
+      // 3. Alihkan langsung ke dashboard peserta
+      router.push("/peserta");
+    } catch (err: unknown) {
+      console.error("Gagal submit pendaftaran:", err);
+      const msg = err instanceof Error ? err.message : "Terjadi kendala jaringan saat mendaftar.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
   };
 
   return (
     <AuthLayout
       title="Daftar Akun Peserta"
-      subtitle="Buat akun peserta untuk mengikuti challenge non-lomba, scan stand pameran, dan menukar reward."
+      subtitle="Buat akun peserta resmi untuk mengikuti challenge festival, scan QR booth stand budaya, dan menukar poin reward."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {errorMsg && (
-          <div className="p-3 rounded-lg border border-danger/30 bg-danger/10 text-danger text-xs">
-            {errorMsg}
+          <div className="p-3.5 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-xs flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="p-3.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span className="font-medium">{successMsg}</span>
           </div>
         )}
 
@@ -70,10 +99,19 @@ export default function DaftarPage() {
 
         <Input
           label="Asal Sekolah / Kampus / Instansi *"
-          placeholder="Contoh: SMAN 1 Bandung"
+          placeholder="Contoh: SMAN 1 Bandung / Univ. Indonesia"
           value={institution}
           onChange={(e) => setInstitution(e.target.value)}
           required
+        />
+
+        <Input
+          label="Nomor WhatsApp / HP (Disarankan)"
+          type="tel"
+          placeholder="Contoh: 081234567890"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          helperText="Digunakan panitia untuk konfirmasi kegiatan dan penyerahan hadiah reward."
         />
 
         <Input
@@ -91,21 +129,24 @@ export default function DaftarPage() {
           placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          helperText="Gunakan kombinasi huruf besar, huruf kecil, dan angka."
+          helperText="Gunakan minimal 8 karakter dengan kombinasi huruf dan angka."
           required
         />
 
         <Button
           type="submit"
           size="lg"
-          disabled={isLoading}
-          className="w-full text-xs font-semibold gap-2"
+          disabled={isLoading || !!successMsg}
+          className="w-full text-xs font-semibold gap-2 cursor-pointer"
         >
           {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Memproses Akun Peserta...</span>
+            </span>
           ) : (
             <>
-              <span>Daftar Sekarang</span>
+              <span>Daftar Akun Sekarang</span>
               <ArrowRight className="h-4 w-4" />
             </>
           )}
