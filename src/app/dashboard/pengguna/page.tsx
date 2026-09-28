@@ -20,12 +20,14 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import { getAllUsers, updateUserRole, toggleUserActive, AppUser } from "@/app/actions/users";
+import { getAllUsers, updateUserRole, toggleUserActive } from "@/app/actions/users";
+import type { AppUser } from "@/app/actions/users";
 import { UserRole } from "@/types/database.types";
 
 export default function DashboardKelolaPenggunaPage() {
   const [users, setUsers] = React.useState<AppUser[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isMounted, setIsMounted] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [filterRole, setFilterRole] = React.useState<string>("all");
   const [updatingId, setUpdatingId] = React.useState<string | null>(null);
@@ -75,6 +77,7 @@ export default function DashboardKelolaPenggunaPage() {
   }, []);
 
   React.useEffect(() => {
+    setIsMounted(true);
     fetchUsers();
   }, [fetchUsers]);
 
@@ -193,7 +196,7 @@ export default function DashboardKelolaPenggunaPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="gold" className="text-xs font-mono">
+            <Badge variant="gold" className="text-xs font-mono" suppressHydrationWarning>
               Total {users.length} Akun Terdaftar
             </Badge>
             <Button
@@ -201,7 +204,8 @@ export default function DashboardKelolaPenggunaPage() {
               variant="outline"
               size="sm"
               onClick={fetchUsers}
-              disabled={isLoading}
+              disabled={isMounted ? isLoading : false}
+              suppressHydrationWarning
               className="text-xs gap-1.5 cursor-pointer"
             >
               <RotateCcw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
