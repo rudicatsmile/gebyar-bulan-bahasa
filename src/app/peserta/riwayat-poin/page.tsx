@@ -13,7 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Coins, ArrowLeft, PlusCircle, MinusCircle } from "lucide-react";
+import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
+import { Coins, ArrowLeft, PlusCircle, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 
 interface PointLedgerItem {
   id: string;
@@ -23,7 +24,7 @@ interface PointLedgerItem {
   timestamp: string;
 }
 
-const LEDGER_ITEMS: PointLedgerItem[] = [
+const DEMO_LEDGER_ITEMS: PointLedgerItem[] = [
   { id: "tx-1", source: "Scan QR", description: "Kunjungan Stand Membaca Puisi (PUISI01)", pointsDelta: 10, timestamp: "27 Okt 2025, 09:15 WIB" },
   { id: "tx-2", source: "Scan QR", description: "Kunjungan Stand Melukis Tas Kanvas (KANVAS04)", pointsDelta: 10, timestamp: "27 Okt 2025, 09:40 WIB" },
   { id: "tx-3", source: "Scan QR", description: "Kunjungan Stand Tradisi Palang Pintu (PALANG06)", pointsDelta: 10, timestamp: "27 Okt 2025, 10:05 WIB" },
@@ -34,10 +35,14 @@ const LEDGER_ITEMS: PointLedgerItem[] = [
 ];
 
 export default function PesertaRiwayatPoinPage() {
-  const currentTotal = LEDGER_ITEMS.reduce((sum, item) => sum + item.pointsDelta, 0);
+  const { participant, loading } = useCurrentParticipant();
+
+  const isDemo = participant?.isDemoFallback;
+  const currentTotal = participant?.totalPoints ?? 0;
+  const ledgerItems = isDemo ? DEMO_LEDGER_ITEMS : [];
 
   return (
-    <DashboardLayout role="peserta">
+    <DashboardLayout role="peserta" participantPoints={currentTotal}>
       <div className="space-y-6">
         <div>
           <Link
@@ -69,38 +74,72 @@ export default function PesertaRiwayatPoinPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Sumber Perolehan</TableHead>
-                <TableHead>Keterangan Transaksi</TableHead>
-                <TableHead>Waktu Transaksi</TableHead>
-                <TableHead className="text-right">Mutasi Poin</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {LEDGER_ITEMS.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell>
-                    <Badge variant="gold" className="text-[10px]">
-                      {tx.source}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-medium text-foreground text-xs sm:text-sm">
-                    {tx.description}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono">
-                    {tx.timestamp}
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
-                    +{tx.pointsDelta} Pts
-                  </TableCell>
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin text-accent" />
+            <p className="text-xs">Memuat riwayat poin peserta...</p>
+          </div>
+        ) : ledgerItems.length === 0 ? (
+          <div className="p-8 sm:p-12 text-center rounded-xl border border-dashed border-border bg-card space-y-4">
+            <div className="w-12 h-12 rounded-full bg-accent/10 text-accent flex items-center justify-center mx-auto">
+              <Coins className="h-6 w-6" />
+            </div>
+            <div className="space-y-1 max-w-md mx-auto">
+              <h3 className="font-heading text-base font-bold text-foreground">
+                Belum Ada Riwayat Mutasi Poin
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Anda saat ini memiliki saldo 0 poin. Kunjungi stand pameran budaya, lakukan scan QR, atau kerjakan misi tantangan untuk mulai mengumpulkan poin festival.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Link href="/peserta/scan">
+                <Button size="sm" variant="outline" className="text-xs">
+                  Scan QR Stand
+                </Button>
+              </Link>
+              <Link href="/peserta/challenge">
+                <Button size="sm" className="text-xs gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Kerjakan Challenge</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Sumber Perolehan</TableHead>
+                  <TableHead>Keterangan Transaksi</TableHead>
+                  <TableHead>Waktu Transaksi</TableHead>
+                  <TableHead className="text-right">Mutasi Poin</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {ledgerItems.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell>
+                      <Badge variant="gold" className="text-[10px]">
+                        {tx.source}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium text-foreground text-xs sm:text-sm">
+                      {tx.description}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono">
+                      {tx.timestamp}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
+                      +{tx.pointsDelta} Pts
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

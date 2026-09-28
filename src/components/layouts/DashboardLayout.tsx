@@ -43,6 +43,8 @@ import {
   Search,
 } from "lucide-react";
 
+import { createClient } from "@/lib/supabase/client";
+
 type RoleType = "seksi_acara" | "juri" | "media_center" | "peserta";
 
 interface NavItem {
@@ -112,13 +114,52 @@ const PESERTA_NAV: NavItem[] = [
 export function DashboardLayout({
   children,
   role,
+  participantPoints,
 }: {
   children: React.ReactNode;
   role: RoleType;
+  participantPoints?: number;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [internalPoints, setInternalPoints] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (role === "peserta" && participantPoints === undefined) {
+      const supabase = createClient();
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (!user) return;
+        supabase
+          .from("participants")
+          .select("total_points")
+          .eq("user_id", user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.total_points !== undefined && data?.total_points !== null) {
+              setInternalPoints(data.total_points);
+            }
+          });
+      });
+    }
+  }, [role, participantPoints]);
+
+  const displayPoints =
+    participantPoints !== undefined
+      ? participantPoints
+      : internalPoints !== null
+      ? internalPoints
+      : 0;
+
+  const handleLogout = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Gagal logout:", err);
+    }
+    window.location.href = "/masuk";
+  };
 
   const navItems =
     role === "seksi_acara"
@@ -334,7 +375,7 @@ export function DashboardLayout({
             {role === "peserta" && (
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/15 border border-accent/30 text-accent-foreground text-xs font-bold font-mono">
                 <Coins className="h-3.5 w-3.5 text-accent" />
-                <span>140 Poin</span>
+                <span>{displayPoints} Poin</span>
               </div>
             )}
 
@@ -345,12 +386,15 @@ export function DashboardLayout({
               </Button>
             </Link>
 
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground">
-                <LogOut className="h-3.5 w-3.5 mr-1" />
-                <span className="hidden sm:inline">Keluar</span>
-              </Button>
-            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              <LogOut className="h-3.5 w-3.5 mr-1" />
+              <span className="hidden sm:inline">Keluar</span>
+            </Button>
           </div>
         </header>
 

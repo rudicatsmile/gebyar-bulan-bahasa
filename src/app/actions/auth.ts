@@ -130,3 +130,82 @@ export async function registerUser(formData: {
     return { success: false, error: message };
   }
 }
+
+export async function updateParticipantProfile(formData: {
+  userId: string;
+  fullName: string;
+  institution: string;
+  phone?: string | null;
+  password?: string | null;
+}) {
+  const { userId, fullName, institution, phone, password } = formData;
+  if (!userId) {
+    return { success: false, error: "ID pengguna tidak ditemukan." };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  try {
+    // 1. Perbarui tabel public.profiles
+    const { error: profileError } = await adminSupabase
+      .from("profiles")
+      .update({
+        full_name: fullName.trim(),
+        institution: institution.trim(),
+        phone: phone?.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+
+    if (profileError) {
+      console.error("Gagal update profiles:", profileError);
+      return { success: false, error: "Gagal memperbarui profil: " + profileError.message };
+    }
+
+    // 2. Perbarui tabel public.participants jika ada baris untuk user_id ini
+    await adminSupabase
+      .from("participants")
+      .update({
+        full_name: fullName.trim(),
+        institution: institution.trim(),
+        phone: phone?.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+
+    // 3. Perbarui auth metadata & kata sandi bila diminta
+    if (password && password.trim().length >= 8) {
+      await adminSupabase.auth.admin.updateUserById(userId, {
+        password: password.trim(),
+        user_metadata: {
+          full_name: fullName.trim(),
+          institution: institution.trim(),
+          phone: phone?.trim() || null,
+        },
+      });
+    } else {
+      await adminSupabase.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          full_name: fullName.trim(),
+          institution: institution.trim(),
+          phone: phone?.trim() || null,
+        },
+      });
+    }
+
+    try {
+      revalidatePath("/peserta");
+      revalidatePath("/peserta/profil");
+    } catch {
+      // Safe fallback
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("Gagal updateParticipantProfile:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Terjadi kesalahan sistem saat memperbarui profil.",
+    };
+  }
+}

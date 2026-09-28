@@ -7,18 +7,27 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { REWARDS, Reward, PARTICIPANTS } from "@/lib/dummy-data";
-import { Gift, ArrowLeft, CheckCircle2, AlertCircle, Coins } from "lucide-react";
+import { REWARDS, Reward } from "@/lib/dummy-data";
+import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
+import { Gift, ArrowLeft, CheckCircle2, AlertCircle, Coins, Loader2 } from "lucide-react";
 
 export default function PesertaRewardPage() {
-  const [balance, setBalance] = React.useState(PARTICIPANTS[0].totalPoints); // 140
+  const { participant, loading } = useCurrentParticipant();
+  const [balance, setBalance] = React.useState<number>(0);
   const [selectedReward, setSelectedReward] = React.useState<Reward | null>(null);
   const [claimSuccess, setClaimSuccess] = React.useState<string | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
 
+  // Sync balance when participant loads
+  React.useEffect(() => {
+    if (participant) {
+      setBalance(participant.totalPoints ?? 0);
+    }
+  }, [participant]);
+
   const handleOpenClaim = (r: Reward) => {
     if (balance < r.pointsRequired) {
-      setErrorMsg(`Saldo poin Anda (${balance} Pts) tidak mencukupi untuk reward "${r.name}" (${r.pointsRequired} Pts).`);
+      setErrorMsg(`Saldo poin Anda (${balance} Pts) tidak mencukupi untuk reward "${r.name}" (${r.pointsRequired} Pts). Selesaikan misi challenge atau kunjungi stand festival untuk mengumpulkan lebih banyak poin.`);
       return;
     }
     setErrorMsg("");
@@ -27,14 +36,14 @@ export default function PesertaRewardPage() {
 
   const handleConfirmClaim = () => {
     if (!selectedReward) return;
-    setBalance((prev) => prev - selectedReward.pointsRequired);
+    setBalance((prev) => Math.max(0, prev - selectedReward.pointsRequired));
     const code = `KLAIM-${Math.floor(1000 + Math.random() * 9000)}`;
     setClaimSuccess(code);
     setSelectedReward(null);
   };
 
   return (
-    <DashboardLayout role="peserta">
+    <DashboardLayout role="peserta" participantPoints={balance}>
       <div className="space-y-6">
         <div>
           <Link

@@ -47,6 +47,9 @@ export default function DaftarPage() {
 
       // 2. Langsung login otomatis via Supabase SSR client agar cookie sesi aktif di browser
       const supabase = createClient();
+      // Bersihkan kemungkinan residu sesi lama
+      await supabase.auth.signOut().catch(() => {});
+
       const { error: loginError } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase().trim(),
         password,
@@ -59,8 +62,8 @@ export default function DaftarPage() {
         return;
       }
 
-      // 3. Alihkan langsung ke dashboard peserta
-      router.push("/peserta");
+      // 3. Alihkan langsung ke dashboard peserta dengan fresh page load
+      window.location.href = "/peserta";
     } catch (err: unknown) {
       console.error("Gagal submit pendaftaran:", err);
       const msg = err instanceof Error ? err.message : "Terjadi kendala jaringan saat mendaftar.";

@@ -6,11 +6,10 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import {
-  PARTICIPANTS,
   CHALLENGES,
   REWARDS,
-  ANNOUNCEMENTS,
 } from "@/lib/dummy-data";
 import {
   Coins,
@@ -20,48 +19,64 @@ import {
   Trophy,
   ArrowRight,
   Camera,
-  CheckCircle2,
+  Loader2,
 } from "lucide-react";
 
 export default function DashboardPesertaPage() {
-  // Current participant demo: Ahmad Fauzan Ramadhan
-  const participant = PARTICIPANTS[0];
+  const { participant, loading } = useCurrentParticipant();
+
   const nextReward = REWARDS[1]; // Voucher Kopi (150 poin)
-  const remainingForNextReward = Math.max(0, nextReward.pointsRequired - participant.totalPoints);
+  const currentPoints = participant?.totalPoints ?? 0;
+  const remainingForNextReward = Math.max(0, nextReward.pointsRequired - currentPoints);
   const activeChallenges = CHALLENGES.slice(0, 3);
 
   return (
-    <DashboardLayout role="peserta">
+    <DashboardLayout role="peserta" participantPoints={currentPoints}>
       <div className="space-y-8">
         {/* Welcome Card & Point Balance */}
-        <div className="p-6 sm:p-8 rounded-2xl border border-accent/40 bg-accent/10 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xs">
-          <div className="space-y-2">
-            <Badge variant="gold" className="text-[10px]">
-              AKUN PESERTA RESMI
-            </Badge>
-            <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Halo, {participant.fullName}!
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              {participant.institution} • No. Registrasi:{" "}
-              <strong className="text-accent font-mono">{participant.registrationNumber}</strong>
-            </p>
+        {loading || !participant ? (
+          <div className="p-6 sm:p-8 rounded-2xl border border-accent/40 bg-accent/10 flex flex-col sm:flex-row sm:items-center justify-between gap-6 animate-pulse">
+            <div className="space-y-3">
+              <div className="h-5 w-32 bg-accent/20 rounded-md" />
+              <div className="h-8 w-64 bg-accent/25 rounded-md" />
+              <div className="h-4 w-48 bg-accent/15 rounded-md" />
+            </div>
+            <div className="p-5 rounded-xl border border-accent/30 bg-card h-28 w-44 shrink-0" />
           </div>
+        ) : (
+          <div className="p-6 sm:p-8 rounded-2xl border border-accent/40 bg-accent/10 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xs">
+            <div className="space-y-2">
+              <Badge variant="gold" className="text-[10px]">
+                AKUN PESERTA RESMI
+              </Badge>
+              <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                Halo, {participant.fullName}!
+              </h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {participant.institution} • No. Registrasi:{" "}
+                <strong className="text-accent font-mono">{participant.registrationNumber}</strong>
+              </p>
+            </div>
 
-          {/* Point Counter Block */}
-          <div className="p-5 rounded-xl border border-accent/30 bg-card text-center sm:text-right shrink-0">
-            <div className="flex items-center justify-center sm:justify-end gap-1.5 text-accent text-xs font-semibold uppercase tracking-wider mb-1">
-              <Coins className="h-4 w-4" />
-              <span>Saldo Poin Anda</span>
+            {/* Point Counter Block */}
+            <div className="p-5 rounded-xl border border-accent/30 bg-card text-center sm:text-right shrink-0">
+              <div className="flex items-center justify-center sm:justify-end gap-1.5 text-accent text-xs font-semibold uppercase tracking-wider mb-1">
+                <Coins className="h-4 w-4" />
+                <span>Saldo Poin Anda</span>
+              </div>
+              <div className="font-mono text-4xl font-black text-accent">
+                {currentPoints}
+              </div>
+              <span className="text-[11px] text-muted-foreground block mt-1">
+                {remainingForNextReward > 0 ? (
+                  <>Butuh {remainingForNextReward} poin lagi untuk &ldquo;{nextReward.name}&rdquo;</>
+                ) : (
+                  <>Poin Anda mencukupi untuk &ldquo;{nextReward.name}&rdquo;!</>
+                )}
+              </span>
             </div>
-            <div className="font-mono text-4xl font-black text-accent">
-              {participant.totalPoints}
-            </div>
-            <span className="text-[11px] text-muted-foreground block mt-1">
-              Butuh {remainingForNextReward} poin lagi untuk &ldquo;{nextReward.name}&rdquo;
-            </span>
           </div>
-        </div>
+        )}
 
         {/* Quick Actions Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -93,7 +108,9 @@ export default function DashboardPesertaPage() {
             <Card className="p-4 text-center space-y-2 hover:border-accent transition-colors cursor-pointer group">
               <Trophy className="h-6 w-6 text-accent mx-auto group-hover:scale-110 transition-transform" />
               <h4 className="font-heading text-xs font-bold text-foreground">Lomba Diikuti</h4>
-              <p className="text-[10px] text-muted-foreground">Membaca Puisi</p>
+              <p className="text-[10px] text-muted-foreground truncate">
+                {participant?.competitionName || "Pilih Cabang Lomba"}
+              </p>
             </Card>
           </Link>
         </div>

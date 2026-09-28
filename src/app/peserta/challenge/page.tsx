@@ -7,11 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CHALLENGES } from "@/lib/dummy-data";
+import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import { Sparkles, QrCode, ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 
 export default function PesertaChallengeListPage() {
+  const { participant } = useCurrentParticipant();
+
   return (
-    <DashboardLayout role="peserta">
+    <DashboardLayout role="peserta" participantPoints={participant?.totalPoints}>
       <div className="space-y-6">
         <div>
           <Link

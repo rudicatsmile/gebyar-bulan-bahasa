@@ -11,9 +11,11 @@ import { STANDS } from "@/lib/dummy-data";
 import { ArrowLeft, Camera, CheckCircle2, AlertCircle } from "lucide-react";
 import { claimStandVisit } from "@/app/actions/challenges";
 import { createClient } from "@/lib/supabase/client";
+import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 
 export default function PesertaScanStandPage() {
   const isDev = process.env.NODE_ENV === "development";
+  const { participant, refetch } = useCurrentParticipant();
   const [manualCode, setManualCode] = React.useState("");
   const [successStand, setSuccessStand] = React.useState<{ name: string; points: number } | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
@@ -21,6 +23,7 @@ export default function PesertaScanStandPage() {
 
   // Helper to retrieve active participant UUID or fallback in dev
   const resolveParticipantId = async (): Promise<string> => {
+    if (participant?.id) return participant.id;
     try {
       const supabase = createClient();
       const {
@@ -70,6 +73,7 @@ export default function PesertaScanStandPage() {
     setErrorMsg("");
     setSuccessStand({ name: matched.name, points: matched.points });
     setManualCode("");
+    refetch();
   };
 
   const handleSimulateScan = async (standCode: string) => {
@@ -90,12 +94,13 @@ export default function PesertaScanStandPage() {
       setScanningSimulated(false);
       if (matched) {
         setSuccessStand({ name: matched.name, points: matched.points });
+        refetch();
       }
     }, 600);
   };
 
   return (
-    <DashboardLayout role="peserta">
+    <DashboardLayout role="peserta" participantPoints={participant?.totalPoints}>
       <div className="space-y-6 max-w-xl mx-auto">
         <div>
           <Link
