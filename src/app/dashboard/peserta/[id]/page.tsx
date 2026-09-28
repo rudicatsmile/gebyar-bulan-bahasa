@@ -7,7 +7,6 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PARTICIPANTS } from "@/lib/dummy-data";
 import {
   ArrowLeft,
   Mail,
@@ -24,7 +23,38 @@ export default function DashboardPesertaDetailPage() {
   const params = useParams();
   const id = params?.id as string;
 
-  const participant = PARTICIPANTS.find((p) => p.id === id);
+  const [participant, setParticipant] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const fetchParticipant = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/participants/${id}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.participant) {
+          setParticipant(data.participant);
+        }
+      }
+    } catch (e) {
+      console.error("Failed fetch participant", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  React.useEffect(() => {
+    fetchParticipant();
+  }, [fetchParticipant]);
+
+  if (loading) {
+    return (
+      <DashboardLayout role="seksi_acara">
+        <div className="flex items-center justify-center py-20 text-foreground">Loading...</div>
+      </DashboardLayout>
+    );
+  }
+
   if (!participant) return notFound();
 
   const statusVariant =
