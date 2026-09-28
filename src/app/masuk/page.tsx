@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowRight, ShieldCheck, UserCheck, Tv, User, Loader2, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-export default function MasukPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = React.useState("acara@gebyarbulanbahasa.id");
@@ -221,5 +221,14 @@ export default function MasukPage() {
         </div>
       </form>
     </AuthLayout>
+  );
+}
+
+// useSearchParams() harus dibungkus Suspense agar halaman bisa di-prerender saat build
+export default function MasukPage() {
+  return (
+    <React.Suspense>
+      <LoginForm />
+    </React.Suspense>
   );
 }
