@@ -80,10 +80,12 @@ export function DialogTitle({
 
 export function DialogDescription({
   className,
+  as: Component = "div",
   ...props
-}: React.HTMLAttributes<HTMLParagraphElement>) {
+}: React.HTMLAttributes<HTMLDivElement> & { as?: React.ElementType }) {
+  const Comp = Component || "div";
   return (
-    <p
+    <Comp
       className={cn("text-xs text-muted-foreground leading-relaxed", className)}
       {...props}
     />
