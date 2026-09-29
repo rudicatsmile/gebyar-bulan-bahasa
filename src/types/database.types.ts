@@ -1204,6 +1204,160 @@ export interface Database {
           }
         ];
       };
+      qr_letter_challenges: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          target_phrase: string;
+          points_reward: number;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          target_phrase: string;
+          points_reward?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string | null;
+          target_phrase?: string;
+          points_reward?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      qr_letter_codes: {
+        Row: {
+          id: string;
+          challenge_id: string;
+          letter: string;
+          letter_index: number;
+          qr_token: string;
+          location_hint: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          challenge_id: string;
+          letter: string;
+          letter_index: number;
+          qr_token: string;
+          location_hint?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          challenge_id?: string;
+          letter?: string;
+          letter_index?: number;
+          qr_token?: string;
+          location_hint?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "qr_letter_codes_challenge_id_fkey";
+            columns: ["challenge_id"];
+            isOneToOne: false;
+            referencedRelation: "qr_letter_challenges";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      qr_letter_scans: {
+        Row: {
+          id: string;
+          challenge_id: string;
+          participant_id: string;
+          qr_code_id: string;
+          scanned_at: string;
+        };
+        Insert: {
+          id?: string;
+          challenge_id: string;
+          participant_id: string;
+          qr_code_id: string;
+          scanned_at?: string;
+        };
+        Update: {
+          id?: string;
+          challenge_id?: string;
+          participant_id?: string;
+          qr_code_id?: string;
+          scanned_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "qr_letter_scans_participant_id_fkey";
+            columns: ["participant_id"];
+            isOneToOne: false;
+            referencedRelation: "participants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "qr_letter_scans_qr_code_id_fkey";
+            columns: ["qr_code_id"];
+            isOneToOne: false;
+            referencedRelation: "qr_letter_codes";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      qr_letter_submissions: {
+        Row: {
+          id: string;
+          challenge_id: string;
+          participant_id: string;
+          submitted_phrase: string;
+          is_correct: boolean;
+          score: number;
+          time_seconds: number | null;
+          submitted_at: string;
+        };
+        Insert: {
+          id?: string;
+          challenge_id: string;
+          participant_id: string;
+          submitted_phrase: string;
+          is_correct?: boolean;
+          score?: number;
+          time_seconds?: number | null;
+          submitted_at?: string;
+        };
+        Update: {
+          id?: string;
+          challenge_id?: string;
+          participant_id?: string;
+          submitted_phrase?: string;
+          is_correct?: boolean;
+          score?: number;
+          time_seconds?: number | null;
+          submitted_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "qr_letter_submissions_participant_id_fkey";
+            columns: ["participant_id"];
+            isOneToOne: false;
+            referencedRelation: "participants";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {
       v_assessment_totals: {

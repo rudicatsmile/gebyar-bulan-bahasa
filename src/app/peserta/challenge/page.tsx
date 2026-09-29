@@ -75,6 +75,38 @@ export default function PesertaChallengeListPage() {
           </div>
         </Card>
 
+        {/* Featured: Challenge QR Huruf */}
+        <Card className="p-6 relative overflow-hidden border-accent/40 bg-gradient-to-br from-accent/10 via-card to-card hover:border-accent transition-all">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="space-y-2 max-w-xl">
+              <div className="flex items-center gap-2">
+                <Badge variant="gold" className="text-[10px] font-bold">
+                  PETUALANGAN AKSARA
+                </Badge>
+                <Badge variant="info" className="text-[10px]">
+                  +100 Poin Penuh
+                </Badge>
+              </div>
+              <h3 className="font-heading text-xl font-bold text-foreground flex items-center gap-2">
+                <QrCode className="h-5 w-5 text-accent" />
+                <span>Challenge QR Huruf: Jelajah Aksara & Susun Kata</span>
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Temukan stiker QR code huruf yang ditempel di berbagai lokasi tersembunyi acara. Scan stikernya, kumpulkan semua huruf di inventarismu, lalu susun menjadi kalimat bermakna rahasia!
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link href="/peserta/challenge/qr-huruf">
+                <Button size="lg" variant="accent" className="w-full sm:w-auto font-bold gap-2 shadow-md">
+                  <QrCode className="h-4 w-4" />
+                  <span>Mulai Berburu QR Huruf</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {CHALLENGES.map((ch) => (
             <Card key={ch.id} className="p-6 flex flex-col justify-between space-y-4 hover:border-accent transition-colors">
