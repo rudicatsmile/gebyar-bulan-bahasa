@@ -2,9 +2,19 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database.types";
+
+function safeRevalidate(path: string) {
+  try {
+    revalidatePath(path);
+  } catch {
+    // Gracefully handle calls outside Next.js request context
+  }
+}
 
 // =============================================================================
 // TYPES
@@ -175,6 +185,84 @@ const fallbackMemoryAttempts: MemoryAttemptRow[] = [
 ];
 
 // =============================================================================
+// ADMIN — UPLOAD PUZZLE COSTUME IMAGE
+// =============================================================================
+export async function uploadPuzzleCostumeImage(formData: FormData): Promise<{
+  success: boolean;
+  url?: string;
+  error?: string;
+}> {
+  try {
+    const file = formData.get("file") as File | null;
+    if (!file || !(file instanceof File)) {
+      return { success: false, error: "Berkas gambar tidak ditemukan." };
+    }
+
+    // 5MB limit
+    if (file.size > 5 * 1024 * 1024) {
+      return { success: false, error: "Ukuran berkas melebihi batas maksimal 5MB." };
+    }
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    if (!validTypes.includes(file.type)) {
+      return { success: false, error: "Format gambar harus berupa JPG, PNG, atau WEBP." };
+    }
+
+    const sanitizedOriginal = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const uniqueFileName = `costume-${Date.now()}-${sanitizedOriginal}`;
+    const storagePath = `puzzle/${uniqueFileName}`;
+
+    // 1. Coba upload ke Supabase Storage terlebih dahulu
+    try {
+      const supabase = createAdminClient();
+      const bucketName = process.env.NEXT_PUBLIC_BUCKET_MEDIA || "media-acara";
+
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (!error && data) {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from(bucketName).getPublicUrl(data.path);
+
+        return { success: true, url: publicUrl };
+      }
+    } catch {
+      // Fallback lokal jika storage bucket belum siap
+    }
+
+    // 2. Fallback: Simpan file ke direktori public/uploads/puzzle/
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "puzzle");
+      await fs.mkdir(uploadDir, { recursive: true });
+      const localFilePath = path.join(uploadDir, uniqueFileName);
+      const arrayBuffer = await file.arrayBuffer();
+      await fs.writeFile(localFilePath, Buffer.from(arrayBuffer));
+
+      const localUrl = `/uploads/puzzle/${uniqueFileName}`;
+      return { success: true, url: localUrl };
+    } catch (fsErr) {
+      return {
+        success: false,
+        error: fsErr instanceof Error ? fsErr.message : "Gagal menyimpan berkas gambar ke server.",
+      };
+    }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal mengunggah berkas gambar.",
+    };
+  }
+}
+
+// =============================================================================
 // ADMIN — GET ALL PUZZLE ITEMS
 // =============================================================================
 export async function getAdminPuzzleItems(): Promise<{
@@ -215,8 +303,8 @@ export async function getAdminPuzzleItems(): Promise<{
 const CreatePuzzleSchema = z.object({
   costumeName: z.string().min(2, "Nama baju daerah minimal 2 karakter"),
   regionName: z.string().min(2, "Nama daerah minimal 2 karakter"),
-  costumeImageUrl: z.string().optional(),
-  hint: z.string().optional(),
+  costumeImageUrl: z.string().nullable().optional(),
+  hint: z.string().nullable().optional(),
   sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
 });
@@ -231,10 +319,16 @@ export async function createPuzzleItem(
 
   try {
     const supabase = createAdminClient();
-    const serverSupabase = await createClient();
-    const {
-      data: { user },
-    } = await serverSupabase.auth.getUser();
+    let userId: string | null = null;
+    try {
+      const serverSupabase = await createClient();
+      const {
+        data: { user },
+      } = await serverSupabase.auth.getUser();
+      userId = user?.id || null;
+    } catch {
+      // outside request context or no active session
+    }
 
     const { error } = await supabase.from("puzzle_items").insert({
       costume_name: parsed.data.costumeName,
@@ -243,7 +337,7 @@ export async function createPuzzleItem(
       hint: parsed.data.hint || null,
       sort_order: parsed.data.sortOrder,
       is_active: parsed.data.isActive,
-      created_by: user?.id || null,
+      created_by: userId,
     });
 
     if (error) {
@@ -261,7 +355,7 @@ export async function createPuzzleItem(
       fallbackMemoryItems.push(newItem);
     }
 
-    revalidatePath("/dashboard/challenge/puzzle");
+    safeRevalidate("/dashboard/challenge/puzzle");
     return { success: true };
   } catch {
     const newItem: PuzzleItem = {
@@ -275,7 +369,7 @@ export async function createPuzzleItem(
       createdAt: new Date().toISOString(),
     };
     fallbackMemoryItems.push(newItem);
-    revalidatePath("/dashboard/challenge/puzzle");
+    safeRevalidate("/dashboard/challenge/puzzle");
     return { success: true };
   }
 }
@@ -287,8 +381,8 @@ const UpdatePuzzleSchema = z.object({
   id: z.string().uuid(),
   costumeName: z.string().min(2).optional(),
   regionName: z.string().min(2).optional(),
-  costumeImageUrl: z.string().optional(),
-  hint: z.string().optional(),
+  costumeImageUrl: z.string().nullable().optional(),
+  hint: z.string().nullable().optional(),
   sortOrder: z.number().int().optional(),
   isActive: z.boolean().optional(),
 });
@@ -342,7 +436,7 @@ export async function updatePuzzleItem(
       });
     }
 
-    revalidatePath("/dashboard/challenge/puzzle");
+    safeRevalidate("/dashboard/challenge/puzzle");
     return { success: true };
   } catch {
     fallbackMemoryItems = fallbackMemoryItems.map((item) => {
@@ -359,7 +453,7 @@ export async function updatePuzzleItem(
       }
       return item;
     });
-    revalidatePath("/dashboard/challenge/puzzle");
+    safeRevalidate("/dashboard/challenge/puzzle");
     return { success: true };
   }
 }
@@ -378,11 +472,11 @@ export async function deletePuzzleItem(
       fallbackMemoryItems = fallbackMemoryItems.filter((i) => i.id !== id);
     }
 
-    revalidatePath("/dashboard/challenge/puzzle");
+    safeRevalidate("/dashboard/challenge/puzzle");
     return { success: true };
   } catch {
     fallbackMemoryItems = fallbackMemoryItems.filter((i) => i.id !== id);
-    revalidatePath("/dashboard/challenge/puzzle");
+    safeRevalidate("/dashboard/challenge/puzzle");
     return { success: true };
   }
 }
@@ -407,13 +501,13 @@ export async function togglePuzzleItemActive(
       );
     }
 
-    revalidatePath("/dashboard/challenge/puzzle");
+    safeRevalidate("/dashboard/challenge/puzzle");
     return { success: true };
   } catch {
     fallbackMemoryItems = fallbackMemoryItems.map((i) =>
       i.id === id ? { ...i, isActive } : i
     );
-    revalidatePath("/dashboard/challenge/puzzle");
+    safeRevalidate("/dashboard/challenge/puzzle");
     return { success: true };
   }
 }

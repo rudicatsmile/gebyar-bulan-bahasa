@@ -36,6 +36,8 @@ import {
   Users,
   CheckCircle2,
   ImageIcon,
+  Upload,
+  X,
 } from "lucide-react";
 import {
   getAdminPuzzleItems,
@@ -44,6 +46,7 @@ import {
   deletePuzzleItem,
   togglePuzzleItemActive,
   getAdminPuzzleAttempts,
+  uploadPuzzleCostumeImage,
   type PuzzleItem,
 } from "@/app/actions/puzzle";
 import { cn } from "@/lib/utils";
@@ -75,6 +78,10 @@ export default function DashboardPuzzlePage() {
   const [formCostume, setFormCostume] = React.useState("");
   const [formRegion, setFormRegion] = React.useState("");
   const [formImage, setFormImage] = React.useState("");
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+  const [imageError, setImageError] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [formHint, setFormHint] = React.useState("");
   const [formOrder, setFormOrder] = React.useState("0");
   const [formActive, setFormActive] = React.useState(true);
@@ -104,10 +111,47 @@ export default function DashboardPuzzlePage() {
     loadData();
   }, [loadData]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError("Ukuran berkas melebihi batas maksimal 5MB.");
+      return;
+    }
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    if (!validTypes.includes(file.type)) {
+      setImageError("Format gambar harus berupa JPG, PNG, atau WEBP.");
+      return;
+    }
+
+    setImageError(null);
+    setSelectedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setImagePreview(objectUrl);
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedFile(null);
+    setImagePreview(null);
+    setFormImage("");
+    setImageError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const resetForm = () => {
     setFormCostume("");
     setFormRegion("");
     setFormImage("");
+    setSelectedFile(null);
+    setImagePreview(null);
+    setImageError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setFormHint("");
     setFormOrder("0");
     setFormActive(true);
@@ -123,6 +167,12 @@ export default function DashboardPuzzlePage() {
     setFormCostume(item.costumeName);
     setFormRegion(item.regionName);
     setFormImage(item.costumeImageUrl || "");
+    setImagePreview(item.costumeImageUrl || null);
+    setSelectedFile(null);
+    setImageError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setFormHint(item.hint || "");
     setFormOrder(String(item.sortOrder));
     setFormActive(item.isActive);
@@ -134,11 +184,26 @@ export default function DashboardPuzzlePage() {
     e.preventDefault();
     setSaving(true);
     try {
+      let finalImageUrl: string | null = formImage || null;
+
+      // Jika user memilih file gambar baru, lakukan upload terlebih dahulu
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        const uploadRes = await uploadPuzzleCostumeImage(formData);
+        if (!uploadRes.success || !uploadRes.url) {
+          alert(uploadRes.error || "Gagal mengunggah berkas gambar baju daerah.");
+          setSaving(false);
+          return;
+        }
+        finalImageUrl = uploadRes.url;
+      }
+
       if (dialogMode === "create") {
         const res = await createPuzzleItem({
           costumeName: formCostume,
           regionName: formRegion,
-          costumeImageUrl: formImage || undefined,
+          costumeImageUrl: finalImageUrl || undefined,
           hint: formHint || undefined,
           sortOrder: parseInt(formOrder) || 0,
           isActive: formActive,
@@ -152,7 +217,7 @@ export default function DashboardPuzzlePage() {
           id: editId,
           costumeName: formCostume,
           regionName: formRegion,
-          costumeImageUrl: formImage || undefined,
+          costumeImageUrl: finalImageUrl,
           hint: formHint || undefined,
           sortOrder: parseInt(formOrder) || 0,
           isActive: formActive,
@@ -327,9 +392,16 @@ export default function DashboardPuzzlePage() {
                       </TableCell>
                       <TableCell className="text-center">
                         {item.costumeImageUrl ? (
-                          <Badge variant="success" className="text-[10px]">
-                            Ada
-                          </Badge>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <img
+                              src={item.costumeImageUrl}
+                              alt={item.costumeName}
+                              className="w-7 h-7 rounded-md object-cover border border-border shadow-2xs"
+                            />
+                            <Badge variant="success" className="text-[10px]">
+                              Ada
+                            </Badge>
+                          </div>
                         ) : (
                           <Badge variant="default" className="text-[10px]">
                             Belum
@@ -493,13 +565,101 @@ export default function DashboardPuzzlePage() {
             />
           </div>
 
-          <Input
-            label="URL Gambar Baju Daerah"
-            placeholder="https://example.com/kebaya.jpg"
-            value={formImage}
-            onChange={(e) => setFormImage(e.target.value)}
-            helperText="Opsional. Masukkan URL gambar baju daerah."
-          />
+          {/* Upload File Gambar Baju Daerah */}
+          <div className="space-y-1.5 text-left">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Gambar Baju Daerah
+              </label>
+              <span className="text-[11px] text-muted-foreground">
+                Opsional • PNG, JPG, WEBP (Maks 5MB)
+              </span>
+            </div>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/jpeg,image/png,image/webp,image/jpg"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+
+            {imagePreview ? (
+              <div className="relative flex items-center gap-3 p-3 rounded-xl border border-border bg-card/60">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg overflow-hidden border border-border bg-muted/30">
+                  <img
+                    src={imagePreview}
+                    alt="Preview Baju Daerah"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-xs sm:text-sm font-semibold text-foreground truncate">
+                      {selectedFile ? selectedFile.name : "Gambar Baju Daerah"}
+                    </p>
+                    {selectedFile ? (
+                      <Badge variant="warning" className="text-[10px] shrink-0">
+                        File Baru
+                      </Badge>
+                    ) : (
+                      <Badge variant="success" className="text-[10px] shrink-0">
+                        Tersimpan
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {selectedFile
+                      ? `${(selectedFile.size / 1024).toFixed(1)} KB`
+                      : "Gambar sudah tersimpan di database"}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="h-7 text-xs cursor-pointer"
+                    >
+                      <Upload className="h-3 w-3 mr-1" />
+                      Ganti Gambar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveImage}
+                      className="h-7 text-xs text-destructive hover:text-destructive cursor-pointer hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Hapus
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="group flex flex-col items-center justify-center p-5 rounded-xl border-2 border-dashed border-border/80 hover:border-primary/60 bg-muted/10 hover:bg-muted/30 cursor-pointer transition-all duration-200"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-105 transition-transform mb-2">
+                  <Upload className="h-5 w-5" />
+                </div>
+                <p className="text-xs sm:text-sm font-medium text-foreground">
+                  Pilih file gambar dari perangkat
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Klik untuk menelusuri berkas (JPG, PNG, atau WEBP hingga 5MB)
+                </p>
+              </div>
+            )}
+
+            {imageError && (
+              <p className="text-xs text-destructive mt-1 flex items-center gap-1 font-medium">
+                <span>⚠️</span> {imageError}
+              </p>
+            )}
+          </div>
 
           <Textarea
             label="Petunjuk / Hint"
