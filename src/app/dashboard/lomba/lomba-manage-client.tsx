@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import type { Competition } from "@/lib/dummy-data";
 import {
   toggleCompetitionStatus,
@@ -33,7 +34,202 @@ import {
   Trash2,
   Archive,
   Trophy,
+  MoreVertical,
+  Eye,
+  ClipboardList,
+  RotateCw,
 } from "lucide-react";
+
+interface CompetitionActionMenuProps {
+  comp: Competition;
+  index: number;
+  total: number;
+  isUpdating: boolean;
+  onToggleStatus: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function CompetitionActionMenu({
+  comp,
+  index,
+  total,
+  isUpdating,
+  onToggleStatus,
+  onEdit,
+  onDelete,
+}: CompetitionActionMenuProps) {
+  const [open, setOpen] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  // Close on click outside or Escape key
+  React.useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  // Determine dropup vs dropdown: open upwards if row is near bottom
+  const isDropup = total > 3 && index >= total - 2;
+
+  // Next status preview label
+  const nextStatusLabel =
+    comp.status === "pendaftaran"
+      ? "Mulai Lomba (Live)"
+      : comp.status === "berlangsung"
+      ? "Selesaikan Lomba"
+      : "Buka Pendaftaran";
+
+  return (
+    <div className="relative inline-block text-left" ref={menuRef}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((prev) => !prev);
+        }}
+        className={cn(
+          "h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 inline-flex items-center justify-center cursor-pointer transition-colors focus-visible:ring-1 focus-visible:ring-accent",
+          open && "bg-muted text-foreground ring-1 ring-border shadow-xs"
+        )}
+        title="Opsi Aksi Lomba"
+        aria-label={`Menu aksi untuk ${comp.name}`}
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </Button>
+
+      {open && (
+        <div
+          className={cn(
+            "absolute right-0 z-50 min-w-[220px] w-max rounded-xl border border-border bg-card/98 backdrop-blur-md p-1.5 shadow-xl text-foreground animate-in fade-in-50 zoom-in-95",
+            isDropup ? "bottom-full mb-1.5 origin-bottom-right" : "top-full mt-1.5 origin-top-right"
+          )}
+          role="menu"
+          aria-orientation="vertical"
+        >
+          {/* Header Info Singkat */}
+          <div className="px-2.5 py-1.5 border-b border-border/60 mb-1">
+            <p className="text-[11px] font-semibold text-foreground truncate max-w-[200px]">
+              {comp.name}
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              Aksi & Operasional
+            </p>
+          </div>
+
+          {/* Group 1: Navigasi Utama */}
+          <Link
+            href={`/dashboard/penilaian/${comp.id}`}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium rounded-lg text-foreground hover:bg-accent/10 hover:text-accent transition-colors"
+            role="menuitem"
+          >
+            <ClipboardList className="h-4 w-4 text-accent shrink-0" />
+            <div className="flex flex-col text-left">
+              <span>Input / Penilaian</span>
+              <span className="text-[10px] text-muted-foreground font-normal">Lembar skor juri</span>
+            </div>
+          </Link>
+
+          <Link
+            href={`/dashboard/lomba/${comp.slug}`}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium rounded-lg text-foreground hover:bg-muted transition-colors"
+            role="menuitem"
+          >
+            <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="flex flex-col text-left">
+              <span>Pantau Lomba</span>
+              <span className="text-[10px] text-muted-foreground font-normal">Leaderboard & peserta</span>
+            </div>
+          </Link>
+
+          <div className="h-px bg-border/60 my-1" />
+
+          {/* Group 2: Status & Edit */}
+          <button
+            type="button"
+            disabled={isUpdating}
+            onClick={() => {
+              setOpen(false);
+              onToggleStatus();
+            }}
+            className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-xs font-medium rounded-lg text-foreground hover:bg-muted transition-colors text-left disabled:opacity-50 cursor-pointer"
+            role="menuitem"
+          >
+            <div className="flex items-center gap-2.5">
+              {isUpdating ? (
+                <Loader2 className="h-4 w-4 animate-spin text-accent shrink-0" />
+              ) : (
+                <RotateCw className="h-4 w-4 text-muted-foreground shrink-0" />
+              )}
+              <div className="flex flex-col text-left">
+                <span>Ubah Status</span>
+                <span className="text-[10px] text-accent font-normal">{nextStatusLabel}</span>
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium rounded-lg text-foreground hover:bg-muted transition-colors text-left cursor-pointer"
+            role="menuitem"
+          >
+            <Edit2 className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div className="flex flex-col text-left">
+              <span>Edit Lomba</span>
+              <span className="text-[10px] text-muted-foreground font-normal">Nama, kategori & panggung</span>
+            </div>
+          </button>
+
+          <div className="h-px bg-border/60 my-1" />
+
+          {/* Group 3: Hapus / Arsipkan */}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium rounded-lg text-destructive hover:bg-destructive/10 transition-colors text-left cursor-pointer"
+            role="menuitem"
+          >
+            <Trash2 className="h-4 w-4 text-destructive shrink-0" />
+            <div className="flex flex-col text-left">
+              <span>Hapus / Arsipkan</span>
+              <span className="text-[10px] text-destructive/80 font-normal">Hapus atau nonaktifkan</span>
+            </div>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface LombaManageClientProps {
   initialCompetitions: Competition[];
@@ -324,7 +520,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="rounded-xl border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -333,11 +529,11 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 <TableHead>Venue & Panggung</TableHead>
                 <TableHead className="text-center">Kriteria</TableHead>
                 <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Aksi Operasional</TableHead>
+                <TableHead className="text-right pr-4 w-16">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {competitions.map((comp) => {
+              {competitions.map((comp, index) => {
                 const statusVariant =
                   comp.status === "berlangsung"
                     ? "live"
@@ -398,64 +594,19 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                       </Badge>
                     </TableCell>
 
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                        {/* Tombol Ubah Status */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={isUpdating === comp.id}
-                          onClick={() => toggleStatus(comp.id, comp.status, comp.name)}
-                          className="text-[11px] h-8 text-accent font-semibold cursor-pointer"
-                          title="Klik untuk rotasi status lomba"
-                        >
-                          {isUpdating === comp.id ? (
-                            <span className="flex items-center gap-1">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              <span>Menyimpan...</span>
-                            </span>
-                          ) : (
-                            "Ubah Status"
-                          )}
-                        </Button>
-
-                        {/* Tombol EDIT Lomba & Kategori */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEdit(comp)}
-                          className="text-xs h-8 gap-1 cursor-pointer"
-                          title="Edit nama, kategori individu/kelompok, dan konfigurasi lomba"
-                        >
-                          <Edit2 className="h-3 w-3" />
-                          <span>Edit</span>
-                        </Button>
-
-                        {/* Tombol HAPUS / ARSIP */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setDeleteTarget(comp);
-                            setDeleteOpen(true);
-                          }}
-                          className="text-xs h-8 text-destructive hover:bg-destructive/10 cursor-pointer px-2"
-                          title="Arsipkan atau Hapus Lomba"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-
-                        <Link href={`/dashboard/lomba/${comp.slug}`}>
-                          <Button variant="outline" size="sm" className="text-xs h-8">
-                            Pantau
-                          </Button>
-                        </Link>
-                        <Link href={`/dashboard/penilaian/${comp.id}`}>
-                          <Button size="sm" className="text-xs h-8">
-                            Nilai
-                          </Button>
-                        </Link>
-                      </div>
+                    <TableCell className="text-right pr-4">
+                      <CompetitionActionMenu
+                        comp={comp}
+                        index={index}
+                        total={competitions.length}
+                        isUpdating={isUpdating === comp.id}
+                        onToggleStatus={() => toggleStatus(comp.id, comp.status, comp.name)}
+                        onEdit={() => openEdit(comp)}
+                        onDelete={() => {
+                          setDeleteTarget(comp);
+                          setDeleteOpen(true);
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 );
