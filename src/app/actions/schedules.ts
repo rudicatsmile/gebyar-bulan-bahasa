@@ -3,10 +3,13 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { DUMMY_TO_COMP_ID } from "@/lib/constants";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const ScheduleInputSchema = z.object({
   id: z.string().optional(),
-  competitionId: z.string().uuid().optional().nullable(),
+  competitionId: z.string().optional().nullable(),
   title: z.string().min(3, "Judul jadwal minimal 3 karakter"),
   description: z.string().optional(),
   eventDay: z.number().int().min(1).max(3),
@@ -46,8 +49,12 @@ export async function upsertSchedule(data: z.infer<typeof ScheduleInputSchema>) 
       }
     }
 
+    const rawCompId = parsed.data.competitionId?.trim() || null;
+    const resolvedCompId = rawCompId ? (DUMMY_TO_COMP_ID[rawCompId] || rawCompId) : null;
+    const validCompId = resolvedCompId && UUID_RE.test(resolvedCompId) ? resolvedCompId : null;
+
     const payload = {
-      competition_id: parsed.data.competitionId || null,
+      competition_id: validCompId,
       title: parsed.data.title,
       description: parsed.data.description || null,
       event_day: parsed.data.eventDay,

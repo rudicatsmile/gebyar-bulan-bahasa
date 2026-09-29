@@ -1,11 +1,18 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -14,27 +21,77 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ScheduleItem } from "@/lib/dummy-data";
+import type { ScheduleItem, Competition } from "@/lib/dummy-data";
 import { setScheduleStatus, upsertSchedule } from "@/app/actions/schedules";
-import { Plus, Radio, AlertCircle } from "lucide-react";
+import { Plus, Radio, AlertCircle, Trophy, Pencil } from "lucide-react";
 
 interface JadwalManageClientProps {
   initialSchedules: ScheduleItem[];
+  competitions: Competition[];
 }
 
-export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps) {
+export function JadwalManageClient({
+  initialSchedules,
+  competitions = [],
+}: JadwalManageClientProps) {
   const [schedules, setSchedules] = React.useState<ScheduleItem[]>(initialSchedules);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [conflictWarning, setConflictWarning] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   // Form states
+  const [editingScheduleId, setEditingScheduleId] = React.useState<string | null>(null);
+  const [selectedCompId, setSelectedCompId] = React.useState<string>("");
   const [title, setTitle] = React.useState("");
   const [day, setDay] = React.useState("2");
   const [time, setTime] = React.useState("09:00 - 12:00 WIB");
   const [venue, setVenue] = React.useState("Panggung Utama");
   const [stage, setStage] = React.useState("Stage A");
   const [host, setHost] = React.useState("");
+
+  const handleOpenAdd = () => {
+    setEditingScheduleId(null);
+    setSelectedCompId("");
+    setTitle("");
+    setDay("2");
+    setTime("09:00 - 12:00 WIB");
+    setVenue("Panggung Utama");
+    setStage("Stage A");
+    setHost("");
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (sch: ScheduleItem) => {
+    setEditingScheduleId(sch.id);
+    const matchedComp = competitions.find(
+      (c) => c.id === sch.competitionId || (sch.competitionId && c.slug === sch.competitionId)
+    );
+    setSelectedCompId(matchedComp?.id || sch.competitionId || "");
+    setTitle(sch.title);
+    setDay(String(sch.day || 1));
+    setTime(sch.time || "09:00 - 12:00 WIB");
+    setVenue(sch.venue || "Panggung Utama");
+    setStage(sch.stage || "Stage A");
+    setHost(sch.host || "");
+    setDialogOpen(true);
+  };
+
+  const handleCompetitionChange = (compVal: string) => {
+    setSelectedCompId(compVal);
+    if (!compVal) return;
+
+    const foundComp = competitions.find(
+      (c) => c.id === compVal || c.slug === compVal
+    );
+    if (foundComp) {
+      // Auto-suggest judul agenda jika masih kosong atau berisi default format "Lomba..."
+      if (!title || title.startsWith("Lomba ") || title.includes("Cabang Lomba")) {
+        setTitle(`Lomba ${foundComp.name}`);
+      }
+      if (foundComp.venue) setVenue(foundComp.venue);
+      if (foundComp.stage) setStage(foundComp.stage);
+    }
+  };
 
   const handleSetLive = async (id: string) => {
     const target = schedules.find((s) => s.id === id);
@@ -76,7 +133,7 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
     }
   };
 
-  const handleAddSchedule = async (e: React.FormEvent) => {
+  const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
@@ -84,9 +141,11 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
       day === "1" ? "2025-10-26" : day === "2" ? "2025-10-27" : "2025-10-28";
     const startTimeParts = time.split("-")[0]?.trim() || "09:00";
     const endTimeParts = time.split("-")[1]?.replace("WIB", "").trim() || "12:00";
+    const compIdPayload = selectedCompId || null;
 
     const newItem: ScheduleItem = {
-      id: `sch-${Date.now()}`,
+      id: editingScheduleId || `sch-${Date.now()}`,
+      competitionId: compIdPayload || undefined,
       title,
       day: parseInt(day),
       date: day === "1" ? "26 Oktober 2025" : day === "2" ? "27 Oktober 2025" : "28 Oktober 2025",
@@ -97,10 +156,18 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
       status: "terjadwal",
     };
 
-    setSchedules((prev) => [newItem, ...prev]);
+    if (editingScheduleId) {
+      setSchedules((prev) =>
+        prev.map((s) => (s.id === editingScheduleId ? newItem : s))
+      );
+    } else {
+      setSchedules((prev) => [newItem, ...prev]);
+    }
 
     try {
       await upsertSchedule({
+        id: editingScheduleId || undefined,
+        competitionId: compIdPayload,
         title,
         eventDay: parseInt(day),
         eventDate,
@@ -116,6 +183,8 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
     } finally {
       setIsSubmitting(false);
       setDialogOpen(false);
+      setEditingScheduleId(null);
+      setSelectedCompId("");
       setTitle("");
       setTime("09:00 - 12:00 WIB");
       setHost("");
@@ -131,11 +200,15 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
               Manajemen Jadwal & Panggung
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Atur status pelaksanaan panggung secara langsung. Perubahan status menjadi &quot;Berlangsung&quot; otomatis tampil di layar monitor lapangan.
+              Atur status pelaksanaan panggung dan hubungkan agenda dengan cabang lomba. Jadwal terintegrasi otomatis ke monitor TV dan jadwal publik.
             </p>
           </div>
 
-          <Button onClick={() => setDialogOpen(true)} size="sm" className="text-xs gap-1.5 cursor-pointer">
+          <Button
+            onClick={handleOpenAdd}
+            size="sm"
+            className="text-xs gap-1.5 cursor-pointer"
+          >
             <Plus className="h-4 w-4" />
             <span>Tambah Jadwal Baru</span>
           </Button>
@@ -153,32 +226,64 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
             <TableHeader>
               <TableRow>
                 <TableHead>Hari & Jam</TableHead>
-                <TableHead>Agenda / Judul Acara</TableHead>
+                <TableHead>Agenda & Cabang Lomba</TableHead>
                 <TableHead>Lokasi & Panggung</TableHead>
                 <TableHead>Pemandu Acara</TableHead>
                 <TableHead className="text-center">Status Panggung</TableHead>
-                <TableHead className="text-right">Aksi Status</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {schedules.map((sch) => {
                 const isLive = sch.status === "berlangsung";
+                const matchedComp = competitions.find(
+                  (c) =>
+                    c.id === sch.competitionId ||
+                    (sch.competitionId && c.slug === sch.competitionId) ||
+                    sch.title.toLowerCase().includes(c.shortName.toLowerCase())
+                );
+
                 return (
                   <TableRow key={sch.id} className={isLive ? "bg-danger/5" : ""}>
                     <TableCell>
                       <span className="font-mono text-xs font-bold text-foreground block">
                         Hari ke-{sch.day}
                       </span>
-                      <span className="text-[11px] font-mono text-muted-foreground">{sch.time}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        {sch.time}
+                      </span>
                     </TableCell>
-                    <TableCell className="font-semibold text-foreground text-xs sm:text-sm">
-                      {sch.title}
+                    <TableCell>
+                      <div className="space-y-1">
+                        <span className="font-semibold text-foreground text-xs sm:text-sm block">
+                          {sch.title}
+                        </span>
+                        {matchedComp ? (
+                          <Link
+                            href={`/dashboard/lomba/${matchedComp.slug}`}
+                            className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline font-mono"
+                            title="Buka monitoring cabang lomba ini"
+                          >
+                            <Trophy className="h-3 w-3" />
+                            <span>
+                              {matchedComp.name} (
+                              {matchedComp.category === "kelompok" ? "Kelompok" : "Individu"})
+                            </span>
+                          </Link>
+                        ) : (
+                          <span className="inline-block text-[10px] text-muted-foreground font-mono">
+                            Acara Umum (Non-Lomba)
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       <strong className="text-foreground">{sch.venue}</strong>
                       <span className="block text-[11px]">{sch.stage}</span>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{sch.host}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {sch.host || "—"}
+                    </TableCell>
                     <TableCell className="text-center">
                       <Badge
                         variant={
@@ -194,22 +299,34 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {!isLive && (
+                      <div className="flex items-center justify-end gap-1.5">
                         <Button
-                          variant="accent"
+                          variant="outline"
                           size="sm"
-                          onClick={() => handleSetLive(sch.id)}
-                          className="text-[11px] h-7 gap-1 cursor-pointer"
+                          onClick={() => handleOpenEdit(sch)}
+                          className="text-[11px] h-7 gap-1 px-2 cursor-pointer"
+                          title="Ubah Jadwal & Relasi Lomba"
                         >
-                          <Radio className="h-3 w-3" />
-                          <span>Jadikan Live</span>
+                          <Pencil className="h-3 w-3" />
+                          <span className="hidden sm:inline">Ubah</span>
                         </Button>
-                      )}
-                      {isLive && (
-                        <span className="text-[11px] font-mono font-bold text-danger animate-pulse">
-                          ● SEDANG TAYANG
-                        </span>
-                      )}
+                        {!isLive && (
+                          <Button
+                            variant="accent"
+                            size="sm"
+                            onClick={() => handleSetLive(sch.id)}
+                            className="text-[11px] h-7 gap-1 cursor-pointer"
+                          >
+                            <Radio className="h-3 w-3" />
+                            <span>Jadikan Live</span>
+                          </Button>
+                        )}
+                        {isLive && (
+                          <span className="text-[11px] font-mono font-bold text-danger animate-pulse">
+                            ● SEDANG TAYANG
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -218,17 +335,41 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
           </Table>
         </div>
 
-        {/* Modal Tambah Jadwal */}
+        {/* Modal Tambah / Edit Jadwal */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <form onSubmit={handleAddSchedule} className="space-y-4">
+          <form onSubmit={handleSaveSchedule} className="space-y-4">
             <DialogHeader>
-              <DialogTitle>Tambah Agenda Acara Baru</DialogTitle>
+              <DialogTitle>
+                {editingScheduleId ? "Ubah Jadwal Agenda Acara" : "Tambah Agenda Acara Baru"}
+              </DialogTitle>
               <DialogDescription>
-                Agenda yang ditambahkan akan tersimpan ke Supabase dan otomatis muncul di jadwal publik.
+                Hubungkan agenda dengan cabang lomba dari data lomba agar venue dan jadwal terintegrasi secara otomatis.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-3 text-xs">
+              {/* Dropdown Referensi Cabang Lomba */}
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground flex items-center justify-between">
+                  <span>Hubungkan ke Cabang Lomba (Opsional)</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    Pilih lomba dari data /dashboard/lomba
+                  </span>
+                </label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                  value={selectedCompId}
+                  onChange={(e) => handleCompetitionChange(e.target.value)}
+                >
+                  <option value="">— Bukan Cabang Lomba (Acara Umum) —</option>
+                  {competitions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      🏆 {c.name} ({c.category === "kelompok" ? "Kelompok" : "Individu"}) — {c.venue}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="space-y-1">
                 <label className="font-semibold text-foreground">Judul Agenda / Acara</label>
                 <Input
@@ -243,7 +384,7 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
                 <div className="space-y-1">
                   <label className="font-semibold text-foreground">Hari ke-</label>
                   <select
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs"
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground"
                     value={day}
                     onChange={(e) => setDay(e.target.value)}
                   >
@@ -268,7 +409,7 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
                   <label className="font-semibold text-foreground">Gedung / Venue</label>
                   <Input
                     required
-                    placeholder="Panggung Utama"
+                    placeholder="Ruang 12"
                     value={venue}
                     onChange={(e) => setVenue(e.target.value)}
                   />
@@ -277,7 +418,7 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
                   <label className="font-semibold text-foreground">Panggung / Stage</label>
                   <Input
                     required
-                    placeholder="Stage A"
+                    placeholder="Stage A1"
                     value={stage}
                     onChange={(e) => setStage(e.target.value)}
                   />
@@ -287,7 +428,7 @@ export function JadwalManageClient({ initialSchedules }: JadwalManageClientProps
               <div className="space-y-1">
                 <label className="font-semibold text-foreground">Pemandu Acara (Host/MC)</label>
                 <Input
-                  placeholder="Nama Host"
+                  placeholder="Nama Host / PIC Panggung"
                   value={host}
                   onChange={(e) => setHost(e.target.value)}
                 />

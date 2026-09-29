@@ -52,6 +52,11 @@ export default function DashboardPenilaianDetailPage() {
   // Status finalisasi diambil secara persisten dari database (status: 'selesai')
   const isFinalized = comp?.status === "selesai";
 
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const [confirmDialog, setConfirmDialog] = React.useState<"finalize" | "unlock" | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
   const [feedback, setFeedback] = React.useState<{
@@ -145,7 +150,9 @@ export default function DashboardPenilaianDetailPage() {
               <div
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-card text-xs text-muted-foreground shadow-xs"
                 title={
-                  realtimeStatus === "connected"
+                  !isMounted
+                    ? "Menghubungkan ke layanan realtime..."
+                    : realtimeStatus === "connected"
                     ? "Tersambung ke Supabase Realtime"
                     : realtimeStatus === "polling"
                     ? "Menggunakan sinkronisasi otomatis (polling interval 8 detik)"
@@ -155,7 +162,9 @@ export default function DashboardPenilaianDetailPage() {
                 <span
                   className={cn(
                     "w-2 h-2 rounded-full",
-                    realtimeStatus === "connected"
+                    !isMounted
+                      ? "bg-muted-foreground"
+                      : realtimeStatus === "connected"
                       ? "bg-emerald-500 animate-pulse"
                       : realtimeStatus === "polling"
                       ? "bg-amber-500"
@@ -163,13 +172,15 @@ export default function DashboardPenilaianDetailPage() {
                   )}
                 />
                 <span className="font-mono text-[11px] font-medium">
-                  {realtimeStatus === "connected"
+                  {!isMounted
+                    ? "Menyambungkan..."
+                    : realtimeStatus === "connected"
                     ? "Live Realtime"
                     : realtimeStatus === "polling"
                     ? "Auto-sync (8s)"
                     : "Menyambungkan..."}
                 </span>
-                {lastUpdatedAt && (
+                {isMounted && lastUpdatedAt && (
                   <span className="text-[10px] text-muted-foreground/75 hidden md:inline ml-1">
                     ({lastUpdatedAt.toLocaleTimeString("id-ID")})
                   </span>
@@ -181,12 +192,13 @@ export default function DashboardPenilaianDetailPage() {
                 size="sm"
                 variant="outline"
                 onClick={refresh}
-                disabled={isRefreshing || loading}
+                disabled={isMounted ? (isRefreshing || loading) : false}
                 className="text-xs gap-1.5 cursor-pointer"
                 title="Segarkan data rekap penilaian"
+                suppressHydrationWarning
               >
                 <RefreshCw
-                  className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin text-accent")}
+                  className={cn("h-3.5 w-3.5", isMounted && isRefreshing && "animate-spin text-accent")}
                 />
                 <span className="hidden sm:inline">Segarkan</span>
               </Button>
@@ -196,8 +208,9 @@ export default function DashboardPenilaianDetailPage() {
                 size="sm"
                 variant={isFinalized ? "secondary" : "default"}
                 onClick={() => setConfirmDialog(isFinalized ? "unlock" : "finalize")}
-                disabled={isUpdatingStatus || loading}
+                disabled={isMounted ? (isUpdatingStatus || loading) : false}
                 className="text-xs gap-1.5 cursor-pointer"
+                suppressHydrationWarning
               >
                 {isUpdatingStatus ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
