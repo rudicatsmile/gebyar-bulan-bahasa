@@ -13,100 +13,134 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { History, Eye, CheckCircle2 } from "lucide-react";
-
-interface EvaluationHistory {
-  id: string;
-  registrationNumber: string;
-  participantName: string;
-  institution: string;
-  competitionName: string;
-  weightedScore: number;
-  submittedAt: string;
-}
-
-const HISTORIES: EvaluationHistory[] = [
-  {
-    id: "eval-1",
-    registrationNumber: "GBB-PUI-014",
-    participantName: "Ahmad Fauzan Ramadhan",
-    institution: "SMAN 1 Bandung",
-    competitionName: "Membaca Puisi",
-    weightedScore: 92.85,
-    submittedAt: "27 Okt 2025, 11:42 WIB",
-  },
-  {
-    id: "eval-2",
-    registrationNumber: "GBB-PUI-015",
-    participantName: "Nurul Hidayah Salsabila",
-    institution: "SMKN 3 Jakarta",
-    competitionName: "Membaca Puisi",
-    weightedScore: 89.5,
-    submittedAt: "27 Okt 2025, 11:15 WIB",
-  },
-  {
-    id: "eval-3",
-    registrationNumber: "GBB-PUI-008",
-    participantName: "Kirana Ayu Lestari",
-    institution: "SMA Taman Siswa Yogyakarta",
-    competitionName: "Membaca Puisi",
-    weightedScore: 87.4,
-    submittedAt: "27 Okt 2025, 10:30 WIB",
-  },
-];
+import {
+  getJudgeEvaluationHistory,
+  type EvaluationHistoryItem,
+} from "@/app/actions/assessments";
+import { History, Loader2, ArrowRight, ClipboardCheck } from "lucide-react";
 
 export default function JuriRiwayatPage() {
+  const [loading, setLoading] = React.useState(true);
+  const [history, setHistory] = React.useState<EvaluationHistoryItem[]>([]);
+  const [judgeName, setJudgeName] = React.useState<string>("");
+
+  React.useEffect(() => {
+    async function loadHistory() {
+      try {
+        setLoading(true);
+        const res = await getJudgeEvaluationHistory();
+        if (res.success) {
+          setHistory(res.history);
+          if (res.judgeName) setJudgeName(res.judgeName);
+        } else {
+          console.error("Gagal load history:", res.error);
+        }
+      } catch (err) {
+        console.error("Error loadHistory:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadHistory();
+  }, []);
+
   return (
     <DashboardLayout role="juri">
       <div className="space-y-6">
-        <div>
-          <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <History className="h-7 w-7 text-accent" />
-            <span>Riwayat Formulir Penilaian Terkirim</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Audit rekam jejak penilaian final yang telah Anda kirimkan kepada panitia beserta rincian skor terbobot.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              <History className="h-7 w-7 text-accent" />
+              <span>Riwayat Formulir Penilaian Terkirim</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Audit rekam jejak penilaian final yang telah Anda kirimkan kepada panitia beserta rincian skor terbobot.
+            </p>
+          </div>
+
+          {judgeName && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-card border border-border px-3 py-1.5 rounded-lg w-fit">
+              <ClipboardCheck className="h-4 w-4 text-accent" />
+              <span>
+                Juri: <strong className="text-foreground">{judgeName}</strong>
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-28">No. Registrasi</TableHead>
-                <TableHead>Nama Peserta</TableHead>
-                <TableHead>Asal Sekolah / Kampus</TableHead>
-                <TableHead>Cabang Lomba</TableHead>
-                <TableHead className="text-center">Skor Terbobot Anda</TableHead>
-                <TableHead className="text-right">Waktu Pengiriman</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {HISTORIES.map((h) => (
-                <TableRow key={h.id}>
-                  <TableCell className="font-mono text-xs font-bold text-accent">
-                    {h.registrationNumber}
-                  </TableCell>
-                  <TableCell className="font-semibold text-foreground text-xs sm:text-sm">
-                    {h.participantName}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {h.institution}
-                  </TableCell>
-                  <TableCell className="text-xs text-foreground font-medium">
-                    {h.competitionName}
-                  </TableCell>
-                  <TableCell className="text-center font-mono font-bold text-accent text-sm">
-                    {h.weightedScore.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                    {h.submittedAt}
-                  </TableCell>
+        {loading ? (
+          <div className="py-20 flex flex-col items-center justify-center space-y-3 text-muted-foreground border border-border rounded-xl bg-card">
+            <Loader2 className="h-8 w-8 animate-spin text-accent" />
+            <p className="text-xs">Memuat rekam riwayat penilaian dari database...</p>
+          </div>
+        ) : history.length > 0 ? (
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-28">No. Registrasi</TableHead>
+                  <TableHead>Nama Peserta</TableHead>
+                  <TableHead>Asal Sekolah / Kampus</TableHead>
+                  <TableHead>Cabang Lomba</TableHead>
+                  <TableHead className="text-center">Status Form</TableHead>
+                  <TableHead className="text-center">Skor Terbobot Anda</TableHead>
+                  <TableHead className="text-right">Waktu Pengiriman</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {history.map((h) => (
+                  <TableRow key={h.id}>
+                    <TableCell className="font-mono text-xs font-bold text-accent">
+                      {h.registrationNumber}
+                    </TableCell>
+                    <TableCell className="font-semibold text-foreground text-xs sm:text-sm">
+                      {h.participantName}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {h.institution}
+                    </TableCell>
+                    <TableCell className="text-xs text-foreground font-medium">
+                      {h.competitionName}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge
+                        variant={h.status === "terkirim" ? "success" : "default"}
+                        className="text-[10px]"
+                      >
+                        {h.status === "terkirim" ? "TERKIRIM" : "DRAFT"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center font-mono font-bold text-accent text-sm">
+                      {h.weightedScore.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                      {h.submittedAt}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-3">
+            <History className="h-10 w-10 text-muted-foreground mx-auto" />
+            <h3 className="text-sm font-semibold text-foreground">
+              Belum Ada Riwayat Penilaian Terkirim
+            </h3>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              Belum ada lembar penilaian final yang tercatat di database untuk akun dewan juri ini. Nilai yang Anda kirimkan pada roster peserta lomba akan tercatat otomatis di sini.
+            </p>
+            <div className="pt-2">
+              <Link href="/juri">
+                <Button size="sm" className="text-xs gap-1.5 font-medium cursor-pointer">
+                  <span>Buka Penugasan Lomba Saya</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

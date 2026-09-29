@@ -15,68 +15,123 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getCompetitionMonitoringData } from "@/app/actions/competitions";
+import {
+  useRealtimeMonitoring,
+  RealtimeStatus,
+} from "@/hooks/useRealtimeMonitoring";
 import {
   ArrowLeft,
   UserCheck,
   Trophy,
   Loader2,
   Users,
+  Radio,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  RotateCw,
 } from "lucide-react";
 
-interface DisplayJudge {
-  id: string;
-  fullName: string;
-  expertise: string;
-  avatarUrl: string;
-  isChiefJudge: boolean;
-}
+function RealtimeIndicator({
+  status,
+  lastUpdatedAt,
+  onRefresh,
+}: {
+  status: RealtimeStatus;
+  lastUpdatedAt: Date | null;
+  onRefresh: () => void;
+}) {
+  const [timeAgo, setTimeAgo] = React.useState("");
 
-interface DisplayParticipant {
-  id: string;
-  registrationNumber: string;
-  fullName: string;
-  institution: string;
+  React.useEffect(() => {
+    if (!lastUpdatedAt) return;
+    const update = () => {
+      const diff = Math.floor((Date.now() - lastUpdatedAt.getTime()) / 1000);
+      if (diff < 5) setTimeAgo("baru saja");
+      else if (diff < 60) setTimeAgo(`${diff} detik lalu`);
+      else setTimeAgo(`${Math.floor(diff / 60)} menit lalu`);
+    };
+    update();
+    const iv = setInterval(update, 5000);
+    return () => clearInterval(iv);
+  }, [lastUpdatedAt]);
+
+  const statusConfig = {
+    connected: {
+      label: "Realtime Aktif",
+      icon: <Wifi className="h-3 w-3" />,
+      badgeClass: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
+      dotClass: "bg-emerald-500 animate-pulse",
+    },
+    polling: {
+      label: "Auto-Refresh",
+      icon: <RotateCw className="h-3 w-3 animate-spin" style={{ animationDuration: "3s" }} />,
+      badgeClass: "bg-amber-500/15 text-amber-600 border-amber-500/30",
+      dotClass: "bg-amber-500",
+    },
+    connecting: {
+      label: "Menghubungkan...",
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+      badgeClass: "bg-sky-500/15 text-sky-600 border-sky-500/30",
+      dotClass: "bg-sky-500 animate-pulse",
+    },
+    disconnected: {
+      label: "Terputus",
+      icon: <WifiOff className="h-3 w-3" />,
+      badgeClass: "bg-red-500/15 text-red-600 border-red-500/30",
+      dotClass: "bg-red-500",
+    },
+  };
+
+  const cfg = statusConfig[status];
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      {/* Status badge */}
+      <div
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium ${cfg.badgeClass}`}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${cfg.dotClass}`} />
+        {cfg.icon}
+        <span>{cfg.label}</span>
+      </div>
+
+      {/* Timestamp */}
+      {lastUpdatedAt && (
+        <span className="text-[10px] text-muted-foreground font-mono">
+          Update: {timeAgo}
+        </span>
+      )}
+
+      {/* Manual refresh */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onRefresh}
+        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+        title="Refresh manual"
+      >
+        <RefreshCw className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
 }
 
 export default function DashboardLombaDetailPage() {
   const params = useParams();
   const slug = (params?.slug as string) || "";
 
-  const [loading, setLoading] = React.useState(true);
-  const [competition, setCompetition] = React.useState<any>(null);
-  const [judges, setJudges] = React.useState<DisplayJudge[]>([]);
-  const [participants, setParticipants] = React.useState<DisplayParticipant[]>([]);
-  const [scores, setScores] = React.useState<Record<string, Record<string, number>>>({});
-
-  const loadData = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await getCompetitionMonitoringData(slug);
-      if (res.success) {
-        if (res.competition) {
-          setCompetition(res.competition);
-        }
-        if (res.judges) {
-          setJudges(res.judges);
-        }
-        if (res.participants) {
-          setParticipants(res.participants);
-        }
-        if (res.scores) {
-          setScores(res.scores);
-        }
-      }
-    } catch (err) {
-      console.error("Gagal memuat monitoring lomba:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  React.useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const {
+    loading,
+    competition,
+    judges,
+    participants,
+    scores,
+    realtimeStatus,
+    lastUpdatedAt,
+    refresh,
+  } = useRealtimeMonitoring(slug);
 
   if (!loading && !competition) {
     return notFound();
@@ -95,7 +150,7 @@ export default function DashboardLombaDetailPage() {
           </Link>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <Badge
                   variant={
                     competition?.status === "berlangsung"
@@ -123,10 +178,15 @@ export default function DashboardLombaDetailPage() {
               </h1>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end gap-2">
+              <RealtimeIndicator
+                status={realtimeStatus}
+                lastUpdatedAt={lastUpdatedAt}
+                onRefresh={refresh}
+              />
               <Link href={`/dashboard/penilaian/${competition?.id || slug}`}>
                 <Button size="sm" className="text-xs">
-                  Rekapitulasi Nilai & Agregasi →
+                  Rekapitulasi Nilai &amp; Agregasi →
                 </Button>
               </Link>
             </div>
@@ -212,14 +272,22 @@ export default function DashboardLombaDetailPage() {
 
         {/* Breakdown Peserta & Nilai Agregat */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-heading text-lg font-bold text-foreground flex items-center gap-2">
               <Trophy className="h-4 w-4 text-accent" />
-              <span>Daftar Peserta & Status Penilaian</span>
+              <span>Daftar Peserta &amp; Status Penilaian</span>
             </h2>
-            <span className="text-xs font-mono text-muted-foreground">
-              Total: {participants.length} Peserta Terdaftar
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono text-muted-foreground">
+                Total: {participants.length} Peserta Terdaftar
+              </span>
+              {realtimeStatus === "connected" && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+                  <Radio className="h-3 w-3 animate-pulse" />
+                  LIVE
+                </span>
+              )}
+            </div>
           </div>
 
           {participants.length === 0 ? (
@@ -280,7 +348,7 @@ export default function DashboardLombaDetailPage() {
                           return (
                             <TableCell key={j.id} className="text-center font-mono text-xs">
                               {score !== null ? (
-                                <span className="font-semibold text-foreground">
+                                <span className="font-semibold text-foreground transition-all duration-300">
                                   {score.toFixed(2)}
                                 </span>
                               ) : (

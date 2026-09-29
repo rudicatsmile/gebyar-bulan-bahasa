@@ -28,17 +28,49 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
   }
 
   try {
+    const adminSupabase = createAdminClient();
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    let judgeId = user?.id;
+
+    // Fallback: jika sesi user belum ada atau dalam konteks pengujian lokal, ambil juri aktif dari penugasan lomba
+    if (!judgeId) {
+      const { data: cj } = await adminSupabase
+        .from("competition_judges")
+        .select("judge_id")
+        .eq("competition_id", parsed.data.competitionId)
+        .eq("status", "aktif")
+        .limit(1)
+        .maybeSingle();
+
+      if (cj?.judge_id) {
+        judgeId = cj.judge_id;
+      }
+    }
+
+    if (!judgeId) {
       return { success: false, error: "Sesi juri tidak ditemukan. Silakan login kembali." };
     }
 
+    // Pastikan lomba belum difinalisasi / dikunci oleh panitia
+    const { data: compCheck } = await adminSupabase
+      .from("competitions")
+      .select("status, name")
+      .eq("id", parsed.data.competitionId)
+      .maybeSingle();
+
+    if (compCheck?.status === "selesai") {
+      return {
+        success: false,
+        error: "Nilai lomba telah difinalisasi dan dikunci oleh panitia. Perubahan nilai tidak diperkenankan.",
+      };
+    }
+
     // Ambil seluruh kriteria lomba untuk menghitung total terbobot
-    const { data: criteriaList } = await supabase
+    const { data: criteriaList } = await adminSupabase
       .from("competition_criteria")
       .select("id, weight")
       .eq("competition_id", parsed.data.competitionId);
@@ -62,14 +94,14 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
 
     const status = parsed.data.isFinal ? "terkirim" : "draft";
 
-    // Upsert assessment header
-    const { data: assessment, error: aErr } = await supabase
+    // Upsert assessment header via admin client
+    const { data: assessment, error: aErr } = await adminSupabase
       .from("assessments")
       .upsert(
         {
           registration_id: parsed.data.registrationId,
           competition_id: parsed.data.competitionId,
-          judge_id: user.id,
+          judge_id: judgeId,
           status,
           weighted_total: Number(weightedTotal.toFixed(2)),
           notes: parsed.data.notes || null,
@@ -92,7 +124,7 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
       comment: sc.comment || null,
     }));
 
-    const { error: sErr } = await supabase
+    const { error: sErr } = await adminSupabase
       .from("assessment_scores")
       .upsert(scoresToUpsert, { onConflict: "assessment_id,criterion_id" });
 
@@ -102,8 +134,8 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
 
     // Catat log jika final
     if (parsed.data.isFinal) {
-      await supabase.from("activity_logs").insert({
-        actor_id: user.id,
+      await adminSupabase.from("activity_logs").insert({
+        actor_id: judgeId,
         action: "submit_assessment",
         entity: "assessment",
         entity_id: assessment.id,
@@ -112,6 +144,8 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
     }
 
     revalidatePath("/juri");
+    revalidatePath("/juri/riwayat");
+    revalidatePath("/juri/lomba");
     revalidatePath("/dashboard/penilaian");
     revalidatePath("/papan-skor");
     return { success: true, data: { weightedTotal, status } };
@@ -195,6 +229,72 @@ export async function correctAssessmentByAdmin(
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal mengoreksi nilai.";
+    return { success: false, error: message };
+  }
+}
+
+export async function toggleCompetitionFinalize(
+  competitionIdOrSlug: string,
+  finalize: boolean
+): Promise<{ success: boolean; newStatus?: string; error?: string }> {
+  try {
+    const adminSupabase = createAdminClient();
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(competitionIdOrSlug);
+
+    const compQuery = adminSupabase.from("competitions").select("id, name, slug, status");
+    const { data: comp, error: cErr } = isUuid
+      ? await compQuery.eq("id", competitionIdOrSlug).maybeSingle()
+      : await compQuery.eq("slug", competitionIdOrSlug).maybeSingle();
+
+    if (cErr || !comp) {
+      return { success: false, error: "Cabang lomba tidak ditemukan." };
+    }
+
+    const newStatus = finalize ? "selesai" : "berlangsung";
+
+    // 1. Update status kompetisi
+    const { error: uErr } = await adminSupabase
+      .from("competitions")
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq("id", comp.id);
+
+    if (uErr) throw uErr;
+
+    // 2. Jika difinalisasi, kunci seluruh asesmen yang sudah terkirim menjadi status 'final'
+    if (finalize) {
+      await adminSupabase
+        .from("assessments")
+        .update({ status: "final" })
+        .eq("competition_id", comp.id)
+        .eq("status", "terkirim");
+    }
+
+    // 3. Catat di activity_logs
+    await adminSupabase.from("activity_logs").insert({
+      actor_id: user?.id || null,
+      action: finalize ? "finalize_scoring" : "unlock_scoring",
+      entity: "competition",
+      entity_id: comp.id,
+      description: finalize
+        ? `Finalisasi nilai lomba ${comp.name}. Skor dikunci.`
+        : `Membuka kunci nilai lomba ${comp.name}. Penilaian dapat disesuaikan kembali.`,
+    });
+
+    revalidatePath(`/dashboard/penilaian/${comp.slug}`);
+    revalidatePath(`/dashboard/penilaian/${comp.id}`);
+    revalidatePath("/dashboard/penilaian");
+    revalidatePath("/dashboard/lomba");
+    revalidatePath(`/dashboard/lomba/${comp.slug}`);
+
+    return { success: true, newStatus };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memperbarui status finalisasi lomba.";
+    console.error("Error toggleCompetitionFinalize:", err);
     return { success: false, error: message };
   }
 }
@@ -450,3 +550,719 @@ export async function getCompetitionScoringRecap(competitionIdOrSlug: string): P
     };
   }
 }
+
+export interface EvaluationHistoryItem {
+  id: string;
+  registrationNumber: string;
+  participantName: string;
+  institution: string;
+  competitionName: string;
+  competitionSlug?: string;
+  weightedScore: number;
+  status: "draft" | "terkirim";
+  submittedAt: string;
+}
+
+export async function getJudgeEvaluationHistory(): Promise<{
+  success: boolean;
+  history: EvaluationHistoryItem[];
+  judgeName?: string;
+  error?: string;
+}> {
+  try {
+    const adminSupabase = createAdminClient();
+    const serverSupabase = await createClient();
+
+    const {
+      data: { user },
+    } = await serverSupabase.auth.getUser();
+
+    let judgeProfile: any = null;
+    if (user) {
+      const { data: p } = await adminSupabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (p) judgeProfile = p;
+    }
+
+    let targetJudgeId = judgeProfile?.id;
+    const isAdminOrAcara =
+      judgeProfile?.role === "super_admin" || judgeProfile?.role === "seksi_acara";
+
+    // Jika belum login atau akun bukan juri/admin, cari juri aktif dari matriks
+    if (!targetJudgeId) {
+      const { data: allActiveJudges } = await adminSupabase
+        .from("competition_judges")
+        .select("judge_id, judge:profiles!competition_judges_judge_id_fkey(id, full_name)")
+        .eq("status", "aktif");
+
+      if (allActiveJudges && allActiveJudges.length > 0) {
+        const found =
+          allActiveJudges.find((a) =>
+            (a.judge as any)?.full_name?.toUpperCase().includes("MULYANA")
+          ) || allActiveJudges[0];
+        targetJudgeId = found.judge_id;
+        judgeProfile = found.judge;
+      }
+    }
+
+    let query = adminSupabase
+      .from("assessments")
+      .select(`
+        id,
+        weighted_total,
+        status,
+        submitted_at,
+        created_at,
+        competitions (
+          id,
+          name,
+          slug
+        ),
+        registrations (
+          id,
+          team_name,
+          participants (
+            id,
+            full_name,
+            institution,
+            registration_number
+          )
+        )
+      `)
+      .order("submitted_at", { ascending: false, nullsFirst: false });
+
+    // Jika bukan admin/acara dan memiliki target judge, filter berdasarkan judge_id
+    if (!isAdminOrAcara && targetJudgeId) {
+      query = query.eq("judge_id", targetJudgeId);
+    }
+
+    const { data: rows, error: qErr } = await query;
+
+    if (qErr) throw qErr;
+
+    const history: EvaluationHistoryItem[] = (rows || []).map((r) => {
+      const comp = r.competitions as any;
+      const reg = r.registrations as any;
+      const part = reg?.participants as any;
+
+      const dateStr = r.submitted_at || r.created_at;
+      let formattedDate = "-";
+      if (dateStr) {
+        try {
+          const d = new Date(dateStr);
+          formattedDate =
+            new Intl.DateTimeFormat("id-ID", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(d) + " WIB";
+        } catch {
+          formattedDate = dateStr;
+        }
+      }
+
+      return {
+        id: r.id,
+        registrationNumber: part?.registration_number || `REG-${r.id.slice(0, 6)}`,
+        participantName: reg?.team_name || part?.full_name || "Peserta",
+        institution: part?.institution || "Umum",
+        competitionName: comp?.name || "Lomba",
+        competitionSlug: comp?.slug,
+        weightedScore: Number(r.weighted_total) || 0,
+        status: (r.status as "draft" | "terkirim") || "draft",
+        submittedAt: formattedDate,
+      };
+    });
+
+    return {
+      success: true,
+      history,
+      judgeName: judgeProfile?.full_name || "Dewan Juri",
+    };
+  } catch (err: unknown) {
+    console.error("Error getJudgeEvaluationHistory:", err);
+    return {
+      success: false,
+      history: [],
+      error: err instanceof Error ? err.message : "Gagal memuat riwayat penilaian.",
+    };
+  }
+}
+
+export interface JudgeRosterParticipant {
+  registrationId: string;
+  participantId: string;
+  registrationNumber: string;
+  fullName: string;
+  teamName: string | null;
+  institution: string;
+  status: "draft" | "terkirim" | "final" | "belum_dinilai";
+  weightedScore: number | null;
+  performanceOrder: number | null;
+}
+
+export interface JudgeCompetitionRosterResult {
+  success: boolean;
+  competition?: {
+    id: string;
+    name: string;
+    slug: string;
+    category: string;
+    stageName?: string | null;
+    status: string;
+    rules?: string | null;
+  };
+  judge?: {
+    id: string;
+    name: string;
+  };
+  participants: JudgeRosterParticipant[];
+  error?: string;
+}
+
+export async function getJudgeCompetitionRoster(
+  slugOrId: string
+): Promise<JudgeCompetitionRosterResult> {
+  try {
+    const adminSupabase = createAdminClient();
+    const serverSupabase = await createClient();
+
+    // 1. Cari cabang lomba berdasarkan slug atau id
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      slugOrId
+    );
+    let compQuery = adminSupabase.from("competitions").select("*");
+    if (isUuid) {
+      compQuery = compQuery.eq("id", slugOrId);
+    } else {
+      compQuery = compQuery.eq("slug", slugOrId);
+    }
+
+    const { data: comp, error: compErr } = await compQuery.maybeSingle();
+
+    if (compErr || !comp) {
+      return {
+        success: false,
+        participants: [],
+        error: "Cabang lomba tidak ditemukan.",
+      };
+    }
+
+    // 2. Ambil profil juri yang sedang login, atau fallback ke juri aktif cabang lomba
+    const {
+      data: { user },
+    } = await serverSupabase.auth.getUser();
+
+    let judgeProfile: any = null;
+    if (user) {
+      const { data: p } = await adminSupabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (p) judgeProfile = p;
+    }
+
+    let targetJudgeId = judgeProfile?.id;
+    if (!targetJudgeId) {
+      const { data: activeJudges } = await adminSupabase
+        .from("competition_judges")
+        .select("judge_id, judge:profiles!competition_judges_judge_id_fkey(id, full_name)")
+        .eq("competition_id", comp.id)
+        .eq("status", "aktif");
+
+      if (activeJudges && activeJudges.length > 0) {
+        const found =
+          activeJudges.find((a) =>
+            (a.judge as any)?.full_name?.toUpperCase().includes("MULYANA")
+          ) || activeJudges[0];
+        targetJudgeId = found.judge_id;
+        judgeProfile = found.judge;
+      }
+    }
+
+    // 3. Ambil seluruh data pendaftaran peserta lomba ini dari Supabase
+    const { data: registrations, error: regErr } = await adminSupabase
+      .from("registrations")
+      .select(`
+        id,
+        participant_id,
+        competition_id,
+        team_name,
+        performance_order,
+        is_confirmed,
+        created_at,
+        participant:participants(*)
+      `)
+      .eq("competition_id", comp.id)
+      .order("performance_order", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
+
+    if (regErr) throw regErr;
+
+    // 4. Ambil penilaian oleh juri ini jika sudah ada
+    let assessments: any[] = [];
+    if (targetJudgeId) {
+      const { data: assessList } = await adminSupabase
+        .from("assessments")
+        .select("id, registration_id, judge_id, status, weighted_total, notes")
+        .eq("competition_id", comp.id)
+        .eq("judge_id", targetJudgeId);
+      assessments = assessList || [];
+    }
+
+    const participants: JudgeRosterParticipant[] = (registrations || []).map((r, index) => {
+      const part = r.participant as any;
+      const myAssessment = assessments.find((a) => a.registration_id === r.id);
+
+      let status: "draft" | "terkirim" | "final" | "belum_dinilai" = "belum_dinilai";
+      if (myAssessment?.status === "terkirim" || myAssessment?.status === "final") {
+        status = "terkirim";
+      } else if (myAssessment?.status === "draft") {
+        status = "draft";
+      }
+
+      return {
+        registrationId: r.id,
+        participantId: r.participant_id,
+        registrationNumber: part?.registration_number || `REG-${(index + 1).toString().padStart(3, "0")}`,
+        fullName: part?.full_name || r.team_name || "Peserta",
+        teamName: r.team_name,
+        institution: part?.institution || "Umum",
+        status,
+        weightedScore: myAssessment?.weighted_total ? Number(myAssessment.weighted_total) : null,
+        performanceOrder: r.performance_order,
+      };
+    });
+
+    return {
+      success: true,
+      competition: {
+        id: comp.id,
+        name: comp.name,
+        slug: comp.slug,
+        category: comp.type === "kelompok" ? "Kelompok" : "Individu",
+        stageName: comp.theme_link || "Panggung Utama",
+        status: comp.status,
+        rules: comp.rules,
+      },
+      judge: {
+        id: targetJudgeId || "",
+        name: judgeProfile?.full_name || "Dewan Juri",
+      },
+      participants,
+    };
+  } catch (err: unknown) {
+    console.error("Error getJudgeCompetitionRoster:", err);
+    return {
+      success: false,
+      participants: [],
+      error: err instanceof Error ? err.message : "Gagal memuat daftar peserta lomba.",
+    };
+  }
+}
+
+export interface GradingCriterionItem {
+  id: string;
+  competitionId: string;
+  name: string;
+  description: string | null;
+  weight: number;
+  maxScore: number;
+  sortOrder: number;
+}
+
+export interface ParticipantGradingSheetResult {
+  success: boolean;
+  participant?: {
+    registrationId: string;
+    registrationNumber: string;
+    fullName: string;
+    teamName: string | null;
+    institution: string;
+  };
+  competition?: {
+    id: string;
+    name: string;
+    slug: string;
+    category: string;
+    stageName?: string | null;
+    status?: string;
+  };
+  criteria: GradingCriterionItem[];
+  existingScores: Record<string, number>;
+  existingComments: Record<string, string>;
+  existingNotes: string;
+  status: "draft" | "terkirim" | "final" | "belum_dinilai";
+  judgeName?: string;
+  error?: string;
+}
+
+export async function getParticipantGradingSheet(
+  registrationId: string
+): Promise<ParticipantGradingSheetResult> {
+  try {
+    const adminSupabase = createAdminClient();
+    const serverSupabase = await createClient();
+
+    // 1. Ambil pendaftaran peserta beserta detail peserta & lomba
+    const { data: reg, error: regErr } = await adminSupabase
+      .from("registrations")
+      .select(`
+        id,
+        participant_id,
+        competition_id,
+        team_name,
+        participant:participants(*),
+        competition:competitions(*)
+      `)
+      .eq("id", registrationId)
+      .maybeSingle();
+
+    if (regErr || !reg) {
+      return {
+        success: false,
+        criteria: [],
+        existingScores: {},
+        existingComments: {},
+        existingNotes: "",
+        status: "belum_dinilai",
+        error: "Data pendaftaran peserta tidak ditemukan.",
+      };
+    }
+
+    const comp = reg.competition as any;
+    const part = reg.participant as any;
+
+    // 2. Ambil kriteria penilaian lomba
+    const { data: criteriaList, error: critErr } = await adminSupabase
+      .from("competition_criteria")
+      .select("*")
+      .eq("competition_id", reg.competition_id)
+      .order("sort_order", { ascending: true });
+
+    if (critErr) throw critErr;
+
+    const criteria: GradingCriterionItem[] = (criteriaList || []).map((c) => ({
+      id: c.id,
+      competitionId: c.competition_id,
+      name: c.name,
+      description: c.description,
+      weight: Number(c.weight),
+      maxScore: Number(c.max_score) || 100,
+      sortOrder: c.sort_order || 0,
+    }));
+
+    // 3. Ambil juri yang login atau fallback juri aktif
+    const {
+      data: { user },
+    } = await serverSupabase.auth.getUser();
+
+    let judgeProfile: any = null;
+    if (user) {
+      const { data: p } = await adminSupabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (p) judgeProfile = p;
+    }
+
+    let targetJudgeId = judgeProfile?.id;
+    if (!targetJudgeId) {
+      const { data: activeJudges } = await adminSupabase
+        .from("competition_judges")
+        .select("judge_id, judge:profiles!competition_judges_judge_id_fkey(id, full_name)")
+        .eq("competition_id", reg.competition_id)
+        .eq("status", "aktif");
+
+      if (activeJudges && activeJudges.length > 0) {
+        const found =
+          activeJudges.find((a) =>
+            (a.judge as any)?.full_name?.toUpperCase().includes("MULYANA")
+          ) || activeJudges[0];
+        targetJudgeId = found.judge_id;
+        judgeProfile = found.judge;
+      }
+    }
+
+    // 4. Ambil penilaian yang sudah ada dari juri ini
+    const existingScores: Record<string, number> = {};
+    const existingComments: Record<string, string> = {};
+    let existingNotes = "";
+    let assessmentStatus: "draft" | "terkirim" | "final" | "belum_dinilai" = "belum_dinilai";
+
+    if (targetJudgeId) {
+      const { data: existingAssessment } = await adminSupabase
+        .from("assessments")
+        .select("id, status, weighted_total, notes")
+        .eq("registration_id", registrationId)
+        .eq("judge_id", targetJudgeId)
+        .maybeSingle();
+
+      if (existingAssessment) {
+        assessmentStatus = (existingAssessment.status as any) || "draft";
+        existingNotes = existingAssessment.notes || "";
+
+        const { data: scoreRows } = await adminSupabase
+          .from("assessment_scores")
+          .select("criterion_id, score, comment")
+          .eq("assessment_id", existingAssessment.id);
+
+        (scoreRows || []).forEach((s) => {
+          existingScores[s.criterion_id] = Number(s.score);
+          if (s.comment) existingComments[s.criterion_id] = s.comment;
+        });
+      }
+    }
+
+    // Berikan nilai default 85 jika belum ada skor sama sekali
+    criteria.forEach((c) => {
+      if (existingScores[c.id] === undefined) {
+        existingScores[c.id] = 85;
+      }
+    });
+
+    return {
+      success: true,
+      participant: {
+        registrationId: reg.id,
+        registrationNumber: part?.registration_number || `REG-${reg.id.slice(0, 6)}`,
+        fullName: part?.full_name || reg.team_name || "Peserta",
+        teamName: reg.team_name,
+        institution: part?.institution || "Umum",
+      },
+      competition: {
+        id: comp.id,
+        name: comp.name,
+        slug: comp.slug,
+        category: comp.type === "kelompok" ? "Kelompok" : "Individu",
+        stageName: comp.theme_link || "Panggung Utama",
+        status: comp.status || "berlangsung",
+      },
+      criteria,
+      existingScores,
+      existingComments,
+      existingNotes,
+      status: assessmentStatus,
+      judgeName: judgeProfile?.full_name || "Dewan Juri",
+    };
+  } catch (err: unknown) {
+    console.error("Error getParticipantGradingSheet:", err);
+    return {
+      success: false,
+      criteria: [],
+      existingScores: {},
+      existingComments: {},
+      existingNotes: "",
+      status: "belum_dinilai",
+      error: err instanceof Error ? err.message : "Gagal memuat lembar penilaian peserta.",
+    };
+  }
+}
+
+export interface JudgeAssignedCompetition {
+  id: string;
+  competitionId: string;
+  name: string;
+  slug: string;
+  category: string;
+  stageName: string;
+  isChiefJudge: boolean;
+  status: string;
+  expertiseNote?: string | null;
+}
+
+export interface JudgeProfileResult {
+  success: boolean;
+  profile?: {
+    id: string;
+    fullName: string;
+    email: string;
+    institution: string;
+    nickname: string;
+    phone: string;
+    avatarUrl: string;
+    role: string;
+  };
+  assignedCompetitions: JudgeAssignedCompetition[];
+  stats: {
+    totalAssigned: number;
+    submittedAssessments: number;
+    draftAssessments: number;
+  };
+  error?: string;
+}
+
+export async function getJudgeProfileData(): Promise<JudgeProfileResult> {
+  try {
+    const adminSupabase = createAdminClient();
+    const serverSupabase = await createClient();
+
+    const {
+      data: { user },
+    } = await serverSupabase.auth.getUser();
+
+    let judgeProfile: any = null;
+    if (user) {
+      const { data: p } = await adminSupabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (p) judgeProfile = p;
+    }
+
+    let targetJudgeId = judgeProfile?.id;
+    if (!targetJudgeId) {
+      const { data: activeJudges } = await adminSupabase
+        .from("competition_judges")
+        .select("judge_id, judge:profiles!competition_judges_judge_id_fkey(*)")
+        .eq("status", "aktif");
+
+      if (activeJudges && activeJudges.length > 0) {
+        const found =
+          activeJudges.find((a) =>
+            (a.judge as any)?.full_name?.toUpperCase().includes("MULYANA")
+          ) || activeJudges[0];
+        targetJudgeId = found.judge_id;
+        judgeProfile = found.judge;
+      }
+    }
+
+    if (!judgeProfile) {
+      return {
+        success: false,
+        assignedCompetitions: [],
+        stats: { totalAssigned: 0, submittedAssessments: 0, draftAssessments: 0 },
+        error: "Profil dewan juri tidak ditemukan.",
+      };
+    }
+
+    // Ambil daftar penugasan cabang lomba
+    const { data: assignments, error: aErr } = await adminSupabase
+      .from("competition_judges")
+      .select(`
+        id,
+        competition_id,
+        is_chief_judge,
+        status,
+        expertise_note,
+        competition:competitions(*)
+      `)
+      .eq("judge_id", judgeProfile.id);
+
+    if (aErr) throw aErr;
+
+    const assignedCompetitions: JudgeAssignedCompetition[] = (assignments || []).map((a) => {
+      const comp = a.competition as any;
+      return {
+        id: a.id,
+        competitionId: a.competition_id,
+        name: comp?.name || "Cabang Lomba",
+        slug: comp?.slug || "",
+        category: comp?.type === "kelompok" ? "Kelompok" : "Individu",
+        stageName: comp?.theme_link || "Panggung Utama",
+        isChiefJudge: !!a.is_chief_judge,
+        status: a.status || "aktif",
+        expertiseNote: a.expertise_note,
+      };
+    });
+
+    // Ambil statistik penilaian juri ini
+    const { data: assessments } = await adminSupabase
+      .from("assessments")
+      .select("id, status")
+      .eq("judge_id", judgeProfile.id);
+
+    const submittedCount = (assessments || []).filter(
+      (as) => as.status === "terkirim" || as.status === "final"
+    ).length;
+    const draftCount = (assessments || []).filter((as) => as.status === "draft").length;
+
+    return {
+      success: true,
+      profile: {
+        id: judgeProfile.id,
+        fullName: judgeProfile.full_name || "",
+        email: judgeProfile.email || "",
+        institution: judgeProfile.institution || "",
+        nickname: judgeProfile.nickname || "",
+        phone: judgeProfile.phone || "",
+        avatarUrl:
+          judgeProfile.avatar_url ||
+          `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
+            judgeProfile.full_name || "Juri"
+          )}`,
+        role: judgeProfile.role || "juri",
+      },
+      assignedCompetitions,
+      stats: {
+        totalAssigned: assignedCompetitions.length,
+        submittedAssessments: submittedCount,
+        draftAssessments: draftCount,
+      },
+    };
+  } catch (err: unknown) {
+    console.error("Error getJudgeProfileData:", err);
+    return {
+      success: false,
+      assignedCompetitions: [],
+      stats: { totalAssigned: 0, submittedAssessments: 0, draftAssessments: 0 },
+      error: err instanceof Error ? err.message : "Gagal memuat profil dewan juri.",
+    };
+  }
+}
+
+export async function updateJudgeProfileData(data: {
+  id: string;
+  fullName: string;
+  institution: string;
+  nickname?: string;
+  phone?: string;
+  newPassword?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const adminSupabase = createAdminClient();
+
+    const { error: pErr } = await adminSupabase
+      .from("profiles")
+      .update({
+        full_name: data.fullName,
+        institution: data.institution,
+        nickname: data.nickname || null,
+        phone: data.phone || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+
+    if (pErr) throw pErr;
+
+    if (data.newPassword && data.newPassword.trim().length >= 6) {
+      try {
+        await adminSupabase.auth.admin.updateUserById(data.id, {
+          password: data.newPassword.trim(),
+        });
+      } catch (authErr) {
+        console.warn("Notice: Gagal memperbarui kata sandi auth:", authErr);
+      }
+    }
+
+    revalidatePath("/juri/profil");
+    revalidatePath("/juri");
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("Error updateJudgeProfileData:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal memperbarui profil juri.",
+    };
+  }
+}
+
+

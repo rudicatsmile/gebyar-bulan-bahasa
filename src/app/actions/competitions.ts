@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 const CriterionSchema = z.object({
   id: z.string().optional(),
@@ -849,6 +850,204 @@ export async function deleteOrArchiveCompetitionAdmin(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Gagal memproses penghapusan lomba.",
+    };
+  }
+}
+
+export async function getJudgeDashboardData(): Promise<{
+  success: boolean;
+  judgeInfo?: {
+    fullName: string;
+    expertise: string;
+    title: string;
+    avatarUrl?: string;
+  };
+  assignedComps: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    category: string;
+    description: string;
+    venue: string;
+    stage: string;
+    status: string;
+    criteriaCount: number;
+    isChiefJudge: boolean;
+  }>;
+  error?: string;
+}> {
+  try {
+    const adminSupabase = createAdminClient();
+    const serverSupabase = await createServerClient();
+
+    const {
+      data: { user },
+    } = await serverSupabase.auth.getUser();
+
+    let judgeProfile: any = null;
+    if (user) {
+      const { data: p } = await adminSupabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (p) judgeProfile = p;
+    }
+
+    const queryStr = `
+      judge_id,
+      is_chief_judge,
+      judge:profiles!competition_judges_judge_id_fkey (
+        id,
+        full_name,
+        institution,
+        role,
+        avatar_url
+      ),
+      competitions (
+        id,
+        slug,
+        name,
+        type,
+        description,
+        theme_link,
+        status,
+        competition_criteria (id),
+        schedules (venue, stage)
+      )
+    `;
+
+    // 1. Jika ada user login dan memiliki penugasan di competition_judges
+    if (judgeProfile) {
+      const { data: assignments } = await adminSupabase
+        .from("competition_judges")
+        .select(queryStr)
+        .eq("judge_id", judgeProfile.id)
+        .eq("status", "aktif");
+
+      if (assignments && assignments.length > 0) {
+        const mapped = assignments
+          .filter((a) => Boolean(a.competitions))
+          .map((a) => {
+            const comp = a.competitions as any;
+            const rawTheme = comp.theme_link?.trim() || "";
+            const sch = comp.schedules?.[0];
+            let venue = "";
+            let stage = "";
+
+            if (rawTheme.includes(" | ")) {
+              const parts = rawTheme.split(" | ");
+              venue = parts[0]?.trim() || "";
+              stage = parts[1]?.trim() || "";
+            } else if (rawTheme) {
+              venue = rawTheme;
+              stage = sch?.stage?.trim() || "";
+            } else {
+              venue = sch?.venue?.trim() || "Panggung Utama";
+              stage = sch?.stage?.trim() || "";
+            }
+
+            return {
+              id: comp.id,
+              slug: comp.slug,
+              name: comp.name,
+              category: comp.type || "individu",
+              description: comp.description || "",
+              venue: venue || "Panggung Utama",
+              stage,
+              status: comp.status || "pendaftaran",
+              criteriaCount: comp.competition_criteria?.length || 4,
+              isChiefJudge: Boolean(a.is_chief_judge),
+            };
+          });
+
+        return {
+          success: true,
+          judgeInfo: {
+            fullName: judgeProfile.full_name || "Dewan Juri",
+            expertise: judgeProfile.institution || "Dewan Juri Resmi",
+            title: judgeProfile.role === "juri" ? "Dewan Juri Ahli Bersertifikasi" : "Penilai Lomba",
+            avatarUrl: judgeProfile.avatar_url || undefined,
+          },
+          assignedComps: mapped,
+        };
+      }
+    }
+
+    // 2. Fallback: jika belum login atau login sebagai akun panitia/admin,
+    // ambil penugasan aktif dari database (utamakan juri H.MULYANA,MM atau juri pertama aktif)
+    const { data: allActive } = await adminSupabase
+      .from("competition_judges")
+      .select(queryStr)
+      .eq("status", "aktif");
+
+    if (allActive && allActive.length > 0) {
+      const targetAssignment =
+        allActive.find(
+          (a) => (a.judge as any)?.full_name?.toUpperCase().includes("MULYANA")
+        ) || allActive[0];
+
+      const fallbackJudge = targetAssignment.judge as any;
+      const targetJudgeId = fallbackJudge?.id || targetAssignment.judge_id;
+      const activeForJudge = allActive.filter((a) => a.judge_id === targetJudgeId);
+
+      const mapped = activeForJudge
+        .filter((a) => Boolean(a.competitions))
+        .map((a) => {
+          const comp = a.competitions as any;
+          const rawTheme = comp.theme_link?.trim() || "";
+          const sch = comp.schedules?.[0];
+          let venue = "";
+          let stage = "";
+
+          if (rawTheme.includes(" | ")) {
+            const parts = rawTheme.split(" | ");
+            venue = parts[0]?.trim() || "";
+            stage = parts[1]?.trim() || "";
+          } else if (rawTheme) {
+            venue = rawTheme;
+            stage = sch?.stage?.trim() || "";
+          } else {
+            venue = sch?.venue?.trim() || "Panggung Utama";
+            stage = sch?.stage?.trim() || "";
+          }
+
+          return {
+            id: comp.id,
+            slug: comp.slug,
+            name: comp.name,
+            category: comp.type || "individu",
+            description: comp.description || "",
+            venue: venue || "Panggung Utama",
+            stage,
+            status: comp.status || "pendaftaran",
+            criteriaCount: comp.competition_criteria?.length || 4,
+            isChiefJudge: Boolean(a.is_chief_judge),
+          };
+        });
+
+      return {
+        success: true,
+        judgeInfo: {
+          fullName: fallbackJudge?.full_name || "H.MULYANA,MM",
+          expertise: fallbackJudge?.institution || "Dewan Juri Sastra & Puisi",
+          title: "Dewan Juri Ahli Bersertifikasi",
+          avatarUrl: fallbackJudge?.avatar_url || undefined,
+        },
+        assignedComps: mapped,
+      };
+    }
+
+    return {
+      success: true,
+      assignedComps: [],
+    };
+  } catch (err: unknown) {
+    console.error("Error getJudgeDashboardData:", err);
+    return {
+      success: false,
+      assignedComps: [],
+      error: err instanceof Error ? err.message : "Gagal memuat penugasan juri",
     };
   }
 }

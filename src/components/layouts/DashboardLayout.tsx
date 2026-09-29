@@ -126,34 +126,52 @@ export function DashboardLayout({
   const [internalPoints, setInternalPoints] = React.useState<number | null>(null);
   const [pendingVerificationCount, setPendingVerificationCount] = React.useState<number | null>(null);
 
+  // ---------- Realtime badge count for "Verifikasi Berkas" ----------
+  const fetchPendingCount = React.useCallback(() => {
+    if (role !== "seksi_acara") return;
+
+    const supabase = createClient();
+    supabase
+      .from("participants")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "menunggu_verifikasi")
+      .then(({ count }) => {
+        if (count !== null && count !== undefined) {
+          setPendingVerificationCount(count);
+        }
+      });
+  }, [role]);
+
   React.useEffect(() => {
-    if (role === "seksi_acara") {
-      const supabase = createClient();
-      supabase
-        .from("participants")
-        .select("id, status, registrations(is_confirmed)")
-        .then(({ data, error }) => {
-          if (!error && Array.isArray(data)) {
-            const count = data.filter((row: any) => {
-              const firstReg = row.registrations && row.registrations[0];
-              const isUnconfirmed = firstReg && !firstReg.is_confirmed;
-              return row.status === "menunggu_verifikasi" || isUnconfirmed;
-            }).length;
-            setPendingVerificationCount(count);
-          } else {
-            supabase
-              .from("participants")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "menunggu_verifikasi")
-              .then(({ count }) => {
-                if (count !== null && count !== undefined) {
-                  setPendingVerificationCount(count);
-                }
-              });
-          }
-        });
-    }
-  }, [role, pathname]);
+    if (role !== "seksi_acara") return;
+
+    // Initial fetch
+    fetchPendingCount();
+
+    // Subscribe to realtime changes on participants table
+    const supabase = createClient();
+    const channel = supabase
+      .channel("sidebar-verifikasi-badge")
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "participants" },
+        () => {
+          // Re-count on any participant change (INSERT / UPDATE status / DELETE)
+          fetchPendingCount();
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          // Fallback: poll every 15 seconds if realtime fails
+          const pollId = setInterval(fetchPendingCount, 15_000);
+          return () => clearInterval(pollId);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [role, fetchPendingCount]);
 
   React.useEffect(() => {
     if (role === "peserta" && participantPoints === undefined) {

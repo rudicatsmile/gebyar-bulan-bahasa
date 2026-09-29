@@ -183,8 +183,8 @@ export const COMPETITIONS: Competition[] = [
     status: "berlangsung",
     description:
       "Lomba membaca karya puisi sastra nusantara dan puisi bertema Sumpah Pemuda untuk mengobarkan semangat persatuan generasi penerus bangsa.",
-    venue: "Panggung Utama",
-    stage: "Stage A",
+    venue: "Ruang 12",
+    stage: "Stage A1",
     date: "27 Oktober 2025",
     time: "09:00 - 12:00 WIB",
     minMembers: 1,
@@ -238,8 +238,8 @@ export const COMPETITIONS: Competition[] = [
     status: "berlangsung",
     description:
       "Kompetisi karya sinematografi fiksi pendek bertema 'Persatuan dalam Keberagaman Budaya Nusantara' dengan durasi 5-10 menit.",
-    venue: "Ruang Bioskop Mini",
-    stage: "Hall Sinema Lt. 2",
+    venue: "Ruang Perpustakaan",
+    stage: "Stage B2",
     date: "28 Oktober 2025",
     time: "09:00 - 15:00 WIB",
     minMembers: 3,

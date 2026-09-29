@@ -7,43 +7,99 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PARTICIPANTS, COMPETITIONS, SCORING_RECAPS } from "@/lib/dummy-data";
-import { ArrowLeft, Save, Send, CheckCircle2, Sliders, AlertCircle } from "lucide-react";
+import {
+  getParticipantGradingSheet,
+  saveAssessment,
+  GradingCriterionItem,
+} from "@/app/actions/assessments";
+import {
+  ArrowLeft,
+  Save,
+  Send,
+  CheckCircle2,
+  Sliders,
+  AlertCircle,
+  Loader2,
+  UserCheck,
+  Lock,
+} from "lucide-react";
 
 export default function FormPenilaianDigitalPage() {
   const router = useRouter();
   const params = useParams();
   const regId = params?.registrationId as string;
 
-  const participant = PARTICIPANTS.find((p) => p.id === regId);
-  if (!participant) return notFound();
+  const [loading, setLoading] = React.useState(true);
+  const [notFoundState, setNotFoundState] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
 
-  const comp = COMPETITIONS.find((c) => c.id === participant.competitionId);
-  if (!comp) return notFound();
+  const [participant, setParticipant] = React.useState<{
+    registrationId: string;
+    registrationNumber: string;
+    fullName: string;
+    teamName: string | null;
+    institution: string;
+  } | null>(null);
 
-  // Existing scores if any
-  const existingRecap = SCORING_RECAPS[comp.id]?.find((r) => r.registrationId === regId);
-  const myExistingGrading = existingRecap?.scoresPerJudge.find((j) => j.judgeId === "judge-1");
+  const [competition, setCompetition] = React.useState<{
+    id: string;
+    name: string;
+    slug: string;
+    category: string;
+    stageName?: string | null;
+    status?: string;
+  } | null>(null);
 
-  // State skor per kriteria
-  const [scores, setScores] = React.useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    comp.criteria.forEach((c) => {
-      init[c.id] = myExistingGrading?.scores[c.id] ?? 85;
-    });
-    return init;
-  });
-
-  const [notes, setNotes] = React.useState(myExistingGrading?.notes || "");
-  const [status, setStatus] = React.useState<"draft" | "terkirim">(
-    myExistingGrading?.status || "draft"
+  const [criteria, setCriteria] = React.useState<GradingCriterionItem[]>([]);
+  const [scores, setScores] = React.useState<Record<string, number>>({});
+  const [comments, setComments] = React.useState<Record<string, string>>({});
+  const [notes, setNotes] = React.useState("");
+  const [status, setStatus] = React.useState<"draft" | "terkirim" | "final" | "belum_dinilai">(
+    "belum_dinilai"
   );
-  const [feedbackNotice, setFeedbackNotice] = React.useState("");
+  const [judgeName, setJudgeName] = React.useState("");
+  const [feedbackNotice, setFeedbackNotice] = React.useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const loadSheet = React.useCallback(async () => {
+    if (!regId) return;
+    setLoading(true);
+    try {
+      const res = await getParticipantGradingSheet(regId);
+      if (!res.success || !res.participant || !res.competition) {
+        setNotFoundState(true);
+      } else {
+        setParticipant(res.participant);
+        setCompetition(res.competition);
+        setCriteria(res.criteria);
+        setScores(res.existingScores);
+        setComments(res.existingComments || {});
+        setNotes(res.existingNotes || "");
+        setStatus(res.status);
+        if (res.judgeName) setJudgeName(res.judgeName);
+      }
+    } catch {
+      setNotFoundState(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [regId]);
+
+  React.useEffect(() => {
+    loadSheet();
+  }, [loadSheet]);
+
+  if (notFoundState) {
+    return notFound();
+  }
 
   // Live calculation weighted total
-  const weightedTotal = comp.criteria.reduce((total, c) => {
+  const isCompetitionLocked = competition?.status === "selesai";
+
+  const weightedTotal = criteria.reduce((total, c) => {
     const scoreVal = scores[c.id] || 0;
     return total + (scoreVal * c.weight) / 100;
   }, 0);
@@ -52,36 +108,134 @@ export default function FormPenilaianDigitalPage() {
     setScores((prev) => ({ ...prev, [critId]: Math.min(100, Math.max(0, val)) }));
   };
 
-  const handleSaveDraft = () => {
-    setStatus("draft");
-    setFeedbackNotice("Draft penilaian berhasil disimpan! Nilai belum dipublikasikan ke rekap.");
-    setTimeout(() => setFeedbackNotice(""), 3500);
+  const handleSaveDraft = async () => {
+    if (!competition || !participant) return;
+    setIsSaving(true);
+    setFeedbackNotice(null);
+
+    try {
+      const payloadScores = criteria.map((c) => ({
+        criterionId: c.id,
+        score: scores[c.id] ?? 85,
+        comment: comments[c.id] || undefined,
+      }));
+
+      const res = await saveAssessment({
+        registrationId: participant.registrationId,
+        competitionId: competition.id,
+        scores: payloadScores,
+        notes,
+        isFinal: false,
+      });
+
+      if (!res.success) {
+        setFeedbackNotice({
+          type: "error",
+          message: res.error || "Gagal menyimpan draft penilaian.",
+        });
+      } else {
+        setStatus("draft");
+        setFeedbackNotice({
+          type: "success",
+          message: "Draft penilaian berhasil disimpan di database! Nilai belum dipublikasikan ke rekap final.",
+        });
+        setTimeout(() => setFeedbackNotice(null), 4000);
+      }
+    } catch (err: unknown) {
+      setFeedbackNotice({
+        type: "error",
+        message: err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan draft.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSubmitFinal = () => {
-    // Validasi kelengkapan
-    const allFilled = comp.criteria.every((c) => scores[c.id] !== undefined && scores[c.id] > 0);
+  const handleSubmitFinal = async () => {
+    if (!competition || !participant) return;
+
+    // Validasi kelengkapan kriteria
+    const allFilled = criteria.every(
+      (c) => scores[c.id] !== undefined && Number(scores[c.id]) > 0
+    );
     if (!allFilled) {
       alert("Harap lengkapi nilai untuk seluruh kriteria penilaian sebelum mengirimkan nilai final.");
       return;
     }
-    setStatus("terkirim");
-    setFeedbackNotice("Penilaian final berhasil dikirimkan dan langsung diagregasikan ke rekapitulasi lomba!");
-    setTimeout(() => {
-      router.push(`/juri/lomba/${comp.slug}`);
-    }, 1500);
+
+    const confirmSubmit = window.confirm(
+      `Kirim nilai final sebesar ${weightedTotal.toFixed(2)} pts untuk peserta ${participant.fullName}? Nilai akan langsung masuk ke rekapitulasi kejuaraan.`
+    );
+    if (!confirmSubmit) return;
+
+    setIsSaving(true);
+    setFeedbackNotice(null);
+
+    try {
+      const payloadScores = criteria.map((c) => ({
+        criterionId: c.id,
+        score: scores[c.id] ?? 85,
+        comment: comments[c.id] || undefined,
+      }));
+
+      const res = await saveAssessment({
+        registrationId: participant.registrationId,
+        competitionId: competition.id,
+        scores: payloadScores,
+        notes,
+        isFinal: true,
+      });
+
+      if (!res.success) {
+        setFeedbackNotice({
+          type: "error",
+          message: res.error || "Gagal mengirim penilaian final.",
+        });
+        setIsSaving(false);
+      } else {
+        setStatus("terkirim");
+        setFeedbackNotice({
+          type: "success",
+          message: "Penilaian final berhasil dikirimkan ke database dan diagregasikan ke rekapitulasi lomba!",
+        });
+        setTimeout(() => {
+          router.push(`/juri/lomba/${competition.slug}`);
+        }, 1500);
+      }
+    } catch (err: unknown) {
+      setFeedbackNotice({
+        type: "error",
+        message: err instanceof Error ? err.message : "Terjadi kesalahan saat mengirim nilai final.",
+      });
+      setIsSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout role="juri">
+        <div className="flex flex-col items-center justify-center py-24 space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-accent" />
+          <p className="text-sm text-muted-foreground">Memuat lembar penilaian digital peserta...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!participant || !competition) {
+    return notFound();
+  }
 
   return (
     <DashboardLayout role="juri">
       <div className="space-y-6 max-w-4xl mx-auto">
         <div>
           <Link
-            href={`/juri/lomba/${comp.slug}`}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3"
+            href={`/juri/lomba/${competition.slug}`}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Kembali ke Roster Peserta</span>
+            <span>Kembali ke Roster Peserta ({competition.name})</span>
           </Link>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -93,12 +247,19 @@ export default function FormPenilaianDigitalPage() {
                 <span className="font-mono text-xs font-bold text-accent">
                   {participant.registrationNumber}
                 </span>
+                {judgeName && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <UserCheck className="h-3 w-3 text-accent" />
+                    {judgeName}
+                  </span>
+                )}
               </div>
               <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                 {participant.fullName}
               </h1>
               <p className="text-xs text-muted-foreground">
-                {participant.institution} • Cabang: <strong>{comp.name}</strong>
+                {participant.institution} • Cabang: <strong>{competition.name}</strong>{" "}
+                {competition.stageName ? `(${competition.stageName})` : ""}
               </p>
             </div>
 
@@ -115,10 +276,32 @@ export default function FormPenilaianDigitalPage() {
           </div>
         </div>
 
+        {isCompetitionLocked && (
+          <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs flex items-center gap-3">
+            <Lock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div>
+              <p className="font-bold">Penilaian Dikunci (Mode Hanya-Baca)</p>
+              <p className="text-[11px] mt-0.5">
+                Nilai untuk cabang lomba ini telah difinalisasi dan dikunci oleh Panitia / Seksi Acara. Perubahan atau pengiriman nilai baru tidak diperkenankan.
+              </p>
+            </div>
+          </div>
+        )}
+
         {feedbackNotice && (
-          <div className="p-4 rounded-xl border border-success/40 bg-success/10 text-success text-xs flex items-center gap-2 animate-in fade-in-50">
-            <CheckCircle2 className="h-5 w-5 shrink-0" />
-            <span>{feedbackNotice}</span>
+          <div
+            className={`p-4 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${
+              feedbackNotice.type === "success"
+                ? "border-success/40 bg-success/10 text-success"
+                : "border-destructive/40 bg-destructive/10 text-destructive"
+            }`}
+          >
+            {feedbackNotice.type === "success" ? (
+              <CheckCircle2 className="h-5 w-5 shrink-0" />
+            ) : (
+              <AlertCircle className="h-5 w-5 shrink-0" />
+            )}
+            <span>{feedbackNotice.message}</span>
           </div>
         )}
 
@@ -130,8 +313,8 @@ export default function FormPenilaianDigitalPage() {
           </h2>
 
           <div className="space-y-4">
-            {comp.criteria.map((crit) => {
-              const currentScore = scores[crit.id] || 0;
+            {criteria.map((crit) => {
+              const currentScore = scores[crit.id] ?? 85;
               const contribution = ((currentScore * crit.weight) / 100).toFixed(2);
 
               return (
@@ -146,7 +329,9 @@ export default function FormPenilaianDigitalPage() {
                           {crit.name}
                         </h3>
                       </div>
-                      <p className="text-xs text-muted-foreground">{crit.description}</p>
+                      {crit.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{crit.description}</p>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3 sm:shrink-0">
@@ -159,8 +344,11 @@ export default function FormPenilaianDigitalPage() {
                           min={0}
                           max={crit.maxScore}
                           value={currentScore}
-                          onChange={(e) => handleScoreChange(crit.id, parseFloat(e.target.value) || 0)}
-                          className="h-10 w-20 rounded-lg border border-border bg-background px-3 text-center font-mono text-lg font-bold text-foreground focus:outline-none focus:border-accent"
+                          disabled={isCompetitionLocked}
+                          onChange={(e) =>
+                            handleScoreChange(crit.id, parseFloat(e.target.value) || 0)
+                          }
+                          className="h-10 w-20 rounded-lg border border-border bg-background px-3 text-center font-mono text-lg font-bold text-foreground focus:outline-none focus:border-accent disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </div>
                     </div>
@@ -173,8 +361,11 @@ export default function FormPenilaianDigitalPage() {
                       min={0}
                       max={crit.maxScore}
                       value={currentScore}
-                      onChange={(e) => handleScoreChange(crit.id, parseFloat(e.target.value))}
-                      className="w-full accent-[hsl(var(--accent))] cursor-pointer"
+                      disabled={isCompetitionLocked}
+                      onChange={(e) =>
+                        handleScoreChange(crit.id, parseFloat(e.target.value) || 0)
+                      }
+                      className="w-full accent-[hsl(var(--accent))] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
                       <span>0</span>
@@ -196,8 +387,10 @@ export default function FormPenilaianDigitalPage() {
           <Textarea
             placeholder="Tuliskan catatan apresiasi, saran pengembangan vokal/ekspresi, atau hal yang perlu diperbaiki peserta..."
             value={notes}
+            disabled={isCompetitionLocked}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
+            className="disabled:opacity-60 disabled:cursor-not-allowed"
           />
         </Card>
 
@@ -205,8 +398,21 @@ export default function FormPenilaianDigitalPage() {
         <div className="p-4 rounded-xl border border-border bg-card flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-xs text-muted-foreground">
             Status Nilai Saat Ini:{" "}
-            <Badge variant={status === "terkirim" ? "success" : "warning"} className="text-[10px]">
-              {status === "terkirim" ? "TERKIRIM FINAL" : "DRAFT (TERSEMBUNYI)"}
+            <Badge
+              variant={
+                status === "terkirim" || status === "final"
+                  ? "success"
+                  : status === "draft"
+                  ? "warning"
+                  : "default"
+              }
+              className="text-[10px]"
+            >
+              {status === "terkirim" || status === "final"
+                ? "TERKIRIM FINAL"
+                : status === "draft"
+                ? "DRAFT (TERSEMBUNYI)"
+                : "BELUM DINILAI"}
             </Badge>
           </div>
 
@@ -214,19 +420,29 @@ export default function FormPenilaianDigitalPage() {
             <Button
               type="button"
               variant="outline"
+              disabled={isSaving || isCompetitionLocked}
               onClick={handleSaveDraft}
-              className="text-xs gap-1.5 cursor-pointer"
+              className="text-xs gap-1.5 cursor-pointer disabled:cursor-not-allowed"
             >
-              <Save className="h-4 w-4" />
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
               <span>Simpan Draft</span>
             </Button>
             <Button
               type="button"
+              disabled={isSaving || isCompetitionLocked}
               onClick={handleSubmitFinal}
               size="lg"
-              className="text-xs font-semibold gap-1.5 cursor-pointer shadow-xs"
+              className="text-xs font-semibold gap-1.5 cursor-pointer shadow-xs disabled:cursor-not-allowed"
             >
-              <Send className="h-4 w-4" />
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
               <span>Kirimkan Nilai Final</span>
             </Button>
           </div>

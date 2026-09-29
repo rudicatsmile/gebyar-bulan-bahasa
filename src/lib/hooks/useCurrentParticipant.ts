@@ -12,6 +12,10 @@ export interface Enrollment {
   competitionName: string | null;
   teamName: string | null;
   isConfirmed: boolean;
+  category?: string | null;
+  venue?: string | null;
+  stage?: string | null;
+  scheduleText?: string | null;
 }
 
 export interface CurrentParticipant {
@@ -97,12 +101,62 @@ export function useCurrentParticipant() {
         if (participantRow?.id) {
           const { data: regRows } = await supabase
             .from("registrations")
-            .select("id, team_name, is_confirmed, competition_id, competitions(name, slug)")
+            .select(`
+              id,
+              team_name,
+              is_confirmed,
+              competition_id,
+              competitions (
+                id,
+                name,
+                slug,
+                type,
+                theme_link,
+                schedules (
+                  venue,
+                  stage,
+                  event_date,
+                  start_time,
+                  end_time
+                )
+              )
+            `)
             .eq("participant_id", participantRow.id)
             .order("created_at", { ascending: true });
 
           enrollments = (regRows ?? []).map((reg) => {
-            const comp = reg.competitions as { name?: string; slug?: string } | null;
+            const comp = reg.competitions as any;
+            const rawTheme = comp?.theme_link?.trim() || "";
+            const sch = comp?.schedules?.[0];
+
+            let venue = "";
+            let stage = "";
+
+            if (rawTheme.includes(" | ")) {
+              const parts = rawTheme.split(" | ");
+              venue = parts[0]?.trim() || "";
+              stage = parts[1]?.trim() || "";
+            } else if (rawTheme) {
+              venue = rawTheme;
+              stage = sch?.stage?.trim() || "";
+            } else if (sch?.venue) {
+              venue = sch.venue.trim();
+              stage = sch?.stage?.trim() || "";
+            }
+
+            let scheduleText = "";
+            if (sch?.event_date) {
+              const dateStr = new Date(sch.event_date).toLocaleDateString("id-ID", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              });
+              const timeStr = sch.start_time
+                ? `${sch.start_time.slice(0, 5)}${sch.end_time ? ` - ${sch.end_time.slice(0, 5)} WIB` : " WIB"}`
+                : "";
+              scheduleText = `${dateStr} • ${timeStr}`.trim();
+            }
+
             return {
               registrationId: reg.id,
               competitionId: reg.competition_id,
@@ -110,6 +164,10 @@ export function useCurrentParticipant() {
               competitionName: comp?.name ?? null,
               teamName: reg.team_name,
               isConfirmed: reg.is_confirmed,
+              category: comp?.type === "kelompok" ? "Kelompok" : "Individu",
+              venue: venue || null,
+              stage: stage || null,
+              scheduleText: scheduleText || null,
             };
           });
         }
@@ -198,8 +256,13 @@ export function useCurrentParticipant() {
                 registrationId: "demo-reg",
                 competitionId: dummyDemo.competitionId,
                 competitionName: comp?.name || "Membaca Puisi",
+                competitionSlug: comp?.slug || "membaca-puisi",
                 teamName: dummyDemo.teamName ?? null,
                 isConfirmed: true,
+                category: comp?.category === "kelompok" ? "Kelompok" : "Individu",
+                venue: comp?.venue || "Ruang 12",
+                stage: comp?.stage || "Stage A1",
+                scheduleText: comp ? `${comp.date} • ${comp.time}` : "27 Oktober 2025 • 09:00 - 12:00 WIB",
               },
             ],
             participantRowId: null,

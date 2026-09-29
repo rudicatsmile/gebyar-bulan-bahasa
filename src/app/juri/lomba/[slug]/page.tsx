@@ -14,18 +14,58 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { COMPETITIONS, PARTICIPANTS, SCORING_RECAPS } from "@/lib/dummy-data";
-import { ArrowLeft, Edit3, CheckCircle2, Clock, Trophy } from "lucide-react";
+import {
+  getJudgeCompetitionRoster,
+  JudgeRosterParticipant,
+} from "@/app/actions/assessments";
+import { ArrowLeft, Edit3, Loader2, MapPin, UserCheck } from "lucide-react";
 
 export default function JuriLombaPesertaPage() {
   const params = useParams();
   const slug = params?.slug as string;
 
-  const comp = COMPETITIONS.find((c) => c.slug === slug);
-  if (!comp) return notFound();
+  const [loading, setLoading] = React.useState(true);
+  const [notFoundState, setNotFoundState] = React.useState(false);
+  const [competition, setCompetition] = React.useState<{
+    id: string;
+    name: string;
+    slug: string;
+    category: string;
+    stageName?: string | null;
+    status: string;
+    rules?: string | null;
+  } | null>(null);
+  const [participants, setParticipants] = React.useState<JudgeRosterParticipant[]>([]);
+  const [judgeName, setJudgeName] = React.useState<string>("");
 
-  const participants = PARTICIPANTS.filter((p) => p.competitionId === comp.id);
-  const recaps = SCORING_RECAPS[comp.id] || [];
+  const loadData = React.useCallback(async () => {
+    if (!slug) return;
+    setLoading(true);
+    try {
+      const res = await getJudgeCompetitionRoster(slug);
+      if (!res.success || !res.competition) {
+        setNotFoundState(true);
+      } else {
+        setCompetition(res.competition);
+        setParticipants(res.participants);
+        if (res.judge?.name) {
+          setJudgeName(res.judge.name);
+        }
+      }
+    } catch {
+      setNotFoundState(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [slug]);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  if (notFoundState) {
+    return notFound();
+  }
 
   return (
     <DashboardLayout role="juri">
@@ -33,7 +73,7 @@ export default function JuriLombaPesertaPage() {
         <div>
           <Link
             href="/juri"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Kembali ke Lomba Saya</span>
@@ -44,17 +84,36 @@ export default function JuriLombaPesertaPage() {
                 <Badge variant="gold" className="text-[10px]">
                   ROSTER PESERTA RESMI
                 </Badge>
-                <span className="text-xs font-mono text-muted-foreground uppercase">
-                  {comp.category}
-                </span>
+                {competition && (
+                  <>
+                    <span className="text-xs font-mono text-muted-foreground uppercase">
+                      {competition.category}
+                    </span>
+                    {competition.stageName && (
+                      <span className="inline-flex items-center gap-1 text-xs text-accent font-medium">
+                        <MapPin className="h-3 w-3" />
+                        {competition.stageName}
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
               <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                Penilaian: {comp.name}
+                Penilaian: {competition?.name || (loading ? "Memuat Lomba..." : "Cabang Lomba")}
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Pilih peserta di bawah untuk membuka lembar penilaian digital per kriteria.
               </p>
             </div>
+
+            {judgeName && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card/80 text-xs text-muted-foreground shrink-0 self-start sm:self-auto">
+                <UserCheck className="h-4 w-4 text-accent" />
+                <span>
+                  Juri Penilai: <strong className="text-foreground">{judgeName}</strong>
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -64,64 +123,85 @@ export default function JuriLombaPesertaPage() {
               <TableRow>
                 <TableHead className="w-28">No. Registrasi</TableHead>
                 <TableHead>Nama Peserta</TableHead>
-                <TableHead>Sekolah / Kampus</TableHead>
+                <TableHead>Sekolah / Instansi</TableHead>
                 <TableHead className="text-center">Status Penilaian Anda</TableHead>
                 <TableHead className="text-right">Aksi Form Penilaian</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {participants.map((p) => {
-                const recap = recaps.find((r) => r.registrationId === p.id);
-                const myGrading = recap?.scoresPerJudge.find((j) => j.judgeId === "judge-1");
-                const isSent = myGrading?.status === "terkirim";
-                const isDraft = myGrading?.status === "draft";
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                      <span>Memuat daftar peserta resmi dari database...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : participants.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
+                    Belum ada peserta yang terdaftar pada cabang lomba ini.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                participants.map((p) => {
+                  const isSent = p.status === "terkirim" || p.status === "final";
+                  const isDraft = p.status === "draft";
 
-                return (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-mono text-xs font-bold text-accent">
-                      {p.registrationNumber}
-                    </TableCell>
-                    <TableCell>
-                      <strong className="text-foreground text-xs sm:text-sm block">
-                        {p.fullName}
-                      </strong>
-                      {p.teamName && (
-                        <span className="text-[11px] text-muted-foreground">{p.teamName}</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {p.institution}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {isSent ? (
-                        <Badge variant="success" className="text-[10px]">
-                          ✓ TERKIRIM ({myGrading?.weightedTotal.toFixed(2)})
-                        </Badge>
-                      ) : isDraft ? (
-                        <Badge variant="warning" className="text-[10px]">
-                          DRAFT DISIMPAN
-                        </Badge>
-                      ) : (
-                        <Badge variant="default" className="text-[10px]">
-                          BELUM DINILAI
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/juri/penilaian/${p.id}`}>
-                        <Button
-                          size="sm"
-                          variant={isSent ? "outline" : "default"}
-                          className="text-xs h-8 gap-1.5"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                          <span>{isSent ? "Lihat Nilai" : "Buka Form Nilai"}</span>
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                  return (
+                    <TableRow key={p.registrationId}>
+                      <TableCell className="font-mono text-xs font-bold text-accent">
+                        {p.registrationNumber}
+                      </TableCell>
+                      <TableCell>
+                        <strong className="text-foreground text-xs sm:text-sm block">
+                          {p.fullName}
+                        </strong>
+                        {p.teamName && (
+                          <span className="text-[11px] text-muted-foreground">{p.teamName}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {p.institution}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isSent ? (
+                          <Badge variant="success" className="text-[10px]">
+                            ✓ TERKIRIM {p.weightedScore !== null ? `(${p.weightedScore.toFixed(2)})` : ""}
+                          </Badge>
+                        ) : isDraft ? (
+                          <Badge variant="warning" className="text-[10px]">
+                            DRAFT DISIMPAN {p.weightedScore !== null ? `(${p.weightedScore.toFixed(2)})` : ""}
+                          </Badge>
+                        ) : (
+                          <Badge variant="default" className="text-[10px]">
+                            BELUM DINILAI
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link href={`/juri/penilaian/${p.registrationId}`}>
+                          <Button
+                            size="sm"
+                            variant={isSent ? "outline" : "default"}
+                            className="text-xs h-8 gap-1.5"
+                          >
+                            <Edit3 className="h-3 w-3" />
+                            <span>
+                              {isSent
+                                ? "Lihat / Ubah Nilai"
+                                : isDraft
+                                ? "Lanjutkan Menilai"
+                                : "Buka Form Nilai"}
+                            </span>
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>

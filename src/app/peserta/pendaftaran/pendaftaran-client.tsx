@@ -351,12 +351,17 @@ export function PesertaPendaftaranClient() {
                     (c) => c.id === enr.competitionId || (enr.competitionSlug && c.slug === enr.competitionSlug)
                   );
                   const targetSlug = enr.competitionSlug || dummy?.slug || enr.competitionId;
+                  const displayCategory = enr.category || dummy?.category || "perlombaan";
+                  const displayVenue = enr.venue || dummy?.venue || "Ruang 12";
+                  const displayStage = enr.stage || dummy?.stage || "";
+                  const displaySchedule = enr.scheduleText || (dummy ? `${dummy.date} • ${dummy.time}` : "");
+
                   return (
                     <Card key={enr.registrationId} className="p-5 sm:p-6 space-y-3 border-success/40 bg-success/5">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="min-w-0">
                           <span className="text-[10px] font-mono text-accent uppercase font-bold tracking-wider">
-                            Cabang {dummy?.category || "perlombaan"}
+                            Cabang {displayCategory}
                           </span>
                           <h3 className="font-heading text-lg sm:text-xl font-bold text-foreground truncate">
                             {enr.competitionName || dummy?.name || "Cabang Lomba"}
@@ -379,22 +384,22 @@ export function PesertaPendaftaranClient() {
                         <strong className="text-accent">{participant?.registrationNumber}</strong>
                       </div>
 
-                      {dummy && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-success/20 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-accent" />
-                            <span>
-                              Venue: <strong>{dummy.venue} ({dummy.stage})</strong>
-                            </span>
-                          </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-success/20 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-accent" />
+                          <span>
+                            Venue: <strong>{displayVenue}{displayStage ? ` (${displayStage})` : ""}</strong>
+                          </span>
+                        </div>
+                        {displaySchedule && (
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                             <span>
-                              Jadwal Tampil: <strong>{dummy.date} • {dummy.time}</strong>
+                              Jadwal Tampil: <strong>{displaySchedule}</strong>
                             </span>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
 
                       <Link
                         href={`/lomba/${targetSlug}`}

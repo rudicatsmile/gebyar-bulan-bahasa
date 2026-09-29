@@ -6,7 +6,6 @@ import { useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -15,52 +14,82 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, ShieldCheck, Award, Loader2, Users } from "lucide-react";
 import {
-  getCompetitionScoringRecap,
-  type ScoringRecapItem,
-} from "@/app/actions/assessments";
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  ArrowLeft,
+  ShieldCheck,
+  Award,
+  Loader2,
+  Users,
+  RefreshCw,
+  Lock,
+} from "lucide-react";
+import { useRealtimeScoringRecap } from "@/hooks/useRealtimeScoringRecap";
+import { toggleCompetitionFinalize } from "@/app/actions/assessments";
+import { cn } from "@/lib/utils";
 
 export default function DashboardPenilaianDetailPage() {
   const params = useParams();
   const rawCompId = (params?.competitionId as string) || "";
 
-  const [loading, setLoading] = React.useState(true);
-  const [comp, setComp] = React.useState<{
-    id: string;
-    slug: string;
-    name: string;
-    shortName: string;
-    category: string;
-    status: string;
-    aggregation: string;
-    criteria: Array<{ id: string; name: string; weight: number }>;
+  const {
+    loading,
+    isRefreshing,
+    competition: comp,
+    judges,
+    recaps,
+    realtimeStatus,
+    lastUpdatedAt,
+    refresh,
+  } = useRealtimeScoringRecap(rawCompId);
+
+  // Status finalisasi diambil secara persisten dari database (status: 'selesai')
+  const isFinalized = comp?.status === "selesai";
+
+  const [confirmDialog, setConfirmDialog] = React.useState<"finalize" | "unlock" | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
+  const [feedback, setFeedback] = React.useState<{
+    type: "success" | "error";
+    message: string;
   } | null>(null);
 
-  const [judges, setJudges] = React.useState<
-    Array<{ id: string; fullName: string; isChiefJudge: boolean }>
-  >([]);
-  const [recaps, setRecaps] = React.useState<ScoringRecapItem[]>([]);
-  const [isFinalized, setIsFinalized] = React.useState(false);
-
-  React.useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        const res = await getCompetitionScoringRecap(rawCompId);
-        if (res.success) {
-          if (res.competition) setComp(res.competition);
-          setJudges(res.judges);
-          setRecaps(res.recaps);
-        }
-      } catch (err) {
-        console.error("Gagal memuat rekap nilai:", err);
-      } finally {
-        setLoading(false);
+  const handleToggleFinalize = async () => {
+    if (!comp) return;
+    const willFinalize = confirmDialog === "finalize";
+    setIsUpdatingStatus(true);
+    setFeedback(null);
+    try {
+      const res = await toggleCompetitionFinalize(rawCompId, willFinalize);
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          message: willFinalize
+            ? "Nilai lomba berhasil difinalisasi! Seluruh formulir penilaian juri kini terkunci."
+            : "Kunci nilai berhasil dibuka. Dewan juri dapat melakukan penyesuaian nilai kembali.",
+        });
+        await refresh();
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal memperbarui status finalisasi nilai.",
+        });
       }
+    } catch {
+      setFeedback({
+        type: "error",
+        message: "Terjadi kesalahan sistem saat memperbarui status finalisasi.",
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+      setConfirmDialog(null);
     }
-    loadData();
-  }, [rawCompId]);
+  };
 
   return (
     <DashboardLayout role="seksi_acara">
@@ -97,8 +126,9 @@ export default function DashboardPenilaianDetailPage() {
                     : (comp?.status || "MEMUAT...").toUpperCase()}
                 </Badge>
                 {isFinalized && (
-                  <Badge variant="success" className="text-xs">
-                    NILAI SUDAH DIFINALISASI
+                  <Badge variant="success" className="text-xs flex items-center gap-1">
+                    <Lock className="h-3 w-3" />
+                    <span>NILAI SUDAH DIFINALISASI</span>
                   </Badge>
                 )}
                 <span className="text-xs font-mono text-muted-foreground uppercase">
@@ -110,16 +140,73 @@ export default function DashboardPenilaianDetailPage() {
               </h1>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Indikator Status Realtime */}
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-card text-xs text-muted-foreground shadow-xs"
+                title={
+                  realtimeStatus === "connected"
+                    ? "Tersambung ke Supabase Realtime"
+                    : realtimeStatus === "polling"
+                    ? "Menggunakan sinkronisasi otomatis (polling interval 8 detik)"
+                    : "Menghubungkan ke layanan realtime..."
+                }
+              >
+                <span
+                  className={cn(
+                    "w-2 h-2 rounded-full",
+                    realtimeStatus === "connected"
+                      ? "bg-emerald-500 animate-pulse"
+                      : realtimeStatus === "polling"
+                      ? "bg-amber-500"
+                      : "bg-muted-foreground"
+                  )}
+                />
+                <span className="font-mono text-[11px] font-medium">
+                  {realtimeStatus === "connected"
+                    ? "Live Realtime"
+                    : realtimeStatus === "polling"
+                    ? "Auto-sync (8s)"
+                    : "Menyambungkan..."}
+                </span>
+                {lastUpdatedAt && (
+                  <span className="text-[10px] text-muted-foreground/75 hidden md:inline ml-1">
+                    ({lastUpdatedAt.toLocaleTimeString("id-ID")})
+                  </span>
+                )}
+              </div>
+
+              {/* Tombol Segarkan Manual */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={refresh}
+                disabled={isRefreshing || loading}
+                className="text-xs gap-1.5 cursor-pointer"
+                title="Segarkan data rekap penilaian"
+              >
+                <RefreshCw
+                  className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin text-accent")}
+                />
+                <span className="hidden sm:inline">Segarkan</span>
+              </Button>
+
+              {/* Tombol Finalisasi / Buka Kunci Nilai */}
               <Button
                 size="sm"
                 variant={isFinalized ? "secondary" : "default"}
-                onClick={() => setIsFinalized(!isFinalized)}
+                onClick={() => setConfirmDialog(isFinalized ? "unlock" : "finalize")}
+                disabled={isUpdatingStatus || loading}
                 className="text-xs gap-1.5 cursor-pointer"
               >
-                <ShieldCheck className="h-4 w-4" />
+                {isUpdatingStatus ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
                 <span>{isFinalized ? "Buka Kunci Nilai" : "Finalisasi Nilai Lomba"}</span>
               </Button>
+
               <Link href="/dashboard/pemenang">
                 <Button size="sm" variant="accent" className="text-xs gap-1.5">
                   <Award className="h-4 w-4" />
@@ -129,6 +216,26 @@ export default function DashboardPenilaianDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Notifikasi Feedback Sukses / Gagal */}
+        {feedback && (
+          <div
+            className={cn(
+              "p-3.5 rounded-xl border text-xs flex items-center justify-between animate-in fade-in duration-200",
+              feedback.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200"
+                : "bg-red-500/10 border-red-500/30 text-red-800 dark:text-red-200"
+            )}
+          >
+            <span>{feedback.message}</span>
+            <button
+              onClick={() => setFeedback(null)}
+              className="text-xs font-semibold ml-4 hover:underline cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        )}
 
         {/* Kriteria Info Strip */}
         {comp && (comp.criteria || []).length > 0 && (
@@ -238,6 +345,83 @@ export default function DashboardPenilaianDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Modal Dialog Konfirmasi Finalisasi / Buka Kunci */}
+      <Dialog
+        open={confirmDialog !== null}
+        onOpenChange={(open) => {
+          if (!open && !isUpdatingStatus) setConfirmDialog(null);
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck
+              className={cn(
+                "h-5 w-5",
+                confirmDialog === "finalize" ? "text-accent" : "text-amber-500"
+              )}
+            />
+            <span>
+              {confirmDialog === "finalize"
+                ? "Finalisasi & Kunci Nilai Lomba"
+                : "Buka Kunci Nilai Lomba"}
+            </span>
+          </DialogTitle>
+          <DialogDescription className="space-y-3 pt-2 text-foreground/80">
+            {confirmDialog === "finalize" ? (
+              <>
+                <p>
+                  Apakah Anda yakin ingin memfinalisasi perolehan skor untuk cabang lomba{" "}
+                  <strong>{comp?.name || "ini"}</strong>?
+                </p>
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
+                  <p className="font-semibold mb-1">⚠️ Dampak Finalisasi:</p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Nilai seluruh peserta akan dikunci secara resmi.</li>
+                    <li>Dewan juri tidak dapat mengubah atau menginput nilai lagi.</li>
+                    <li>Status lomba beralih ke <strong>SELESAI</strong> dan siap untuk penetapan juara.</li>
+                  </ul>
+                </div>
+              </>
+            ) : (
+              <>
+                <p>
+                  Apakah Anda yakin ingin membuka kembali kunci penilaian untuk cabang lomba{" "}
+                  <strong>{comp?.name || "ini"}</strong>?
+                </p>
+                <div className="p-3 rounded-lg bg-muted border border-border text-xs text-muted-foreground">
+                  ℹ️ <strong>Catatan:</strong> Dewan juri akan dapat melakukan penyesuaian atau input ulang nilai pada formulir penilaian.
+                </div>
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmDialog(null)}
+            disabled={isUpdatingStatus}
+          >
+            Batal
+          </Button>
+          <Button
+            type="button"
+            variant={confirmDialog === "finalize" ? "accent" : "default"}
+            size="sm"
+            onClick={handleToggleFinalize}
+            disabled={isUpdatingStatus}
+            className="gap-1.5"
+          >
+            {isUpdatingStatus && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <span>
+              {confirmDialog === "finalize" ? "Ya, Kunci & Finalisasi" : "Ya, Buka Kunci"}
+            </span>
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </DashboardLayout>
   );
 }
