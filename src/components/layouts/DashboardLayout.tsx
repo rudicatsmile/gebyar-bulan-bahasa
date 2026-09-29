@@ -79,8 +79,6 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Verifikasi Bukti", href: "/dashboard/challenge/verifikasi", icon: CheckCircle2, badge: "3" },
   { title: "Penyesuaian Poin", href: "/dashboard/challenge/poin", icon: Coins },
   { title: "Katalog Reward", href: "/dashboard/challenge/reward", icon: Gift },
-  { title: "Puzzle Baju Daerah", href: "/dashboard/challenge/puzzle", icon: Puzzle },
-  { title: "Challenge QR Huruf", href: "/dashboard/challenge/qr-huruf", icon: QrCode },
   { title: "SISTEM", href: "#", icon: Settings, isHeader: true },
   { title: "Moderasi Twibbon", href: "/dashboard/twibbon", icon: Camera, badge: "1" },
   { title: "Kelola Pengguna", href: "/dashboard/pengguna", icon: Users },
