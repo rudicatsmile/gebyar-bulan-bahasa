@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CHALLENGES, Challenge } from "@/lib/dummy-data";
-import { Sparkles, Plus, Store, CheckCircle, Coins, Gift, Trophy } from "lucide-react";
+import { Sparkles, Plus, Store, CheckCircle, Coins, Gift, Trophy, Puzzle } from "lucide-react";
 
 export default function DashboardChallengePage() {
   const [challenges, setChallenges] = React.useState<Challenge[]>(CHALLENGES);
@@ -66,6 +66,12 @@ export default function DashboardChallengePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link href="/dashboard/challenge/puzzle">
+              <Button size="sm" variant="outline" className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10">
+                <Puzzle className="h-3.5 w-3.5 text-primary" />
+                <span>Puzzle Baju Daerah</span>
+              </Button>
+            </Link>
             <Link href="/dashboard/challenge/stand">
               <Button size="sm" variant="outline" className="text-xs gap-1.5">
                 <Store className="h-3.5 w-3.5" />

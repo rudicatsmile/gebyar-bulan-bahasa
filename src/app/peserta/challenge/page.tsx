@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CHALLENGES } from "@/lib/dummy-data";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
-import { Sparkles, QrCode, ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Sparkles, QrCode, ArrowLeft, ArrowRight, CheckCircle2, Puzzle } from "lucide-react";
 
 export default function PesertaChallengeListPage() {
   const { participant } = useCurrentParticipant();
@@ -31,7 +31,7 @@ export default function PesertaChallengeListPage() {
                 <span>Misi Tantangan & Kuis Interaktif</span>
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Selesaikan misi keliling stand dan unggah karya untuk mengumpulkan poin reward tambahan.
+                Selesaikan misi keliling stand dan game interaktif untuk mengumpulkan poin reward tambahan.
               </p>
             </div>
             <Link href="/peserta/scan">
@@ -42,6 +42,38 @@ export default function PesertaChallengeListPage() {
             </Link>
           </div>
         </div>
+
+        {/* Featured: Puzzle Challenge */}
+        <Card className="p-6 relative overflow-hidden border-primary/40 bg-gradient-to-br from-primary/10 via-card to-card hover:border-primary transition-all">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="space-y-2 max-w-xl">
+              <div className="flex items-center gap-2">
+                <Badge variant="gold" className="text-[10px] font-bold">
+                  GAME SPESIAL NON-LOMBA
+                </Badge>
+                <Badge variant="info" className="text-[10px]">
+                  +10 Poin / Jawaban Benar
+                </Badge>
+              </div>
+              <h3 className="font-heading text-xl font-bold text-foreground flex items-center gap-2">
+                <Puzzle className="h-5 w-5 text-primary" />
+                <span>Challenge Puzzle: Cocokkan Baju Daerah</span>
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Tantang wawasan kebudayaanmu! Cocokkan nama pakaian adat nusantara (Kebaya, Ulos, Baju Bodo, Beskap, Payas Agung, dll.) dengan daerah asalnya. Mainkan interaktif dengan seret-lepas atau tombol pilihan.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link href="/peserta/challenge/puzzle">
+                <Button size="lg" className="w-full sm:w-auto font-bold gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md">
+                  <Puzzle className="h-4 w-4" />
+                  <span>Mulai Main Puzzle</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {CHALLENGES.map((ch) => (

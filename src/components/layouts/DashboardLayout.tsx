@@ -41,6 +41,7 @@ import {
   Image,
   Bell,
   Search,
+  Puzzle,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -78,6 +79,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Verifikasi Bukti", href: "/dashboard/challenge/verifikasi", icon: CheckCircle2, badge: "3" },
   { title: "Penyesuaian Poin", href: "/dashboard/challenge/poin", icon: Coins },
   { title: "Katalog Reward", href: "/dashboard/challenge/reward", icon: Gift },
+  { title: "Puzzle Baju Daerah", href: "/dashboard/challenge/puzzle", icon: Puzzle },
   { title: "SISTEM", href: "#", icon: Settings, isHeader: true },
   { title: "Moderasi Twibbon", href: "/dashboard/twibbon", icon: Camera, badge: "1" },
   { title: "Kelola Pengguna", href: "/dashboard/pengguna", icon: Users },
@@ -104,6 +106,7 @@ const PESERTA_NAV: NavItem[] = [
   { title: "Beranda Peserta", href: "/peserta", icon: LayoutDashboard },
   { title: "Pendaftaran Lomba", href: "/peserta/pendaftaran", icon: Trophy },
   { title: "Daftar Challenge", href: "/peserta/challenge", icon: Sparkles },
+  { title: "Puzzle Baju Daerah", href: "/peserta/challenge/puzzle", icon: Puzzle },
   { title: "Scan QR & Kode Stand", href: "/peserta/scan", icon: QrCode },
   { title: "Riwayat Poin", href: "/peserta/riwayat-poin", icon: Coins },
   { title: "Katalog Reward", href: "/peserta/reward", icon: Gift },

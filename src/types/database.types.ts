@@ -1124,6 +1124,86 @@ export interface Database {
         };
         Relationships: [];
       };
+      puzzle_items: {
+        Row: {
+          id: string;
+          costume_name: string;
+          region_name: string;
+          costume_image_url: string | null;
+          hint: string | null;
+          sort_order: number;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          costume_name: string;
+          region_name: string;
+          costume_image_url?: string | null;
+          hint?: string | null;
+          sort_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          costume_name?: string;
+          region_name?: string;
+          costume_image_url?: string | null;
+          hint?: string | null;
+          sort_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      puzzle_attempts: {
+        Row: {
+          id: string;
+          participant_id: string;
+          total_items: number;
+          correct_count: number;
+          score: number;
+          time_seconds: number | null;
+          answers: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          total_items?: number;
+          correct_count?: number;
+          score?: number;
+          time_seconds?: number | null;
+          answers?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          participant_id?: string;
+          total_items?: number;
+          correct_count?: number;
+          score?: number;
+          time_seconds?: number | null;
+          answers?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "puzzle_attempts_participant_id_fkey";
+            columns: ["participant_id"];
+            isOneToOne: false;
+            referencedRelation: "participants";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {
       v_assessment_totals: {
