@@ -203,7 +203,7 @@ function CompetitionActionMenu({
             <Edit2 className="h-4 w-4 text-muted-foreground shrink-0" />
             <div className="flex flex-col text-left">
               <span>Edit Lomba</span>
-              <span className="text-[10px] text-muted-foreground font-normal">Nama, kategori & panggung</span>
+              <span className="text-[10px] text-muted-foreground font-normal">Nama, juknis, venue & kuota</span>
             </div>
           </button>
 
@@ -256,6 +256,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [addAggregation, setAddAggregation] = React.useState<"rata_rata" | "total" | "rata_rata_buang_ekstrem">("rata_rata");
   const [addMaxParticipants, setAddMaxParticipants] = React.useState(20);
   const [addDescription, setAddDescription] = React.useState("");
+  const [addRules, setAddRules] = React.useState("");
   const [addStatus, setAddStatus] = React.useState<"draft" | "pendaftaran">("pendaftaran");
   const [isSubmittingAdd, setIsSubmittingAdd] = React.useState(false);
 
@@ -272,6 +273,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [editAggregation, setEditAggregation] = React.useState<"rata_rata" | "total" | "rata_rata_buang_ekstrem">("rata_rata");
   const [editMaxParticipants, setEditMaxParticipants] = React.useState(20);
   const [editDescription, setEditDescription] = React.useState("");
+  const [editRules, setEditRules] = React.useState("");
   const [editStatus, setEditStatus] = React.useState<"draft" | "pendaftaran" | "berlangsung" | "selesai" | "dibatalkan">("pendaftaran");
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
 
@@ -354,6 +356,11 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
     setEditAggregation(comp.aggregation || "rata_rata");
     setEditMaxParticipants(comp.maxParticipants || 20);
     setEditDescription(comp.description || "");
+    setEditRules(
+      comp.rules && Array.isArray(comp.rules) && comp.rules.length > 0
+        ? comp.rules.join("\n")
+        : ""
+    );
     const mappedStatus = comp.status === "terjadwal" ? "pendaftaran" : comp.status;
     setEditStatus(mappedStatus);
     setEditOpen(true);
@@ -382,10 +389,37 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         aggregation: editAggregation,
         maxParticipants: editMaxParticipants,
         description: editDescription,
+        rules: editRules,
         status: editStatus,
       });
 
       if (res.success) {
+        const updatedRules = editRules
+          .split("\n")
+          .map((r) => r.trim())
+          .filter(Boolean);
+
+        setCompetitions((prev) =>
+          prev.map((c) =>
+            c.id === editTarget.id
+              ? {
+                  ...c,
+                  name: editName,
+                  shortName: editShortName,
+                  category: editCategory,
+                  minMembers: editMinMembers,
+                  maxMembers: editMaxMembers,
+                  venue: editVenue.trim(),
+                  stage: editStage.trim(),
+                  aggregation: editAggregation,
+                  maxParticipants: editMaxParticipants,
+                  description: editDescription,
+                  rules: updatedRules,
+                  status: editStatus,
+                }
+              : c
+          )
+        );
         setEditOpen(false);
         setNotification({
           type: "success",
@@ -421,6 +455,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         aggregation: addAggregation,
         maxParticipants: addMaxParticipants,
         description: addDescription,
+        rules: addRules,
         status: addStatus,
       });
 
@@ -429,6 +464,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         setAddName("");
         setAddShortName("");
         setAddDescription("");
+        setAddRules("");
         setNotification({
           type: "success",
           message: `Cabang lomba baru "${addName}" berhasil ditambahkan ke database!`,
@@ -737,6 +773,23 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
             </div>
 
             <div className="space-y-1.5 text-left">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span>Petunjuk Teknis & Peraturan Lomba (Opsional)</span>
+                <span className="text-[10px] text-muted-foreground/80 font-normal">1 baris = 1 poin</span>
+              </label>
+              <textarea
+                rows={4}
+                placeholder="Tuliskan peraturan per baris, contoh:&#10;Karya orisinal dan belum pernah dilombakan&#10;Durasi video 5-10 menit&#10;Format MP4 Full HD 1080p"
+                value={addRules}
+                onChange={(e) => setAddRules(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent font-sans leading-relaxed"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Tekan <strong>Enter</strong> untuk membuat baris aturan baru.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 text-left">
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Status Awal Lomba *
               </label>
@@ -884,6 +937,23 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 onChange={(e) => setEditDescription(e.target.value)}
                 className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none"
               />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span>Petunjuk Teknis & Peraturan Lomba</span>
+                <span className="text-[10px] text-muted-foreground/80 font-normal">1 baris = 1 poin</span>
+              </label>
+              <textarea
+                rows={5}
+                placeholder="Tuliskan peraturan per baris, contoh:&#10;Karya orisinal dan belum pernah dilombakan&#10;Durasi video 5-10 menit termasuk kredit&#10;Format MP4 Full HD 1080p&#10;Bebas dari unsur SARA dan ujaran kebencian"
+                value={editRules}
+                onChange={(e) => setEditRules(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent font-sans leading-relaxed"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Tekan <strong>Enter</strong> untuk membuat butir poin peraturan baru. Aturan ini akan langsung tampil dengan ikon centang di halaman detail lomba publik.
+              </p>
             </div>
 
             <div className="space-y-1.5 text-left">

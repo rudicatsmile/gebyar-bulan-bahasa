@@ -335,12 +335,18 @@ export function LombaDetailClient({ competition, initialJudges }: LombaDetailCli
         </h2>
         <div className="p-6 rounded-xl border border-border bg-card space-y-3">
           <ul className="space-y-2.5 text-xs sm:text-sm text-muted-foreground">
-            {competition.rules.map((rule, idx) => (
-              <li key={idx} className="flex items-start gap-2.5">
-                <CheckCircle className="h-4 w-4 text-accent shrink-0 mt-0.5" />
-                <span>{rule}</span>
+            {competition.rules && competition.rules.length > 0 ? (
+              competition.rules.map((rule, idx) => (
+                <li key={idx} className="flex items-start gap-2.5">
+                  <CheckCircle className="h-4 w-4 text-accent shrink-0 mt-0.5" />
+                  <span>{rule}</span>
+                </li>
+              ))
+            ) : (
+              <li className="text-muted-foreground italic py-2">
+                Petunjuk teknis dan peraturan perlombaan belum diisi oleh panitia.
               </li>
-            ))}
+            )}
           </ul>
         </div>
       </div>

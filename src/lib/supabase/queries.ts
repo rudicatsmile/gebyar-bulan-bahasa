@@ -74,9 +74,17 @@ function formatCompetition(row: DbCompetitionWithCriteria): Competition {
       maxScore: Number(c.max_score ?? 100),
     }));
 
+  const fallbackRules =
+    COMPETITIONS.find((c) => c.slug === row.slug || c.id === row.id)?.rules || [];
+
   const rules =
-    typeof row.rules === "string"
-      ? row.rules.split("\n").filter((r) => r.trim().length > 0)
+    typeof row.rules === "string" && row.rules.trim().length > 0
+      ? row.rules
+          .split("\n")
+          .map((r) => r.trim())
+          .filter((r) => r.length > 0)
+      : row.rules === null
+      ? fallbackRules
       : [];
 
   const rawStatus = row.status;

@@ -37,7 +37,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
         onClick={() => onOpenChange(false)}
       />
       {/* Modal Dialog Content */}
-      <div className="relative z-50 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-md transition-all animate-in zoom-in-95 duration-200">
+      <div className="relative z-50 w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-md transition-all animate-in zoom-in-95 duration-200">
         {children}
         <button
           onClick={() => onOpenChange(false)}

@@ -630,6 +630,7 @@ export async function createCompetitionAdmin(data: {
   slug?: string;
   category: "individu" | "kelompok";
   description?: string;
+  rules?: string;
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -667,6 +668,7 @@ export async function createCompetitionAdmin(data: {
         slug: finalSlug,
         type: data.category,
         description: data.description?.trim() || "",
+        rules: data.rules?.trim() || null,
         theme_link: data.venue?.trim() || "Panggung Utama",
         aggregation: data.aggregation,
         min_team_members: minTeam,
@@ -722,6 +724,7 @@ export async function updateCompetitionAdmin(data: {
   slug: string;
   category: "individu" | "kelompok";
   description?: string;
+  rules?: string;
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -743,6 +746,7 @@ export async function updateCompetitionAdmin(data: {
         slug: data.slug.trim(),
         type: data.category,
         description: data.description?.trim() || "",
+        ...(data.rules !== undefined ? { rules: data.rules.trim() } : {}),
         theme_link: data.venue?.trim() || "Panggung Utama",
         aggregation: data.aggregation,
         min_team_members: minTeam,
