@@ -81,40 +81,74 @@ export default function TentangPage() {
             </p>
           </div>
 
-          {/* Latar Belakang */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center border border-border rounded-2xl p-6 sm:p-8 bg-card">
-            <div className="space-y-4">
-              <span className="text-xs font-mono tracking-widest text-accent uppercase font-bold flex items-center gap-1.5">
+          {/* Latar Belakang Proposal */}
+          <div className="space-y-6">
+            <div className="text-center space-y-2">
+              <span className="text-xs font-mono tracking-widest text-accent uppercase font-bold flex items-center justify-center gap-1.5">
                 <BookOpen className="h-4 w-4" />
-                Latar Belakang
+                Latar Belakang Proposal
               </span>
-              <h2 className="font-heading text-2xl font-bold text-foreground">
-                Menjunjung Bahasa Persatuan di Era Digital
+              <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
+                Fondasi Nilai & Urgensi Kegiatan
               </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                Bulan Bahasa dan Sastra yang diperingati setiap bulan Oktober berakar dari tonggak sejarah Sumpah Pemuda 28 Oktober 1928, di mana para pemuda dari segenap penjuru nusantara berikrar menjunjung bahasa persatuan, bahasa Indonesia.
-              </p>
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                Melalui GebyarBulanBahasa, kami menghadirkan ekosistem festival yang memadukan keluhuran karya sastra, seni pertunjukan tradisional, dan kecanggihan teknologi penilaian digital real-time demi pengalaman acara yang adil, transparan, dan menginspirasi.
-              </p>
             </div>
-            <div className="p-6 rounded-xl bg-muted/60 border border-border space-y-4 text-left">
-              <h3 className="font-heading text-base font-bold text-foreground flex items-center gap-2">
-                <Compass className="h-4 w-4 text-accent" />
-                Tiga Pilar Utama Acara
-              </h3>
-              <ul className="space-y-3 text-xs text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                  <span><strong>100% Digital & Transparan:</strong> Penilaian 8 lomba tanpa kertas dengan kalkulasi agregasi multi-juri otomatis.</span>
+
+            {/* 3 Pilar Kartu Latar Belakang */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-l-4 border-l-rose-700 dark:border-l-rose-500 shadow-xs bg-card hover:border-accent/40 transition-colors">
+                <CardHeader className="p-5 sm:p-6 space-y-2.5">
+                  <CardTitle className="text-base sm:text-lg font-bold text-foreground">
+                    Bahasa = Identitas
+                  </CardTitle>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                    Bahasa dan budaya diposisikan sebagai identitas nasional serta fondasi pembentukan karakter dan kepribadian bangsa.
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card className="border-l-4 border-l-amber-500 dark:border-l-amber-400 shadow-xs bg-card hover:border-accent/40 transition-colors">
+                <CardHeader className="p-5 sm:p-6 space-y-2.5">
+                  <CardTitle className="text-base sm:text-lg font-bold text-foreground">
+                    Tantangan Generasi Muda
+                  </CardTitle>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                    Globalisasi dan perkembangan teknologi digital menghadirkan tantangan untuk menjaga kelestarian bahasa Indonesia dan budaya Nusantara.
+                  </p>
+                </CardHeader>
+              </Card>
+
+              <Card className="border-l-4 border-l-emerald-600 dark:border-l-emerald-500 shadow-xs bg-card hover:border-accent/40 transition-colors">
+                <CardHeader className="p-5 sm:p-6 space-y-2.5">
+                  <CardTitle className="text-base sm:text-lg font-bold text-foreground">
+                    Konteks SMK
+                  </CardTitle>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                    Siswa tidak hanya perlu kompetensi teknis, tetapi juga kreativitas, karakter kuat, kemampuan berkolaborasi, dan kebanggaan terhadap budaya.
+                  </p>
+                </CardHeader>
+              </Card>
+            </div>
+
+            {/* Poin-poin Penegas */}
+            <div className="p-5 sm:p-6 rounded-2xl border border-border bg-card shadow-xs">
+              <ul className="space-y-3 text-xs sm:text-sm text-foreground font-semibold">
+                <li className="flex items-start gap-3">
+                  <span className="text-accent text-lg leading-none mt-0.5">•</span>
+                  <span>
+                    Momentum Bulan Bahasa menjadi ruang untuk mengasah literasi, seni, komunikasi, dan pelestarian budaya.
+                  </span>
                 </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                  <span><strong>Inklusif Non-Lomba:</strong> Penonton dan peserta non-lomba aktif berpartisipasi lewat challenge interaktif 8 stand.</span>
+                <li className="flex items-start gap-3">
+                  <span className="text-accent text-lg leading-none mt-0.5">•</span>
+                  <span>
+                    Seluruh program keahlian didorong untuk berpartisipasi melalui kompetisi yang edukatif dan ekspresif.
+                  </span>
                 </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                  <span><strong>Pelestarian Nilai Budaya:</strong> Memadukan sastra modern dengan seni tradisi nusantara seperti Palang Pintu Betawi.</span>
+                <li className="flex items-start gap-3">
+                  <span className="text-accent text-lg leading-none mt-0.5">•</span>
+                  <span>
+                    Ragam lomba dirancang untuk menghubungkan kemampuan berbahasa dengan kebutuhan komunikasi profesional di dunia kerja.
+                  </span>
                 </li>
               </ul>
             </div>
