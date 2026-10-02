@@ -624,6 +624,56 @@ export async function getCompetitionJudgesBySlug(slug: string): Promise<Array<{
   }
 }
 
+/**
+ * Helper to fetch all competition manuscripts stored in event_settings (key: competition_manuscripts)
+ */
+export async function getCompetitionManuscriptsMap(): Promise<Record<string, string[]>> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "competition_manuscripts")
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object" && !Array.isArray(data.value)) {
+      return data.value as Record<string, string[]>;
+    }
+    return {};
+  } catch (err) {
+    console.error("Error getCompetitionManuscriptsMap:", err);
+    return {};
+  }
+}
+
+/**
+ * Helper to update a competition's manuscripts in event_settings
+ */
+export async function saveCompetitionManuscriptEntry(
+  competitionId: string,
+  slug: string,
+  manuscripts: string[]
+): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+    const currentMap = await getCompetitionManuscriptsMap();
+    const nextMap = {
+      ...currentMap,
+      [competitionId]: manuscripts,
+      [slug]: manuscripts,
+    };
+
+    await supabase.from("event_settings").upsert({
+      key: "competition_manuscripts",
+      value: nextMap,
+      description: "Daftar pilihan naskah untuk cabang lomba tertentu",
+      updated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("Error saveCompetitionManuscriptEntry:", err);
+  }
+}
+
 export async function createCompetitionAdmin(data: {
   name: string;
   shortName: string;
@@ -631,6 +681,7 @@ export async function createCompetitionAdmin(data: {
   category: "individu" | "kelompok";
   description?: string;
   rules?: string;
+  manuscripts?: string[] | string;
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -682,6 +733,17 @@ export async function createCompetitionAdmin(data: {
 
     if (cErr) return { success: false, error: cErr.message };
 
+    // Simpan pilihan naskah jika ada
+    if (data.manuscripts !== undefined) {
+      const list = Array.isArray(data.manuscripts)
+        ? data.manuscripts.map((m) => m.trim()).filter(Boolean)
+        : data.manuscripts
+            .split("\n")
+            .map((m) => m.trim())
+            .filter(Boolean);
+      await saveCompetitionManuscriptEntry(inserted.id, finalSlug, list);
+    }
+
     // Pasang 1 kriteria default berbobot 100% agar perhitungan penilaian langsung berfungsi
     await supabase.from("competition_criteria").insert({
       competition_id: inserted.id,
@@ -725,6 +787,7 @@ export async function updateCompetitionAdmin(data: {
   category: "individu" | "kelompok";
   description?: string;
   rules?: string;
+  manuscripts?: string[] | string;
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -758,6 +821,17 @@ export async function updateCompetitionAdmin(data: {
       .eq("id", data.id);
 
     if (uErr) return { success: false, error: uErr.message };
+
+    // Simpan pilihan naskah jika ada
+    if (data.manuscripts !== undefined) {
+      const list = Array.isArray(data.manuscripts)
+        ? data.manuscripts.map((m) => m.trim()).filter(Boolean)
+        : data.manuscripts
+            .split("\n")
+            .map((m) => m.trim())
+            .filter(Boolean);
+      await saveCompetitionManuscriptEntry(data.id, data.slug, list);
+    }
 
     try {
       await supabase.from("activity_logs").insert({

@@ -38,6 +38,7 @@ import {
   Ban,
   Trophy,
   Loader2,
+  BookOpen,
 } from "lucide-react";
 
 export interface PublicJudgeItem {
@@ -350,6 +351,39 @@ export function LombaDetailClient({ competition, initialJudges }: LombaDetailCli
           </ul>
         </div>
       </div>
+
+      {/* Pilihan Naskah & Materi Lomba (Khusus Lomba Berbasis Naskah) */}
+      {competition.manuscripts && competition.manuscripts.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-heading text-xl sm:text-2xl font-bold text-foreground flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-accent" />
+              <span>Pilihan Naskah &amp; Materi Lomba</span>
+            </h2>
+            <Badge variant="info" className="text-xs">
+              {competition.manuscripts.length} Pilihan Tersedia
+            </Badge>
+          </div>
+          <div className="p-6 rounded-xl border border-accent/20 bg-card space-y-3">
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Peserta pada cabang lomba ini dapat memilih salah satu naskah atau materi resmi berikut untuk ditampilkan:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {competition.manuscripts.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/40 text-xs sm:text-sm text-foreground font-medium hover:border-accent/40 transition-colors"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent text-xs font-bold font-mono">
+                    {idx + 1}
+                  </span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Papan Skor Sementara / Rekap Jika Tersedia */}
       {scoringData.length > 0 && competition.status === "berlangsung" && (

@@ -30,6 +30,7 @@ export interface Competition {
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   rules: string[];
   criteria: CompetitionCriterion[];
+  manuscripts?: string[];
 }
 
 export interface Participant {
@@ -228,6 +229,13 @@ export const COMPETITIONS: Competition[] = [
         maxScore: 100,
       },
     ],
+    manuscripts: [
+      "Aku — Karya Chairil Anwar",
+      "Diponegoro — Karya Chairil Anwar",
+      "Karawang-Bekasi — Karya Chairil Anwar",
+      "Gugur — Karya W.S. Rendra",
+      "Pahlawan Tak Dikenal — Karya Toto Sudarto Bachtiar",
+    ],
   },
   {
     id: "comp-2",
@@ -344,6 +352,12 @@ export const COMPETITIONS: Competition[] = [
         maxScore: 100,
       },
     ],
+    manuscripts: [
+      "Peran Generasi Muda dalam Mengawal Persatuan Bangsa di Era Digital",
+      "Menjunjung Tinggi Bahasa Indonesia sebagai Identitas dan Jati Diri Bangsa",
+      "Refleksi Semangat Kongres Pemuda 1928 bagi Kemajuan Pendidikan Nasional",
+      "Menyikapi Keberagaman Budaya Nusantara dengan Nilai Toleransi dan Budi Pekerti",
+    ],
   },
   {
     id: "comp-4",
@@ -452,6 +466,12 @@ export const COMPETITIONS: Competition[] = [
         maxScore: 100,
       },
     ],
+    manuscripts: [
+      "Lakon Pangeran Diponegoro: Sang Pembebas Tanah Jawa",
+      "Lakon R.A. Kartini: Habis Gelap Terbitlah Terang",
+      "Lakon Soe Hok Gie: Catatan Seorang Demonstran",
+      "Lakon Marsinah: Nyala Api Keadilan Buruh",
+    ],
   },
   {
     id: "comp-6",
@@ -505,6 +525,11 @@ export const COMPETITIONS: Competition[] = [
         weight: 15,
         maxScore: 100,
       },
+    ],
+    manuscripts: [
+      "Naskah Protokoler Upacara Peringatan Hari Sumpah Pemuda Tingkat Nasional",
+      "Naskah Protokoler Upacara Pembukaan Gebyar Bulan Bahasa & Kebudayaan",
+      "Naskah Pemandu Acara Sidang Paripurna Pemuda Indonesia",
     ],
   },
   {

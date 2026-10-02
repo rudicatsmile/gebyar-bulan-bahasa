@@ -38,7 +38,32 @@ import {
   Eye,
   ClipboardList,
   RotateCw,
+  BookOpen,
 } from "lucide-react";
+
+/**
+ * Menentukan apakah sebuah cabang lomba memerlukan input Pilihan Naskah
+ * berdasarkan slug atau kata kunci nama lomba.
+ */
+export function isManuscriptEligible(slug: string, name?: string): boolean {
+  const eligibleSlugs = [
+    "membaca-puisi",
+    "pidato",
+    "monolog",
+    "mc-formal",
+    "cipta-puisi",
+    "esai",
+    "baca-berita",
+    "storytelling",
+  ];
+  const s = (slug || "").toLowerCase();
+  const n = (name || "").toLowerCase();
+
+  if (eligibleSlugs.some((es) => s.includes(es))) return true;
+
+  const keywords = ["puisi", "pidato", "monolog", "mc", "teater", "naskah", "orasi", "esai", "cerpen"];
+  return keywords.some((kw) => s.includes(kw) || n.includes(kw));
+}
 
 interface CompetitionActionMenuProps {
   comp: Competition;
@@ -257,6 +282,8 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [addMaxParticipants, setAddMaxParticipants] = React.useState(20);
   const [addDescription, setAddDescription] = React.useState("");
   const [addRules, setAddRules] = React.useState("");
+  const [addNeedsManuscripts, setAddNeedsManuscripts] = React.useState(false);
+  const [addManuscripts, setAddManuscripts] = React.useState("");
   const [addStatus, setAddStatus] = React.useState<"draft" | "pendaftaran">("pendaftaran");
   const [isSubmittingAdd, setIsSubmittingAdd] = React.useState(false);
 
@@ -274,8 +301,17 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [editMaxParticipants, setEditMaxParticipants] = React.useState(20);
   const [editDescription, setEditDescription] = React.useState("");
   const [editRules, setEditRules] = React.useState("");
+  const [editNeedsManuscripts, setEditNeedsManuscripts] = React.useState(false);
+  const [editManuscripts, setEditManuscripts] = React.useState("");
   const [editStatus, setEditStatus] = React.useState<"draft" | "pendaftaran" | "berlangsung" | "selesai" | "dibatalkan">("pendaftaran");
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
+
+  // Auto-detect jika nama di Modal Tambah Lomba cocok dengan kategori berbasis naskah
+  React.useEffect(() => {
+    if (addOpen && !addNeedsManuscripts && isManuscriptEligible("", addName)) {
+      setAddNeedsManuscripts(true);
+    }
+  }, [addName, addOpen, addNeedsManuscripts]);
 
   // Modal Hapus / Arsip
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -361,6 +397,19 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         ? comp.rules.join("\n")
         : ""
     );
+
+    // Conditional Pilihan Naskah
+    const hasExistingManuscripts = Boolean(
+      comp.manuscripts && Array.isArray(comp.manuscripts) && comp.manuscripts.length > 0
+    );
+    const eligible = isManuscriptEligible(comp.slug, comp.name) || hasExistingManuscripts;
+    setEditNeedsManuscripts(eligible);
+    setEditManuscripts(
+      comp.manuscripts && Array.isArray(comp.manuscripts) && comp.manuscripts.length > 0
+        ? comp.manuscripts.join("\n")
+        : ""
+    );
+
     const mappedStatus = comp.status === "terjadwal" ? "pendaftaran" : comp.status;
     setEditStatus(mappedStatus);
     setEditOpen(true);
@@ -390,6 +439,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         maxParticipants: editMaxParticipants,
         description: editDescription,
         rules: editRules,
+        manuscripts: editNeedsManuscripts ? editManuscripts : "",
         status: editStatus,
       });
 
@@ -398,6 +448,13 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
           .split("\n")
           .map((r) => r.trim())
           .filter(Boolean);
+
+        const updatedManuscripts = editNeedsManuscripts
+          ? editManuscripts
+              .split("\n")
+              .map((m) => m.trim())
+              .filter(Boolean)
+          : [];
 
         setCompetitions((prev) =>
           prev.map((c) =>
@@ -415,6 +472,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                   maxParticipants: editMaxParticipants,
                   description: editDescription,
                   rules: updatedRules,
+                  manuscripts: updatedManuscripts,
                   status: editStatus,
                 }
               : c
@@ -456,6 +514,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         maxParticipants: addMaxParticipants,
         description: addDescription,
         rules: addRules,
+        manuscripts: addNeedsManuscripts ? addManuscripts : "",
         status: addStatus,
       });
 
@@ -465,6 +524,8 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         setAddShortName("");
         setAddDescription("");
         setAddRules("");
+        setAddManuscripts("");
+        setAddNeedsManuscripts(false);
         setNotification({
           type: "success",
           message: `Cabang lomba baru "${addName}" berhasil ditambahkan ke database!`,
@@ -584,8 +645,17 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 return (
                   <TableRow key={comp.id}>
                     <TableCell>
-                      <div className="font-semibold text-foreground text-sm">
-                        {comp.name}
+                      <div className="font-semibold text-foreground text-sm flex items-center gap-2 flex-wrap">
+                        <span>{comp.name}</span>
+                        {comp.manuscripts && comp.manuscripts.length > 0 && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-normal"
+                            title={`${comp.manuscripts.length} Pilihan Naskah Tersedia`}
+                          >
+                            <BookOpen className="h-3 w-3" />
+                            <span>{comp.manuscripts.length} Naskah</span>
+                          </span>
+                        )}
                       </div>
                       <span className="text-[11px] text-muted-foreground">
                         Agregasi: {comp.aggregation.replace(/_/g, " ")}
@@ -789,6 +859,57 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
               </p>
             </div>
 
+            {/* Conditional: Pilihan Naskah (Hanya untuk Lomba Tertentu) */}
+            {addNeedsManuscripts ? (
+              <div className="space-y-2 text-left p-3.5 rounded-xl border border-accent/30 bg-accent/5 transition-all">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-accent flex items-center gap-1.5">
+                    <BookOpen className="h-4 w-4" />
+                    <span>Pilihan Naskah Lomba</span>
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/15 text-accent font-medium">
+                    Khusus Lomba Berbasis Naskah
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Daftar judul puisi wajib/pilihan, naskah lakon drama monolog, atau tema naskah pidato/protokoler bagi peserta.
+                </p>
+                <textarea
+                  rows={4}
+                  placeholder={"Contoh:\nAku — Karya Chairil Anwar\nDiponegoro — Karya Chairil Anwar\nKarawang-Bekasi — Karya Chairil Anwar"}
+                  value={addManuscripts}
+                  onChange={(e) => setAddManuscripts(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent font-sans leading-relaxed"
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    Tekan <strong>Enter</strong> untuk poin naskah baru (1 baris = 1 naskah).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddNeedsManuscripts(false);
+                      setAddManuscripts("");
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-destructive underline decoration-dotted cursor-pointer"
+                  >
+                    Batal sertakan naskah
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-left pt-1">
+                <button
+                  type="button"
+                  onClick={() => setAddNeedsManuscripts(true)}
+                  className="text-xs text-accent hover:underline inline-flex items-center gap-1.5 font-medium cursor-pointer"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span>+ Sertakan Pilihan Naskah untuk lomba ini</span>
+                </button>
+              </div>
+            )}
+
             <div className="space-y-1.5 text-left">
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Status Awal Lomba *
@@ -955,6 +1076,57 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 Tekan <strong>Enter</strong> untuk membuat butir poin peraturan baru. Aturan ini akan langsung tampil dengan ikon centang di halaman detail lomba publik.
               </p>
             </div>
+
+            {/* Conditional: Pilihan Naskah (Hanya untuk Lomba Tertentu) */}
+            {editNeedsManuscripts ? (
+              <div className="space-y-2 text-left p-3.5 rounded-xl border border-accent/30 bg-accent/5 transition-all">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-accent flex items-center gap-1.5">
+                    <BookOpen className="h-4 w-4" />
+                    <span>Pilihan Naskah Lomba</span>
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/15 text-accent font-medium">
+                    Khusus Lomba Berbasis Naskah
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Daftar judul puisi wajib/pilihan, naskah lakon drama monolog, atau tema naskah pidato/protokoler bagi peserta.
+                </p>
+                <textarea
+                  rows={4}
+                  placeholder={"Contoh:\nAku — Karya Chairil Anwar\nDiponegoro — Karya Chairil Anwar\nKarawang-Bekasi — Karya Chairil Anwar"}
+                  value={editManuscripts}
+                  onChange={(e) => setEditManuscripts(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent font-sans leading-relaxed"
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    Tekan <strong>Enter</strong> untuk poin naskah baru (1 baris = 1 naskah).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditNeedsManuscripts(false);
+                      setEditManuscripts("");
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-destructive underline decoration-dotted cursor-pointer"
+                  >
+                    Hapus / Sembunyikan naskah
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-left pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditNeedsManuscripts(true)}
+                  className="text-xs text-accent hover:underline inline-flex items-center gap-1.5 font-medium cursor-pointer"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span>+ Sertakan Pilihan Naskah untuk lomba ini</span>
+                </button>
+              </div>
+            )}
 
             <div className="space-y-1.5 text-left">
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
