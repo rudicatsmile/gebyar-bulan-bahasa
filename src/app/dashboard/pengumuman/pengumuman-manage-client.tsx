@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -16,7 +22,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Megaphone, Plus, Radio, Pin, Eye, Trash2, Loader2, AlertCircle } from "lucide-react";
+import {
+  Megaphone,
+  Plus,
+  Radio,
+  Pin,
+  Eye,
+  Pencil,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
 import { upsertAnnouncement, deleteAnnouncement } from "@/app/actions/announcements";
 import type { Announcement } from "@/lib/dummy-data";
 
@@ -24,31 +41,77 @@ interface PengumumanManageClientProps {
   initialAnnouncements: Announcement[];
 }
 
-export function PengumumanManageClient({ initialAnnouncements }: PengumumanManageClientProps) {
+export function PengumumanManageClient({
+  initialAnnouncements,
+}: PengumumanManageClientProps) {
   const router = useRouter();
-  const [announcements, setAnnouncements] = React.useState<Announcement[]>(initialAnnouncements);
+  const [announcements, setAnnouncements] =
+    React.useState<Announcement[]>(initialAnnouncements);
+
+  // Dialog & Mode states
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [dialogMode, setDialogMode] = React.useState<"create" | "edit">("create");
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+
+  // Form states
+  const [title, setTitle] = React.useState("");
+  const [category, setCategory] = React.useState<
+    "umum" | "jadwal" | "pemenang" | "penting"
+  >("umum");
+  const [body, setBody] = React.useState("");
+  const [isPinned, setIsPinned] = React.useState(false);
+  const [showOnMonitor, setShowOnMonitor] = React.useState(true);
+
+  // Feedback states
   const [isPending, startTransition] = React.useTransition();
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
   // Sync when server data changes
   React.useEffect(() => {
     setAnnouncements(initialAnnouncements);
   }, [initialAnnouncements]);
 
-  // Form states
-  const [title, setTitle] = React.useState("");
-  const [category, setCategory] = React.useState<"umum" | "jadwal" | "pemenang" | "penting">("umum");
-  const [body, setBody] = React.useState("");
-  const [isPinned, setIsPinned] = React.useState(false);
-  const [showOnMonitor, setShowOnMonitor] = React.useState(true);
+  // Auto-dismiss success message after 4s
+  React.useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => {
+      setSuccessMessage(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const openCreate = () => {
+    setEditingId(null);
+    setTitle("");
+    setCategory("umum");
+    setBody("");
+    setIsPinned(false);
+    setShowOnMonitor(true);
+    setErrorMessage(null);
+    setDialogMode("create");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (ann: Announcement) => {
+    setEditingId(ann.id);
+    setTitle(ann.title);
+    setCategory(ann.category);
+    setBody(ann.body);
+    setIsPinned(Boolean(ann.isPinned));
+    setShowOnMonitor(Boolean(ann.showOnMonitor));
+    setErrorMessage(null);
+    setDialogMode("edit");
+    setDialogOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
     startTransition(async () => {
       const res = await upsertAnnouncement({
+        id: editingId || undefined,
         title,
         category,
         body,
@@ -58,15 +121,37 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
       });
 
       if (!res.success) {
-        setErrorMessage(res.error || "Gagal mempublikasikan pengumuman.");
+        setErrorMessage(
+          res.error ||
+            (dialogMode === "edit"
+              ? "Gagal memperbarui pengumuman."
+              : "Gagal mempublikasikan pengumuman.")
+        );
         return;
       }
 
+      // Optimistic update
+      if (dialogMode === "edit" && editingId) {
+        setAnnouncements((prev) =>
+          prev.map((a) =>
+            a.id === editingId
+              ? {
+                  ...a,
+                  title,
+                  category,
+                  body,
+                  isPinned,
+                  showOnMonitor,
+                }
+              : a
+          )
+        );
+        setSuccessMessage(`Pengumuman "${title}" berhasil diperbarui.`);
+      } else {
+        setSuccessMessage(`Pengumuman baru "${title}" berhasil diterbitkan.`);
+      }
+
       setDialogOpen(false);
-      setTitle("");
-      setBody("");
-      setIsPinned(false);
-      setShowOnMonitor(true);
       router.refresh();
     });
   };
@@ -83,6 +168,7 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
         alert(res.error || "Gagal menghapus pengumuman.");
         router.refresh();
       } else {
+        setSuccessMessage(`Pengumuman "${titleStr}" berhasil dihapus.`);
         router.refresh();
       }
     });
@@ -90,6 +176,7 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
 
   return (
     <div className="space-y-6">
+      {/* Header Halaman */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -108,13 +195,34 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
               <span>Panel Siaran Darurat</span>
             </Button>
           </Link>
-          <Button onClick={() => setDialogOpen(true)} size="sm" className="text-xs gap-1.5 cursor-pointer">
+          <Button
+            onClick={openCreate}
+            size="sm"
+            className="text-xs gap-1.5 cursor-pointer"
+          >
             <Plus className="h-4 w-4" />
             <span>Buat Pengumuman Baru</span>
           </Button>
         </div>
       </div>
 
+      {/* Alert Feedback Sukses */}
+      {successMessage && (
+        <div className="p-3.5 rounded-xl bg-success/10 border border-success/30 text-success text-xs sm:text-sm flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2 font-medium">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+            <span>{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="text-xs underline hover:no-underline cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
+
+      {/* Tabel Pengumuman */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
@@ -124,13 +232,16 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
               <TableHead>Waktu Rilis</TableHead>
               <TableHead className="text-center">Pin Beranda</TableHead>
               <TableHead className="text-center">Layar Monitor</TableHead>
-              <TableHead className="text-right w-24">Aksi</TableHead>
+              <TableHead className="text-right w-28">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {announcements.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+                <TableCell
+                  colSpan={6}
+                  className="text-center py-8 text-muted-foreground text-sm"
+                >
                   Belum ada pengumuman resmi yang diterbitkan.
                 </TableCell>
               </TableRow>
@@ -141,7 +252,9 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
                     <strong className="text-foreground text-xs sm:text-sm block">
                       {ann.title}
                     </strong>
-                    <span className="text-[11px] text-muted-foreground line-clamp-1">{ann.body}</span>
+                    <span className="text-[11px] text-muted-foreground line-clamp-1">
+                      {ann.body}
+                    </span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge
@@ -174,16 +287,36 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {/* Lihat Halaman Publik */}
                       <Link href={`/pengumuman/${ann.slug}`} target="_blank">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Lihat Publik">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                          title="Lihat Tampilan Publik"
+                        >
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
                       </Link>
+
+                      {/* Edit Pengumuman */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEdit(ann)}
+                        disabled={isPending}
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-accent cursor-pointer transition-colors"
+                        title="Edit Pengumuman"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+
+                      {/* Hapus Pengumuman */}
                       <button
                         onClick={() => handleDelete(ann.id, ann.title)}
                         disabled={isPending}
-                        className="p-1 rounded text-muted-foreground hover:text-danger hover:bg-muted cursor-pointer transition-colors disabled:opacity-50"
-                        title="Hapus"
+                        className="h-8 w-8 p-0 rounded-md inline-flex items-center justify-center text-muted-foreground hover:text-danger hover:bg-muted cursor-pointer transition-colors disabled:opacity-50"
+                        title="Hapus Pengumuman"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -196,13 +329,19 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
         </Table>
       </div>
 
-      {/* Modal Buat Pengumuman */}
+      {/* Modal Tambah & Edit Pengumuman */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <form onSubmit={handleCreate} className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-4">
           <DialogHeader>
-            <DialogTitle>Tulis Pengumuman Resmi Baru</DialogTitle>
+            <DialogTitle>
+              {dialogMode === "edit"
+                ? "Edit Pengumuman Resmi"
+                : "Tulis Pengumuman Resmi Baru"}
+            </DialogTitle>
             <DialogDescription>
-              Isi judul, kategori, dan rincian warta yang akan disiarkan kepada peserta dan pengunjung.
+              {dialogMode === "edit"
+                ? "Perbarui judul, kategori, isi warta, atau pengaturan tampilan pengumuman ini."
+                : "Isi judul, kategori, dan rincian warta yang akan disiarkan kepada peserta dan pengunjung."}
             </DialogDescription>
           </DialogHeader>
 
@@ -228,7 +367,11 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
             </label>
             <select
               value={category}
-              onChange={(e) => setCategory(e.target.value as "umum" | "jadwal" | "pemenang" | "penting")}
+              onChange={(e) =>
+                setCategory(
+                  e.target.value as "umum" | "jadwal" | "pemenang" | "penting"
+                )
+              }
               className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
             >
               <option value="umum">Umum</option>
@@ -243,13 +386,13 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
             placeholder="Tuliskan isi pengumuman secara mendetail..."
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            rows={4}
+            rows={5}
             required
             minLength={10}
           />
 
-          <div className="flex flex-col gap-2 pt-2 border-t border-border text-xs text-foreground">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="flex flex-col gap-2.5 pt-2 border-t border-border text-xs text-foreground">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={isPinned}
@@ -258,7 +401,7 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
               />
               <span>Pin di bagian paling atas halaman Beranda & Pengumuman</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={showOnMonitor}
@@ -270,12 +413,21 @@ export function PengumumanManageClient({ initialAnnouncements }: PengumumanManag
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={isPending}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              disabled={isPending}
+            >
               Batal
             </Button>
             <Button type="submit" disabled={isPending} className="gap-2">
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              <span>Publikasikan Pengumuman</span>
+              <span>
+                {dialogMode === "edit"
+                  ? "Simpan Perubahan"
+                  : "Publikasikan Pengumuman"}
+              </span>
             </Button>
           </DialogFooter>
         </form>

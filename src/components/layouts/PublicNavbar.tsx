@@ -33,7 +33,7 @@ interface NavLinkItem {
 
 const NAV_LINKS: NavLinkItem[] = [
   { href: "/", label: "Beranda", icon: Home },
-  { href: "/lomba", label: "8 Lomba", icon: Award },
+  { href: "/lomba", label: "Lomba", icon: Award },
   { href: "/jadwal", label: "Jadwal", icon: Calendar },
   {
     href: "/papan-skor",

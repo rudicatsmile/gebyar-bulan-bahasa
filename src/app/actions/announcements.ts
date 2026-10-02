@@ -3,6 +3,15 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+function safeRevalidate(path: string) {
+  try {
+    revalidatePath(path);
+  } catch {
+    // Gracefully handle calls outside Next.js request context
+  }
+}
 
 const AnnouncementSchema = z.object({
   id: z.string().optional(),
@@ -35,10 +44,17 @@ export async function upsertAnnouncement(data: z.infer<typeof AnnouncementSchema
   }
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const supabase = createAdminClient();
+    let authorId: string | null = null;
+    try {
+      const serverClient = await createClient();
+      const {
+        data: { user },
+      } = await serverClient.auth.getUser();
+      authorId = user?.id || null;
+    } catch {
+      // ignore when outside request context or anonymous
+    }
 
     const baseSlug = slugify(parsed.data.title);
     const slug = `${baseSlug}-${Math.floor(100 + Math.random() * 900)}`;
@@ -55,7 +71,7 @@ export async function upsertAnnouncement(data: z.infer<typeof AnnouncementSchema
       show_on_monitor: parsed.data.showOnMonitor,
       publish_at: parsed.data.publishAt || new Date().toISOString(),
       expire_at: parsed.data.expireAt || null,
-      author_id: user?.id || null,
+      author_id: authorId,
     };
 
     if (parsed.data.id) {
@@ -74,9 +90,9 @@ export async function upsertAnnouncement(data: z.infer<typeof AnnouncementSchema
       if (error) return { success: false, error: error.message };
     }
 
-    revalidatePath("/dashboard/pengumuman");
-    revalidatePath("/pengumuman");
-    revalidatePath("/monitor");
+    safeRevalidate("/dashboard/pengumuman");
+    safeRevalidate("/pengumuman");
+    safeRevalidate("/monitor");
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal menyimpan pengumuman.";
@@ -86,13 +102,13 @@ export async function upsertAnnouncement(data: z.infer<typeof AnnouncementSchema
 
 export async function deleteAnnouncement(id: string) {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { error } = await supabase.from("announcements").delete().eq("id", id);
     if (error) return { success: false, error: error.message };
 
-    revalidatePath("/dashboard/pengumuman");
-    revalidatePath("/pengumuman");
-    revalidatePath("/monitor");
+    safeRevalidate("/dashboard/pengumuman");
+    safeRevalidate("/pengumuman");
+    safeRevalidate("/monitor");
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal menghapus pengumuman.";
