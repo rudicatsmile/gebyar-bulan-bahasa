@@ -5,18 +5,60 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkles, BookOpen, Users, Compass, Award, CheckCircle } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 export const metadata = {
   title: "Tentang Acara",
   description: "Latar Belakang, Visi, dan Susunan Panitia Gebyar Bulan Bahasa dan Kebudayaan 2025.",
 };
 
 const COMMITTEE_MEMBERS = [
-  { role: "Penanggung Jawab Acara", name: "Dra. Hj. Pebriani M.Pd.", title: "Ketua Pelaksana & Kurator Acara" },
-  { role: "Seksi Acara & Perlombaan", name: "Rahmat Hidayat S.Pd.", title: "Koordinator Operasional 8 Lomba" },
-  { role: "Koordinator Dewan Juri", name: "Dr. Siti Nurhaliza M.Pd.", title: "Kepala Penilai & Standarisasi Skor" },
-  { role: "Media Center & Dokumentasi", name: "Bima Arya Prasetya", title: "Ketua Publikasi, Twibbon & Monitor" },
-  { role: "Seksi Hubungan & Peserta", name: "Fathia Zahra S.Sos.", title: "Verifikasi Berkas & Pelayanan Peserta" },
-  { role: "Koordinator Challenge & Stand", name: "Bayu Wicaksono", title: "Pengelola 8 Stand & Distribusi Hadiah" },
+  {
+    role: "Penanggung Jawab",
+    name: "Siti Aliyah A., S.Ag.",
+    title: "Kepala Sekolah",
+    color: "border-l-rose-700 dark:border-l-rose-500",
+  },
+  {
+    role: "Ketua Pelaksana",
+    name: "Rizky Pebriani, M.Pd.",
+    title: "Kepala Perpustakaan/ Guru",
+    color: "border-l-amber-500 dark:border-l-amber-400",
+  },
+  {
+    role: "Wakil Ketua",
+    name: "Suci Dwi Wulandari, S.E., M.Pd.",
+    title: "Waka Kesiswaan",
+    color: "border-l-emerald-600 dark:border-l-emerald-500",
+  },
+  {
+    role: "Sekretariat",
+    name: "Mela Nurhasanah, S.Pd. & Najla Azzahra",
+    title: "Guru / XII MPLB 3",
+    color: "border-l-rose-600 dark:border-l-rose-400",
+  },
+  {
+    role: "Bendahara",
+    name: "Zurrahmah, S.Pd. & Sheila Jessika Sari",
+    title: "Bendahara Sekolah / XII MPLB 3",
+    color: "border-l-amber-500 dark:border-l-amber-400",
+  },
+  {
+    role: "Koorlap",
+    name: "Saepullah, S.Pd. & tim",
+    title: "Pembina Ekskul + siswa",
+    color: "border-l-emerald-600 dark:border-l-emerald-500",
+  },
+];
+
+const SUPPORT_DIVISIONS = [
+  "Acara",
+  "Humas",
+  "Kesekretariatan",
+  "Perlengkapan",
+  "Dokumentasi",
+  "Konsumsi",
+  "Keamanan",
 ];
 
 export default function TentangPage() {
@@ -89,19 +131,48 @@ export default function TentangPage() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {COMMITTEE_MEMBERS.map((member, i) => (
-                <Card key={i} className="hover:border-accent/40 transition-colors">
-                  <CardHeader className="p-5 space-y-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-accent font-bold">
+                <Card
+                  key={i}
+                  className={cn(
+                    "border-l-4 hover:border-accent/40 transition-colors shadow-xs bg-card",
+                    member.color
+                  )}
+                >
+                  <CardHeader className="p-5 space-y-1.5">
+                    <span className="text-xs font-mono uppercase tracking-wider text-accent font-bold">
                       {member.role}
                     </span>
-                    <CardTitle className="text-base">{member.name}</CardTitle>
-                    <p className="text-xs text-muted-foreground">{member.title}</p>
+                    <CardTitle className="text-base sm:text-lg font-bold text-foreground">
+                      {member.name}
+                    </CardTitle>
+                    <p className="text-xs sm:text-sm text-muted-foreground font-medium">
+                      {member.title}
+                    </p>
                   </CardHeader>
                 </Card>
               ))}
             </div>
+
+            {/* Divisi Pendukung */}
+            <Card className="border-l-4 border-l-blue-600 dark:border-l-blue-400 hover:border-accent/40 transition-colors shadow-xs bg-card">
+              <CardHeader className="p-5 space-y-2">
+                <span className="text-xs font-mono uppercase tracking-wider text-accent font-bold">
+                  Divisi Pendukung
+                </span>
+                <p className="text-xs sm:text-sm text-foreground font-semibold flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                  {SUPPORT_DIVISIONS.map((divisi, index) => (
+                    <span key={divisi} className="inline-flex items-center gap-2.5">
+                      <span>{divisi}</span>
+                      {index < SUPPORT_DIVISIONS.length - 1 && (
+                        <span className="text-muted-foreground font-bold">•</span>
+                      )}
+                    </span>
+                  ))}
+                </p>
+              </CardHeader>
+            </Card>
           </div>
         </div>
       </main>
