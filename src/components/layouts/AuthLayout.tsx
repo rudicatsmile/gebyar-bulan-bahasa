@@ -47,7 +47,7 @@ export function AuthLayout({
 
         {/* Footer */}
         <div className="pt-6 border-t border-border/60 text-center sm:text-left text-xs text-muted-foreground">
-          © 2025 Panitia Gebyar Bulan Bahasa dan Kebudayaan
+          © 2026 Panitia Gebyar Bulan Bahasa dan Kebudayaan
         </div>
       </div>
 
@@ -59,7 +59,7 @@ export function AuthLayout({
 
         <div className="flex items-center gap-2 text-xs font-semibold tracking-widest uppercase text-accent">
           <Sparkles className="h-4 w-4 text-accent" />
-          <span>Peringatan Hari Sumpah Pemuda 2025</span>
+          <span>Peringatan Hari Sumpah Pemuda 2026</span>
         </div>
 
         <div className="space-y-6 max-w-xl">
@@ -94,7 +94,7 @@ export function AuthLayout({
         </div>
 
         <div className="flex items-center justify-between text-xs text-primary-foreground/60 border-t border-white/10 pt-4 font-mono">
-          <span>Jakarta, 26 - 28 Oktober 2025</span>
+          <span>Jakarta, 26 - 28 Oktober 2026</span>
           <span>Versi 1.0.0 (Digital Scoring)</span>
         </div>
       </div>

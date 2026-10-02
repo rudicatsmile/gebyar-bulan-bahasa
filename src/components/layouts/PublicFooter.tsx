@@ -106,7 +106,7 @@ export function PublicFooter() {
         </div>
 
         <div className="mt-8 pt-8 border-t border-border/60 flex flex-col sm:flex-row items-center justify-between text-xs text-muted-foreground gap-4">
-          <p>© 2025 GebyarBulanBahasa. Panitia Peringatan Hari Sumpah Pemuda.</p>
+          <p>© 2026 GebyarBulanBahasa. Panitia Peringatan Hari Sumpah Pemuda.</p>
           <div className="flex items-center gap-4">
             <Link href="/faq" className="hover:text-foreground transition-colors">
               FAQ

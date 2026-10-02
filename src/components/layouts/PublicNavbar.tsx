@@ -48,7 +48,7 @@ export function PublicNavbar() {
               Gebyar<span className="text-accent">BulanBahasa</span>
             </span>
             <span className="text-[10px] tracking-widest text-muted-foreground uppercase mt-0.5">
-              Sumpah Pemuda 2025
+              Sumpah Pemuda 2026
             </span>
           </div>
         </Link>

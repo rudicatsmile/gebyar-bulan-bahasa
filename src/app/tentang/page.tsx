@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata = {
   title: "Tentang Acara",
-  description: "Latar Belakang, Visi, dan Susunan Panitia Gebyar Bulan Bahasa dan Kebudayaan 2025.",
+  description: "Latar Belakang, Visi, dan Susunan Panitia Gebyar Bulan Bahasa dan Kebudayaan 2026.",
 };
 
 const COMMITTEE_MEMBERS = [
@@ -74,7 +74,7 @@ export default function TentangPage() {
               Profil & Identitas Acara
             </Badge>
             <h1 className="font-heading text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
-              Gebyar Bulan Bahasa dan Kebudayaan 2025
+              Gebyar Bulan Bahasa dan Kebudayaan 2026
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
               Peringatan Hari Sumpah Pemuda bertema &ldquo;Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.&rdquo;
