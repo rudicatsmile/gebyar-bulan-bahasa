@@ -51,7 +51,7 @@ function DaftarForm() {
       // 2. Langsung login otomatis via Supabase SSR client agar cookie sesi aktif di browser
       const supabase = createClient();
       // Bersihkan kemungkinan residu sesi lama
-      await supabase.auth.signOut().catch(() => {});
+      await supabase.auth.signOut().catch(() => { });
 
       const { error: loginError } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase().trim(),
@@ -108,7 +108,7 @@ function DaftarForm() {
 
         <Input
           label="Asal Sekolah / Kampus / Instansi *"
-          placeholder="Contoh: SMAN 1 Bandung / Univ. Indonesia"
+          placeholder="Contoh: SMK Dinamika Pembangunan 2 jakarta"
           value={institution}
           onChange={(e) => setInstitution(e.target.value)}
           required
