@@ -8,15 +8,37 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { REWARDS, Reward } from "@/lib/dummy-data";
+import { getRewards } from "@/lib/supabase/queries";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
-import { Gift, ArrowLeft, CheckCircle2, AlertCircle, Coins, Loader2 } from "lucide-react";
+import { Gift, ArrowLeft, CheckCircle2, AlertCircle, Coins, Loader2, Sparkles } from "lucide-react";
 
 export default function PesertaRewardPage() {
-  const { participant, loading } = useCurrentParticipant();
+  const { participant, loading: participantLoading } = useCurrentParticipant();
   const [balance, setBalance] = React.useState<number>(0);
+  const [rewards, setRewards] = React.useState<Reward[]>(REWARDS);
+  const [loadingRewards, setLoadingRewards] = React.useState(true);
   const [selectedReward, setSelectedReward] = React.useState<Reward | null>(null);
   const [claimSuccess, setClaimSuccess] = React.useState<string | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
+
+  React.useEffect(() => {
+    async function loadRewardCatalog() {
+      try {
+        setLoadingRewards(true);
+        const data = await getRewards();
+        if (data && data.length > 0) {
+          setRewards(data);
+        } else {
+          setRewards(REWARDS);
+        }
+      } catch (err) {
+        console.error("Gagal memuat katalog reward:", err);
+      } finally {
+        setLoadingRewards(false);
+      }
+    }
+    loadRewardCatalog();
+  }, []);
 
   // Sync balance when participant loads
   React.useEffect(() => {
@@ -102,54 +124,66 @@ export default function PesertaRewardPage() {
         )}
 
         {/* Katalog Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {REWARDS.map((rew) => {
-            const isAffordable = balance >= rew.pointsRequired;
-            const remaining = rew.quota - rew.claimedCount;
+        {rewards.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {rewards.map((rew) => {
+              const isAffordable = balance >= rew.pointsRequired;
+              const remaining = rew.quota - rew.claimedCount;
 
-            return (
-              <Card key={rew.id} className="p-6 flex flex-col justify-between space-y-4 hover:border-accent transition-colors">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="gold" className="text-[10px]">
-                      {rew.category}
-                    </Badge>
-                    <span className="font-mono text-xs font-bold text-accent">
-                      {rew.pointsRequired} Poin
-                    </span>
+              return (
+                <Card key={rew.id} className="p-6 flex flex-col justify-between space-y-4 hover:border-accent transition-colors">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="gold" className="text-[10px]">
+                        {rew.category}
+                      </Badge>
+                      <span className="font-mono text-xs font-bold text-accent">
+                        {rew.pointsRequired} Poin
+                      </span>
+                    </div>
+
+                    <h3 className="font-heading text-lg font-bold text-foreground">
+                      {rew.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {rew.description}
+                    </p>
                   </div>
 
-                  <h3 className="font-heading text-lg font-bold text-foreground">
-                    {rew.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {rew.description}
-                  </p>
-                </div>
+                  <div className="space-y-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
+                      <span>Sisa Stok:</span>
+                      <strong>{remaining} unit</strong>
+                    </div>
 
-                <div className="space-y-3 pt-3 border-t border-border">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
-                    <span>Sisa Stok:</span>
-                    <strong>{remaining} unit</strong>
+                    <Button
+                      size="sm"
+                      disabled={!isAffordable || remaining <= 0}
+                      onClick={() => handleOpenClaim(rew)}
+                      className="w-full text-xs font-semibold"
+                    >
+                      {remaining <= 0
+                        ? "Kuota Habis"
+                        : isAffordable
+                        ? `Tukar (${rew.pointsRequired} Poin)`
+                        : `Kurang ${rew.pointsRequired - balance} Poin`}
+                    </Button>
                   </div>
-
-                  <Button
-                    size="sm"
-                    disabled={!isAffordable || remaining <= 0}
-                    onClick={() => handleOpenClaim(rew)}
-                    className="w-full text-xs font-semibold"
-                  >
-                    {remaining <= 0
-                      ? "Kuota Habis"
-                      : isAffordable
-                      ? `Tukar (${rew.pointsRequired} Poin)`
-                      : `Kurang ${rew.pointsRequired - balance} Poin`}
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-12 text-center rounded-2xl border border-border bg-card max-w-lg mx-auto space-y-3">
+            <Gift className="h-12 w-12 text-accent mx-auto" />
+            <h3 className="font-heading text-lg font-bold text-foreground">
+              Belum Ada Katalog Merchandise
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Merchandise dan hadiah penukaran poin challenge akan segera tersedia.
+            </p>
+          </div>
+        )}
 
         {/* Modal Konfirmasi Tukar */}
         {selectedReward && (

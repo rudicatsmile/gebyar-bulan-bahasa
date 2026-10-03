@@ -25,10 +25,12 @@ import {
 export default function DashboardPesertaPage() {
   const { participant, loading } = useCurrentParticipant();
 
-  const nextReward = REWARDS[1]; // Voucher Kopi (150 poin)
+  const nextReward = REWARDS && REWARDS.length > 0 ? (REWARDS[1] || REWARDS[0]) : null;
   const currentPoints = participant?.totalPoints ?? 0;
-  const remainingForNextReward = Math.max(0, nextReward.pointsRequired - currentPoints);
-  const activeChallenges = CHALLENGES.slice(0, 3);
+  const remainingForNextReward = nextReward
+    ? Math.max(0, nextReward.pointsRequired - currentPoints)
+    : 0;
+  const activeChallenges = (CHALLENGES || []).slice(0, 3);
 
   return (
     <DashboardLayout role="peserta" participantPoints={currentPoints}>
@@ -68,10 +70,14 @@ export default function DashboardPesertaPage() {
                 {currentPoints}
               </div>
               <span className="text-[11px] text-muted-foreground block mt-1">
-                {remainingForNextReward > 0 ? (
-                  <>Butuh {remainingForNextReward} poin lagi untuk &ldquo;{nextReward.name}&rdquo;</>
+                {nextReward ? (
+                  remainingForNextReward > 0 ? (
+                    <>Butuh {remainingForNextReward} poin lagi untuk &ldquo;{nextReward.name}&rdquo;</>
+                  ) : (
+                    <>Poin Anda mencukupi untuk &ldquo;{nextReward.name}&rdquo;!</>
+                  )
                 ) : (
-                  <>Poin Anda mencukupi untuk &ldquo;{nextReward.name}&rdquo;!</>
+                  <>Kumpulkan poin dengan mengunjungi stand pameran budaya!</>
                 )}
               </span>
             </div>
