@@ -54,43 +54,53 @@ export function LombaClient({ initialCompetitions }: LombaClientProps) {
           </div>
 
           {/* Filter Bar */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card">
+          <div className="p-3.5 sm:p-4 rounded-2xl border border-border bg-card/95 backdrop-blur-xs shadow-xs space-y-3.5 lg:space-y-0 lg:flex lg:items-center lg:justify-between lg:gap-6">
             {/* Filter Kategori */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-muted-foreground mr-2 flex items-center gap-1">
-                <Filter className="h-3.5 w-3.5" /> Kategori:
-              </span>
-              {["semua", "individu", "kelompok"].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${
-                    selectedCategory === cat
-                      ? "bg-primary text-primary-foreground font-bold"
-                      : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  {cat === "semua" ? "Semua Kategori" : cat}
-                </button>
-              ))}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
+                <Filter className="h-3.5 w-3.5 text-accent" />
+                <span>Kategori:</span>
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1 sm:mx-0 sm:px-0 sm:flex-wrap">
+                {["semua", "individu", "kelompok"].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`whitespace-nowrap px-3 py-1.5 sm:py-1 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all duration-150 cursor-pointer active:scale-95 touch-manipulation ${
+                      selectedCategory === cat
+                        ? "bg-primary text-primary-foreground font-bold shadow-xs ring-1 ring-primary/20"
+                        : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
+                    }`}
+                  >
+                    {cat === "semua" ? "Semua" : cat}
+                  </button>
+                ))}
+              </div>
             </div>
 
+            <div className="hidden lg:block h-6 w-px bg-border/60 shrink-0" />
+
             {/* Filter Status */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-muted-foreground mr-2">Status:</span>
-              {["semua", "berlangsung", "pendaftaran", "selesai"].map((stat) => (
-                <button
-                  key={stat}
-                  onClick={() => setSelectedStatus(stat)}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${
-                    selectedStatus === stat
-                      ? "bg-primary text-primary-foreground font-bold"
-                      : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  {stat === "semua" ? "Semua Status" : stat}
-                </button>
-              ))}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5 pt-2.5 sm:pt-0 border-t border-border/50 sm:border-t-0">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground shrink-0">
+                <span className="h-2 w-2 rounded-full bg-accent inline-block" />
+                <span>Status:</span>
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1 sm:mx-0 sm:px-0 sm:flex-wrap">
+                {["semua", "berlangsung", "pendaftaran", "selesai"].map((stat) => (
+                  <button
+                    key={stat}
+                    onClick={() => setSelectedStatus(stat)}
+                    className={`whitespace-nowrap px-3 py-1.5 sm:py-1 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all duration-150 cursor-pointer active:scale-95 touch-manipulation ${
+                      selectedStatus === stat
+                        ? "bg-primary text-primary-foreground font-bold shadow-xs ring-1 ring-primary/20"
+                        : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
+                    }`}
+                  >
+                    {stat === "semua" ? "Semua" : stat}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
