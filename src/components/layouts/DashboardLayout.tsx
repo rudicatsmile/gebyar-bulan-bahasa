@@ -60,6 +60,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Ringkasan", href: "/dashboard", icon: LayoutDashboard },
   { title: "OPERASIONAL LOMBA", href: "#", icon: Trophy, isHeader: true },
   { title: "Monitoring Lomba", href: "/dashboard/lomba", icon: Trophy },
+  { title: "Tahapan Duta Bahasa", href: "/dashboard/lomba/duta-bahasa", icon: Award },
   { title: "Peserta & Berkas", href: "/dashboard/peserta", icon: Users },
   { title: "Verifikasi Berkas", href: "/dashboard/peserta/verifikasi", icon: FileCheck },
   { title: "Pendaftaran Tim", href: "/dashboard/pendaftaran", icon: ClipboardList },

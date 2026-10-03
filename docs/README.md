@@ -12,15 +12,16 @@ Folder `docs/` ini memuat panduan operasional lengkap yang dibagi berdasarkan pe
 
 ```
 docs/
-├── README.md                   # Dokumen Utama & Ringkasan Alur Bisnis (Dokumen Ini)
-├── KREDENSIAL.md               # Daftar Akun Resmi, Email, Password, & Kode Stand
-├── sistem-penilaian.md         # Dokumentasi Lengkap Sistem Penilaian, Agregasi, & Audit Nilai
-├── user-guide-seksi-acara.md   # Panduan Operasional: Seksi Acara & Super Admin
-├── user-guide-juri.md          # Panduan Pengoperasian: Dewan Juri (Digital Scoring)
-├── user-guide-media.md         # Panduan Pengoperasian: Tim Media Center & Monitor Venue
-├── user-guide-peserta.md       # Panduan Interaktif: Peserta Acara & Gamifikasi Stand
-├── developer-guide.md          # Panduan Teknis Arsitektur & Pengembangan Developer
-└── migrasi-vps-supabase.md     # Panduan Teknis Migrasi Database Supabase Cloud ke VPS
+├── README.md                       # Dokumen Utama & Ringkasan Alur Bisnis (Dokumen Ini)
+├── KREDENSIAL.md                   # Daftar Akun Resmi, Email, Password, & Kode Stand
+├── sistem-penilaian.md             # Dokumentasi Lengkap Sistem Penilaian, Agregasi, & Audit Nilai
+├── user-guide-tahapan-duta-bahasa.md # Panduan Sistem Tahapan Lomba Duta Bahasa & Budaya
+├── user-guide-seksi-acara.md       # Panduan Operasional: Seksi Acara & Super Admin
+├── user-guide-juri.md              # Panduan Pengoperasian: Dewan Juri (Digital Scoring)
+├── user-guide-media.md             # Panduan Pengoperasian: Tim Media Center & Monitor Venue
+├── user-guide-peserta.md           # Panduan Interaktif: Peserta Acara & Gamifikasi Stand
+├── developer-guide.md              # Panduan Teknis Arsitektur & Pengembangan Developer
+└── migrasi-vps-supabase.md         # Panduan Teknis Migrasi Database Supabase Cloud ke VPS
 ```
 
 ---
@@ -81,8 +82,9 @@ Aplikasi menerapkan kontrol akses berbasis peran (*Role-Based Access Control / R
 
 1. **Untuk Pengguna Operasional:**  
    Buka [Panduan Masuk & Kredensial](file:///d:/project/web/energies/gebyar-bulan-bahasa-by-bu-pebri/docs/KREDENSIAL.md) untuk melihat daftar akun resmi dan kata sandi yang dapat langsung dipakai.
-2. **Untuk Seksi Acara:**  
-   Baca [User Guide Seksi Acara](file:///d:/project/web/energies/gebyar-bulan-bahasa-by-bu-pebri/docs/user-guide-seksi-acara.md) untuk mempelajari langkah operasional lomba, panggung, dan rekap juara.
+2. **Untuk Seksi Acara & Admin Lomba:**  
+   - Baca [User Guide Seksi Acara](file:///d:/project/web/energies/gebyar-bulan-bahasa-by-bu-pebri/docs/user-guide-seksi-acara.md) untuk mempelajari langkah operasional lomba, panggung, dan rekap juara.
+   - Baca [Panduan Tahapan Duta Bahasa](file:///d:/project/web/energies/gebyar-bulan-bahasa-by-bu-pebri/docs/user-guide-tahapan-duta-bahasa.md) untuk pengelolaan kompetisi bertingkat, kelolosan seleksi, dan grand final Duta Bahasa.
 3. **Untuk Dewan Juri:**  
    Baca [User Guide Dewan Juri](file:///d:/project/web/energies/gebyar-bulan-bahasa-by-bu-pebri/docs/user-guide-juri.md) untuk panduan penilaian digital bebas kesalahan.
 4. **Untuk Tim Media:**  

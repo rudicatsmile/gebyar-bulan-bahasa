@@ -1,0 +1,850 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { DashboardLayout } from "@/components/layouts/DashboardLayout";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  ArrowLeft,
+  Crown,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  UserPlus,
+  Trash2,
+  ChevronRight,
+  ChevronDown,
+  Save,
+  RotateCcw,
+  Calendar,
+  Award,
+  XCircle,
+  Clock,
+  Star,
+} from "lucide-react";
+import type {
+  DutaBahasaStage,
+  DutaBahasaParticipantInfo,
+  DutaBahasaParticipantStatus,
+} from "@/app/actions/duta-bahasa";
+import {
+  getDutaBahasaStages,
+  getDutaBahasaProgress,
+  saveDutaBahasaStages,
+  updateParticipantStageStatus,
+  addParticipantToDutaBahasa,
+  removeParticipantFromDutaBahasa,
+} from "@/app/actions/duta-bahasa";
+
+// ======================================================================
+// HELPERS
+// ======================================================================
+
+const statusLabel: Record<DutaBahasaParticipantStatus, string> = {
+  terdaftar: "Terdaftar",
+  lolos: "Lolos",
+  tidak_lolos: "Tidak Lolos",
+  menunggu: "Menunggu",
+};
+
+const statusBadge: Record<DutaBahasaParticipantStatus, string> = {
+  terdaftar: "bg-sky-500/15 text-sky-700 border-sky-500/30",
+  lolos: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+  tidak_lolos: "bg-red-500/15 text-red-700 border-red-500/30",
+  menunggu: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+};
+
+const overallStatusLabel: Record<DutaBahasaParticipantInfo["overallStatus"], string> = {
+  aktif: "Aktif",
+  tereliminasi: "Tereliminasi",
+  finalis: "Finalis 3 Besar",
+  pemenang: "Duta Bahasa Terpilih",
+};
+
+const overallStatusBadge: Record<DutaBahasaParticipantInfo["overallStatus"], string> = {
+  aktif: "bg-sky-500/15 text-sky-700 border-sky-500/30",
+  tereliminasi: "bg-red-500/15 text-red-700 border-red-500/30",
+  finalis: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+  pemenang: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+};
+
+const stageStatusLabel: Record<DutaBahasaStage["status"], string> = {
+  upcoming: "Akan Datang",
+  active: "Sedang Berlangsung",
+  completed: "Selesai",
+};
+
+const stageStatusBadge: Record<DutaBahasaStage["status"], string> = {
+  upcoming: "bg-sky-500/15 text-sky-700 border-sky-500/30",
+  active: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+  completed: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+};
+
+// ======================================================================
+// MAIN COMPONENT
+// ======================================================================
+
+export default function DashboardDutaBahasaPage() {
+  const [stages, setStages] = React.useState<DutaBahasaStage[]>([]);
+  const [participants, setParticipants] = React.useState<DutaBahasaParticipantInfo[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [feedback, setFeedback] = React.useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  // Expanded stage view
+  const [expandedStage, setExpandedStage] = React.useState<string | null>(null);
+
+  // Add participant dialog
+  const [showAddDialog, setShowAddDialog] = React.useState(false);
+  const [addParticipantId, setAddParticipantId] = React.useState("");
+  const [addLoading, setAddLoading] = React.useState(false);
+
+  // Update status dialog
+  const [updateDialog, setUpdateDialog] = React.useState<{
+    participantId: string;
+    participantName: string;
+    stageId: string;
+    stageTitle: string;
+  } | null>(null);
+  const [updateStatus, setUpdateStatus] = React.useState<DutaBahasaParticipantStatus>("menunggu");
+  const [updateScore, setUpdateScore] = React.useState("");
+  const [updateNotes, setUpdateNotes] = React.useState("");
+  const [updateLoading, setUpdateLoading] = React.useState(false);
+
+  // Participant search for adding
+  const [searchResults, setSearchResults] = React.useState<
+    Array<{ id: string; full_name: string; institution: string; registration_number: string }>
+  >([]);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [searchLoading, setSearchLoading] = React.useState(false);
+
+  // ======================================================================
+  // DATA LOADING
+  // ======================================================================
+
+  const loadData = React.useCallback(async () => {
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const [stagesRes, progressRes] = await Promise.all([
+        getDutaBahasaStages(),
+        getDutaBahasaProgress(),
+      ]);
+      setStages(stagesRes.stages);
+      setParticipants(progressRes.participants);
+    } catch (err) {
+      console.error("Load error:", err);
+      setFeedback({ type: "error", message: "Gagal memuat data Duta Bahasa." });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // ======================================================================
+  // STAGE STATUS UPDATE
+  // ======================================================================
+
+  const handleSaveStageStatus = async (stageId: string, newStatus: DutaBahasaStage["status"]) => {
+    const updatedStages = stages.map((s) =>
+      s.id === stageId ? { ...s, status: newStatus } : s
+    );
+    setSaving(true);
+    const res = await saveDutaBahasaStages(updatedStages);
+    setSaving(false);
+    if (res.success) {
+      setStages(updatedStages);
+      setFeedback({ type: "success", message: "Status tahapan berhasil diperbarui!" });
+    } else {
+      setFeedback({ type: "error", message: res.error || "Gagal menyimpan status tahapan." });
+    }
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  // ======================================================================
+  // ADD PARTICIPANT
+  // ======================================================================
+
+  const handleSearchParticipant = async (query: string) => {
+    setSearchQuery(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`/api/participants?search=${encodeURIComponent(query)}&limit=10`);
+      const data = await res.json();
+      if (data.success) {
+        setSearchResults(data.participants || []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleAddParticipant = async (participantId: string) => {
+    setAddLoading(true);
+    const res = await addParticipantToDutaBahasa(participantId);
+    setAddLoading(false);
+    if (res.success) {
+      setFeedback({ type: "success", message: "Peserta berhasil ditambahkan ke Duta Bahasa!" });
+      setShowAddDialog(false);
+      setSearchQuery("");
+      setSearchResults([]);
+      loadData();
+    } else {
+      setFeedback({ type: "error", message: res.error || "Gagal menambahkan peserta." });
+    }
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  // ======================================================================
+  // REMOVE PARTICIPANT
+  // ======================================================================
+
+  const handleRemoveParticipant = async (participantId: string, name: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus "${name}" dari Duta Bahasa?`)) return;
+    const res = await removeParticipantFromDutaBahasa(participantId);
+    if (res.success) {
+      setFeedback({ type: "success", message: `${name} dihapus dari Duta Bahasa.` });
+      loadData();
+    } else {
+      setFeedback({ type: "error", message: res.error || "Gagal menghapus peserta." });
+    }
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  // ======================================================================
+  // UPDATE PARTICIPANT STAGE STATUS
+  // ======================================================================
+
+  const handleUpdateStatus = async () => {
+    if (!updateDialog) return;
+    setUpdateLoading(true);
+    const res = await updateParticipantStageStatus({
+      participantId: updateDialog.participantId,
+      stageId: updateDialog.stageId,
+      status: updateStatus,
+      score: updateScore ? Number(updateScore) : null,
+      notes: updateNotes,
+    });
+    setUpdateLoading(false);
+    if (res.success) {
+      setFeedback({ type: "success", message: "Status peserta berhasil diperbarui!" });
+      setUpdateDialog(null);
+      loadData();
+    } else {
+      setFeedback({ type: "error", message: res.error || "Gagal update status peserta." });
+    }
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  // ======================================================================
+  // STATS
+  // ======================================================================
+
+  const totalParticipants = participants.length;
+  const activeCount = participants.filter((p) => p.overallStatus === "aktif").length;
+  const eliminatedCount = participants.filter((p) => p.overallStatus === "tereliminasi").length;
+  const finalistCount = participants.filter(
+    (p) => p.overallStatus === "finalis" || p.overallStatus === "pemenang"
+  ).length;
+
+  // ======================================================================
+  // RENDER
+  // ======================================================================
+
+  return (
+    <DashboardLayout role="seksi_acara">
+      <div className="space-y-6 max-w-6xl">
+        {/* Header */}
+        <div>
+          <Link
+            href="/dashboard/lomba"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Kembali ke Daftar Lomba</span>
+          </Link>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Crown className="h-6 w-6 text-amber-500" />
+                <Badge variant="gold" className="text-[10px]">
+                  LOMBA BERTAHAP
+                </Badge>
+              </div>
+              <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                Duta Bahasa dan Budaya
+              </h1>
+              <p className="text-xs text-muted-foreground mt-1">
+                Kelola tahapan seleksi peserta dari pendaftaran hingga Grand Final.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadData}
+                disabled={loading}
+                className="text-xs gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                <span>Muat Ulang</span>
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowAddDialog(true)}
+                className="text-xs gap-1.5 cursor-pointer"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>Tambah Peserta</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Feedback */}
+        {feedback && (
+          <div
+            className={`p-4 rounded-xl border text-xs flex items-center gap-2.5 animate-in fade-in-50 ${
+              feedback.type === "success"
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "border-destructive/40 bg-destructive/10 text-destructive"
+            }`}
+          >
+            {feedback.type === "success" ? (
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
+            ) : (
+              <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
+            )}
+            <span className="font-medium">{feedback.message}</span>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin text-accent" />
+            <p className="text-xs">Memuat data tahapan Duta Bahasa...</p>
+          </div>
+        ) : (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Card className="p-4 flex flex-col items-center text-center">
+                <Users className="h-5 w-5 text-accent mb-1" />
+                <p className="text-2xl font-bold text-foreground">{totalParticipants}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Peserta</p>
+              </Card>
+              <Card className="p-4 flex flex-col items-center text-center">
+                <Clock className="h-5 w-5 text-sky-500 mb-1" />
+                <p className="text-2xl font-bold text-foreground">{activeCount}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Masih Aktif</p>
+              </Card>
+              <Card className="p-4 flex flex-col items-center text-center">
+                <XCircle className="h-5 w-5 text-red-500 mb-1" />
+                <p className="text-2xl font-bold text-foreground">{eliminatedCount}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Tereliminasi</p>
+              </Card>
+              <Card className="p-4 flex flex-col items-center text-center">
+                <Star className="h-5 w-5 text-amber-500 mb-1" />
+                <p className="text-2xl font-bold text-foreground">{finalistCount}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Finalis / Pemenang</p>
+              </Card>
+            </div>
+
+            {/* Timeline Tahapan */}
+            <Card className="p-6 sm:p-8">
+              <h2 className="font-heading text-lg font-bold text-foreground mb-6 flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-accent" />
+                <span>Timeline Tahapan</span>
+              </h2>
+
+              <div className="space-y-4">
+                {stages.map((stage, idx) => {
+                  const isExpanded = expandedStage === stage.id;
+                  const stageParticipants = participants.filter((p) => {
+                    const progress = p.progress[stage.id];
+                    return !!progress;
+                  });
+
+                  return (
+                    <div key={stage.id} className="border border-border rounded-xl overflow-hidden">
+                      {/* Stage Header */}
+                      <div
+                        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+                        onClick={() => setExpandedStage(isExpanded ? null : stage.id)}
+                      >
+                        {/* Timeline Indicator */}
+                        <div className="flex flex-col items-center shrink-0">
+                          <div
+                            className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
+                              stage.status === "completed"
+                                ? "bg-emerald-500 text-white border-emerald-500"
+                                : stage.status === "active"
+                                ? "bg-amber-500 text-white border-amber-500 animate-pulse"
+                                : "bg-muted text-muted-foreground border-border"
+                            }`}
+                          >
+                            {stage.status === "completed" ? (
+                              <CheckCircle2 className="h-5 w-5" />
+                            ) : (
+                              stage.stageOrder
+                            )}
+                          </div>
+                          {idx < stages.length - 1 && (
+                            <div
+                              className={`w-0.5 h-4 mt-1 ${
+                                stage.status === "completed"
+                                  ? "bg-emerald-500"
+                                  : "bg-border"
+                              }`}
+                            />
+                          )}
+                        </div>
+
+                        {/* Stage Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-heading text-sm font-bold text-foreground truncate">
+                              {stage.title}
+                            </h3>
+                            <Badge
+                              className={`text-[10px] border ${stageStatusBadge[stage.status]}`}
+                            >
+                              {stageStatusLabel[stage.status]}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                            <Calendar className="h-3 w-3" />
+                            <span>{stage.stageDayLabel}</span>
+                            <span className="text-muted-foreground/50">|</span>
+                            <span>{stageParticipants.length} peserta</span>
+                          </p>
+                        </div>
+
+                        {/* Status Toggle & Expand */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <select
+                            value={stage.status}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleSaveStageStatus(
+                                stage.id,
+                                e.target.value as DutaBahasaStage["status"]
+                              );
+                            }}
+                            className="text-[11px] px-2 py-1 rounded-md border border-border bg-background text-foreground cursor-pointer"
+                          >
+                            <option value="upcoming">Akan Datang</option>
+                            <option value="active">Berlangsung</option>
+                            <option value="completed">Selesai</option>
+                          </select>
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expanded: Participants Table */}
+                      {isExpanded && (
+                        <div className="border-t border-border p-4 bg-muted/10">
+                          <p className="text-xs text-muted-foreground mb-3">
+                            {stage.description}
+                          </p>
+
+                          {stageParticipants.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-4 text-center">
+                              Belum ada peserta di tahap ini.
+                            </p>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="text-[10px] w-8">#</TableHead>
+                                    <TableHead className="text-[10px]">Peserta</TableHead>
+                                    <TableHead className="text-[10px]">Institusi</TableHead>
+                                    <TableHead className="text-[10px]">Status Tahap</TableHead>
+                                    <TableHead className="text-[10px]">Skor</TableHead>
+                                    <TableHead className="text-[10px]">Catatan</TableHead>
+                                    <TableHead className="text-[10px] text-right">Aksi</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {stageParticipants.map((p, pIdx) => {
+                                    const progress = p.progress[stage.id];
+                                    return (
+                                      <TableRow key={p.participantId}>
+                                        <TableCell className="text-xs font-mono">
+                                          {pIdx + 1}
+                                        </TableCell>
+                                        <TableCell>
+                                          <div>
+                                            <p className="text-xs font-semibold text-foreground">
+                                              {p.fullName}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground font-mono">
+                                              {p.registrationNumber}
+                                            </p>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="text-xs text-muted-foreground">
+                                          {p.institution || "-"}
+                                        </TableCell>
+                                        <TableCell>
+                                          <Badge
+                                            className={`text-[10px] border ${
+                                              statusBadge[progress?.status || "terdaftar"]
+                                            }`}
+                                          >
+                                            {statusLabel[progress?.status || "terdaftar"]}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-xs font-mono">
+                                          {progress?.score != null ? progress.score : "-"}
+                                        </TableCell>
+                                        <TableCell className="text-[10px] text-muted-foreground max-w-[150px] truncate">
+                                          {progress?.notes || "-"}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="text-[10px] h-7 px-2 cursor-pointer"
+                                              onClick={() => {
+                                                setUpdateDialog({
+                                                  participantId: p.participantId,
+                                                  participantName: p.fullName,
+                                                  stageId: stage.id,
+                                                  stageTitle: stage.title,
+                                                });
+                                                setUpdateStatus(progress?.status || "menunggu");
+                                                setUpdateScore(
+                                                  progress?.score != null
+                                                    ? String(progress.score)
+                                                    : ""
+                                                );
+                                                setUpdateNotes(progress?.notes || "");
+                                              }}
+                                            >
+                                              Update Status
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="text-destructive h-7 w-7 p-0 cursor-pointer"
+                                              onClick={() =>
+                                                handleRemoveParticipant(
+                                                  p.participantId,
+                                                  p.fullName
+                                                )
+                                              }
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* All Participants Overview */}
+            <Card className="p-6 sm:p-8">
+              <h2 className="font-heading text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <Award className="h-5 w-5 text-accent" />
+                <span>Ringkasan Seluruh Peserta Duta Bahasa</span>
+              </h2>
+
+              {participants.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-xs">
+                    Belum ada peserta yang terdaftar di Duta Bahasa.
+                  </p>
+                  <Button
+                    size="sm"
+                    className="mt-3 text-xs gap-1.5 cursor-pointer"
+                    onClick={() => setShowAddDialog(true)}
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    <span>Tambah Peserta Pertama</span>
+                  </Button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] w-8">#</TableHead>
+                        <TableHead className="text-[10px]">No. Registrasi</TableHead>
+                        <TableHead className="text-[10px]">Nama Peserta</TableHead>
+                        <TableHead className="text-[10px]">Institusi</TableHead>
+                        <TableHead className="text-[10px]">Tahap Saat Ini</TableHead>
+                        <TableHead className="text-[10px]">Status Keseluruhan</TableHead>
+                        <TableHead className="text-[10px] text-right">Aksi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {participants.map((p, idx) => (
+                        <TableRow key={p.participantId}>
+                          <TableCell className="text-xs font-mono">{idx + 1}</TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground">
+                            {p.registrationNumber}
+                          </TableCell>
+                          <TableCell className="text-xs font-semibold text-foreground">
+                            {p.fullName}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {p.institution || "-"}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs text-foreground">
+                              Tahap {p.currentStageOrder} —{" "}
+                              {stages.find((s) => s.id === p.currentStageId)?.title || "-"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={`text-[10px] border ${
+                                overallStatusBadge[p.overallStatus]
+                              }`}
+                            >
+                              {overallStatusLabel[p.overallStatus]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive h-7 w-7 p-0 cursor-pointer"
+                              onClick={() =>
+                                handleRemoveParticipant(p.participantId, p.fullName)
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Card>
+          </>
+        )}
+
+        {/* ============================================================= */}
+        {/* ADD PARTICIPANT DIALOG */}
+        {/* ============================================================= */}
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <div className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Tambah Peserta ke Duta Bahasa</DialogTitle>
+              <DialogDescription>
+                Cari peserta berdasarkan nama atau nomor registrasi. Peserta akan otomatis
+                didaftarkan ke Tahap 1 (Pendaftaran).
+              </DialogDescription>
+            </DialogHeader>
+
+            <Input
+              label="Cari Peserta"
+              placeholder="Ketik nama atau no. registrasi..."
+              value={searchQuery}
+              onChange={(e) => handleSearchParticipant(e.target.value)}
+            />
+
+            {searchLoading && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Mencari peserta...</span>
+              </div>
+            )}
+
+            {searchResults.length > 0 && (
+              <div className="max-h-60 overflow-y-auto border border-border rounded-lg divide-y divide-border">
+                {searchResults.map((p) => {
+                  const alreadyAdded = participants.some(
+                    (pp) => pp.participantId === p.id
+                  );
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between p-3 hover:bg-muted/30 transition-colors"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">
+                          {p.full_name}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {p.registration_number} · {p.institution || "Umum"}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={alreadyAdded ? "outline" : "default"}
+                        disabled={alreadyAdded || addLoading}
+                        className="text-[10px] h-7 cursor-pointer"
+                        onClick={() => handleAddParticipant(p.id)}
+                      >
+                        {alreadyAdded ? "Sudah Terdaftar" : "Tambahkan"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {searchQuery.length >= 2 && searchResults.length === 0 && !searchLoading && (
+              <p className="text-xs text-muted-foreground text-center py-3">
+                Tidak ditemukan peserta dengan kata kunci "{searchQuery}"
+              </p>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowAddDialog(false);
+                  setSearchQuery("");
+                  setSearchResults([]);
+                }}
+                className="text-xs cursor-pointer"
+              >
+                Tutup
+              </Button>
+            </DialogFooter>
+          </div>
+        </Dialog>
+
+        {/* ============================================================= */}
+        {/* UPDATE STATUS DIALOG */}
+        {/* ============================================================= */}
+        <Dialog open={!!updateDialog} onOpenChange={(o) => !o && setUpdateDialog(null)}>
+          <div className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Update Status Peserta</DialogTitle>
+              <DialogDescription>
+                {updateDialog?.participantName} — Tahap: {updateDialog?.stageTitle}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                  Status Tahapan *
+                </label>
+                <select
+                  value={updateStatus}
+                  onChange={(e) =>
+                    setUpdateStatus(e.target.value as DutaBahasaParticipantStatus)
+                  }
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-border bg-background text-foreground cursor-pointer"
+                >
+                  <option value="terdaftar">Terdaftar</option>
+                  <option value="menunggu">Menunggu Penilaian</option>
+                  <option value="lolos">✅ Lolos ke Tahap Berikutnya</option>
+                  <option value="tidak_lolos">❌ Tidak Lolos (Eliminasi)</option>
+                </select>
+              </div>
+
+              <Input
+                label="Skor / Nilai (Opsional)"
+                type="number"
+                min={0}
+                max={100}
+                step={0.01}
+                placeholder="0 - 100"
+                value={updateScore}
+                onChange={(e) => setUpdateScore(e.target.value)}
+              />
+
+              <Textarea
+                label="Catatan (Opsional)"
+                placeholder="Catatan penilaian juri atau alasan keputusan..."
+                rows={3}
+                value={updateNotes}
+                onChange={(e) => setUpdateNotes(e.target.value)}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setUpdateDialog(null)}
+                className="text-xs cursor-pointer"
+              >
+                Batal
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleUpdateStatus}
+                disabled={updateLoading}
+                className="text-xs gap-1.5 cursor-pointer"
+              >
+                {updateLoading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-3.5 w-3.5" />
+                    <span>Simpan Perubahan</span>
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
+        </Dialog>
+      </div>
+    </DashboardLayout>
+  );
+}

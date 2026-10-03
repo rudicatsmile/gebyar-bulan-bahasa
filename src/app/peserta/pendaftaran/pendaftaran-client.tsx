@@ -20,6 +20,7 @@ import { enrollCompetition } from "@/app/actions/participants";
 import { createClient } from "@/lib/supabase/client";
 import { COMPETITIONS, PARTICIPANTS } from "@/lib/dummy-data";
 import { BerkasUploadSection } from "@/components/peserta/BerkasUploadSection";
+import { DutaBahasaTimeline } from "@/components/duta-bahasa/DutaBahasaTimeline";
 import type { CompetitionStatus, CompetitionType } from "@/types/database.types";
 import {
   Trophy,
@@ -408,6 +409,16 @@ export function PesertaPendaftaranClient() {
                         <span>Lihat Detail & Kriteria Lomba</span>
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
+
+                      {(enr.competitionSlug?.toLowerCase().includes("duta") ||
+                        enr.competitionName?.toLowerCase().includes("duta")) && (
+                        <div className="pt-3 border-t border-success/20">
+                          <DutaBahasaTimeline
+                            currentParticipantId={participant?.participantRowId || participant?.id}
+                            showParticipantsList={false}
+                          />
+                        </div>
+                      )}
                     </Card>
                   );
                 })}

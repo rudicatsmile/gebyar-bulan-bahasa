@@ -41,6 +41,7 @@ import {
   BookOpen,
   Mic,
 } from "lucide-react";
+import { DutaBahasaTimeline } from "@/components/duta-bahasa/DutaBahasaTimeline";
 
 export interface PublicJudgeItem {
   id: string;
@@ -241,6 +242,12 @@ export function LombaDetailClient({ competition, initialJudges }: LombaDetailCli
           </div>
         </div>
       </div>
+
+      {/* Tahapan & Alur Bertingkat (Khusus Duta Bahasa) */}
+      {(competition.slug?.toLowerCase().includes("duta") ||
+        competition.name?.toLowerCase().includes("duta")) && (
+        <DutaBahasaTimeline currentParticipantId={participant?.id} />
+      )}
 
       {/* Kriteria Penilaian Berbobot (Tabel Kriteria) */}
       <div className="space-y-4">

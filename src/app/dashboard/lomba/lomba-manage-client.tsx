@@ -40,6 +40,7 @@ import {
   RotateCw,
   BookOpen,
   Mic,
+  Award,
 } from "lucide-react";
 
 /**
@@ -642,7 +643,13 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
               Kendali operasional, status pelaksanaan lomba real-time di Supabase, dan akses langsung ke rekapitulasi penilaian digital.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/dashboard/lomba/duta-bahasa">
+              <Button variant="outline" size="sm" className="text-xs gap-1.5 cursor-pointer border-accent/40 text-accent hover:bg-accent/10">
+                <Award className="h-3.5 w-3.5" />
+                <span>Tahapan Duta Bahasa</span>
+              </Button>
+            </Link>
             <Link href="/dashboard/kriteria">
               <Button variant="outline" size="sm" className="text-xs gap-1.5 cursor-pointer">
                 <Sliders className="h-3.5 w-3.5" />
