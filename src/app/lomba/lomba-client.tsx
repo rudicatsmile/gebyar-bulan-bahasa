@@ -145,7 +145,11 @@ export function LombaClient({ initialCompetitions }: LombaClientProps) {
                       </div>
                       <div className="flex items-center gap-2">
                         <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span>{comp.currentParticipantsCount} Peserta Terdaftar</span>
+                        <span>
+                          {comp.currentParticipantsCount > 0
+                            ? `${comp.currentParticipantsCount} Peserta Terdaftar`
+                            : "Belum Ada Peserta Terdaftar"}
+                        </span>
                       </div>
                     </div>
 

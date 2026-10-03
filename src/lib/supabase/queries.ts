@@ -68,7 +68,8 @@ const compIdToName: Record<string, string> = {
 function formatCompetition(
   row: DbCompetitionWithCriteria,
   manuscriptsMap?: Record<string, string[]>,
-  eventFormatsMap?: Record<string, string[]>
+  eventFormatsMap?: Record<string, string[]>,
+  countsMap?: Record<string, number>
 ): Competition {
   const criteria = (row.competition_criteria || [])
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -80,8 +81,8 @@ function formatCompetition(
       maxScore: Number(c.max_score ?? 100),
     }));
 
-  const fallbackRules =
-    COMPETITIONS.find((c) => c.slug === row.slug || c.id === row.id)?.rules || [];
+  const fallbackComp = COMPETITIONS.find((c) => c.slug === row.slug || c.id === row.id);
+  const fallbackRules = fallbackComp?.rules || [];
 
   const rules =
     typeof row.rules === "string" && row.rules.trim().length > 0
@@ -93,16 +94,14 @@ function formatCompetition(
       ? fallbackRules
       : [];
 
-  const fallbackManuscripts =
-    COMPETITIONS.find((c) => c.slug === row.slug || c.id === row.id)?.manuscripts || [];
+  const fallbackManuscripts = fallbackComp?.manuscripts || [];
 
   const manuscripts =
     manuscriptsMap && (manuscriptsMap[row.slug] || manuscriptsMap[row.id])
       ? manuscriptsMap[row.slug] || manuscriptsMap[row.id]
       : fallbackManuscripts;
 
-  const fallbackEventFormats =
-    COMPETITIONS.find((c) => c.slug === row.slug || c.id === row.id)?.eventFormats || [];
+  const fallbackEventFormats = fallbackComp?.eventFormats || [];
 
   const eventFormats =
     eventFormatsMap && (eventFormatsMap[row.slug] || eventFormatsMap[row.id])
@@ -117,6 +116,12 @@ function formatCompetition(
     rawStatus === "dibatalkan"
       ? rawStatus
       : "pendaftaran";
+
+  const fallbackCount = fallbackComp?.currentParticipantsCount ?? 0;
+  const currentParticipantsCount =
+    countsMap !== undefined
+      ? countsMap[row.id] ?? (row.slug ? countsMap[row.slug] : undefined) ?? 0
+      : fallbackCount;
 
   return {
     id: row.id,
@@ -139,7 +144,7 @@ function formatCompetition(
     minMembers: row.min_team_members ?? 1,
     maxMembers: row.max_team_members ?? 1,
     maxParticipants: row.max_participants ?? 20,
-    currentParticipantsCount: 18,
+    currentParticipantsCount,
     aggregation: row.aggregation || "rata_rata",
     rules,
     criteria,
@@ -337,26 +342,58 @@ async function fetchEventFormatsMap(): Promise<Record<string, string[]>> {
   return {};
 }
 
+async function fetchRegistrationCountsMap(): Promise<Record<string, number>> {
+  try {
+    const admin = createAdminClient();
+    const [regRes, dbProgressRes] = await Promise.all([
+      admin.from("registrations").select("competition_id"),
+      admin.from("event_settings").select("value").eq("key", "duta_bahasa_progress").maybeSingle(),
+    ]);
+
+    const map: Record<string, number> = {};
+    if (regRes.data) {
+      for (const row of regRes.data) {
+        if (row.competition_id) {
+          map[row.competition_id] = (map[row.competition_id] || 0) + 1;
+        }
+      }
+    }
+
+    if (dbProgressRes.data?.value && typeof dbProgressRes.data.value === "object") {
+      const dbCount = Object.keys(dbProgressRes.data.value).length;
+      if (dbCount > 0) {
+        map["duta-bahasa"] = Math.max(map["duta-bahasa"] || 0, dbCount);
+      }
+    }
+
+    return map;
+  } catch (err) {
+    console.error("fetchRegistrationCountsMap error:", err);
+    return {};
+  }
+}
+
 // =====================================================================
 // EXPORTED PUBLIC QUERIES
 // =====================================================================
 
 export async function getCompetitions(): Promise<Competition[]> {
   try {
-    const [compResult, manuscriptsMap, eventFormatsMap] = await Promise.all([
+    const [compResult, manuscriptsMap, eventFormatsMap, countsMap] = await Promise.all([
       publicClient
         .from("competitions")
         .select("*, competition_criteria(*)")
         .order("sort_order", { ascending: true }),
       fetchManuscriptsMap(),
       fetchEventFormatsMap(),
+      fetchRegistrationCountsMap(),
     ]);
 
     if (compResult.error || !compResult.data || compResult.data.length === 0) {
       return COMPETITIONS;
     }
     return (compResult.data as unknown as DbCompetitionWithCriteria[]).map((row) =>
-      formatCompetition(row, manuscriptsMap, eventFormatsMap)
+      formatCompetition(row, manuscriptsMap, eventFormatsMap, countsMap)
     );
   } catch (err) {
     console.error("Supabase getCompetitions fallback:", err);
@@ -370,12 +407,13 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
     const resolvedSlug = compIdToSlug[slug] || slug;
 
     const query = publicClient.from("competitions").select("*, competition_criteria(*)");
-    const [compResult, manuscriptsMap, eventFormatsMap] = await Promise.all([
+    const [compResult, manuscriptsMap, eventFormatsMap, countsMap] = await Promise.all([
       isUuid
         ? query.eq("id", slug).maybeSingle()
         : query.eq("slug", resolvedSlug).maybeSingle(),
       fetchManuscriptsMap(),
       fetchEventFormatsMap(),
+      fetchRegistrationCountsMap(),
     ]);
 
     if (compResult.error || !compResult.data) {
@@ -385,7 +423,7 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
         ) || null
       );
     }
-    return formatCompetition(compResult.data as unknown as DbCompetitionWithCriteria, manuscriptsMap, eventFormatsMap);
+    return formatCompetition(compResult.data as unknown as DbCompetitionWithCriteria, manuscriptsMap, eventFormatsMap, countsMap);
   } catch (err) {
     console.error("Supabase getCompetitionBySlug fallback:", err);
     const resolvedSlug = compIdToSlug[slug] || slug;
@@ -403,12 +441,13 @@ export async function getCompetitionById(idOrSlug: string): Promise<Competition 
     const slug = compIdToSlug[idOrSlug] || idOrSlug;
 
     const query = publicClient.from("competitions").select("*, competition_criteria(*)");
-    const [compResult, manuscriptsMap, eventFormatsMap] = await Promise.all([
+    const [compResult, manuscriptsMap, eventFormatsMap, countsMap] = await Promise.all([
       isUuid
         ? query.eq("id", idOrSlug).maybeSingle()
         : query.eq("slug", slug).maybeSingle(),
       fetchManuscriptsMap(),
       fetchEventFormatsMap(),
+      fetchRegistrationCountsMap(),
     ]);
 
     if (compResult.error || !compResult.data) {
@@ -418,7 +457,7 @@ export async function getCompetitionById(idOrSlug: string): Promise<Competition 
         ) || null
       );
     }
-    return formatCompetition(compResult.data as unknown as DbCompetitionWithCriteria, manuscriptsMap, eventFormatsMap);
+    return formatCompetition(compResult.data as unknown as DbCompetitionWithCriteria, manuscriptsMap, eventFormatsMap, countsMap);
   } catch (err) {
     console.error("Supabase getCompetitionById fallback:", err);
     const slug = compIdToSlug[idOrSlug] || idOrSlug;
