@@ -9,13 +9,45 @@ export function MonitorLayout({
   activeModuleTitle,
   currentCycleText,
   emergencyMessage,
+  eventName: initialEventName,
+  eventTheme: initialEventTheme,
+  eventYear: initialEventYear,
 }: {
   children: React.ReactNode;
   activeModuleTitle: string;
   currentCycleText?: string;
   emergencyMessage?: string;
+  eventName?: string;
+  eventTheme?: string;
+  eventYear?: string;
 }) {
   const [timeString, setTimeString] = React.useState("");
+  const [eventName, setEventName] = React.useState(initialEventName || "Gebyar Bulan Bahasa dan Kebudayaan");
+  const [eventTheme, setEventTheme] = React.useState(
+    initialEventTheme || "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia."
+  );
+  const [eventYear, setEventYear] = React.useState(initialEventYear || "2026");
+
+  React.useEffect(() => {
+    if (initialEventName) setEventName(initialEventName);
+    if (initialEventTheme) setEventTheme(initialEventTheme);
+    if (initialEventYear) setEventYear(initialEventYear);
+  }, [initialEventName, initialEventTheme, initialEventYear]);
+
+  React.useEffect(() => {
+    if (!initialEventName || !initialEventTheme || !initialEventYear) {
+      fetch("/api/settings")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.settings) {
+            if (data.settings.eventName) setEventName(data.settings.eventName);
+            if (data.settings.eventTheme) setEventTheme(data.settings.eventTheme);
+            if (data.settings.eventYear) setEventYear(String(data.settings.eventYear));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [initialEventName, initialEventTheme, initialEventYear]);
 
   React.useEffect(() => {
     const updateTime = () => {
@@ -61,14 +93,14 @@ export function MonitorLayout({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-heading text-2xl lg:text-3xl font-bold tracking-tight text-white leading-none">
-                Gebyar<span className="text-accent">BulanBahasa</span>
+                {eventName}
               </h1>
               <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-widest bg-white/10 text-white/90 uppercase">
                 Monitor Lapangan
               </span>
             </div>
             <p className="text-xs text-white/60 tracking-wider uppercase mt-1">
-              Hari Sumpah Pemuda 2025 • Tema: Berkarya dengan Bahasa, Bersatu dalam Budaya
+              Peringatan Hari Sumpah Pemuda {eventYear} • Tema: {eventTheme}
             </p>
           </div>
         </div>

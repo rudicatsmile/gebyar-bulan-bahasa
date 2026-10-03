@@ -679,3 +679,142 @@ export async function getChallengeLeaderboard() {
     return CHALLENGE_LEADERBOARD;
   }
 }
+
+export interface MonitorScoreItem {
+  rank: number;
+  registrationId: string;
+  participantName: string;
+  institution: string;
+  finalAverageScore: number;
+}
+
+export interface MonitorDisplayData {
+  schedules: ScheduleItem[];
+  competitions: Competition[];
+  activeCompetition: Competition | null;
+  liveScores: MonitorScoreItem[];
+  announcements: Announcement[];
+  importantAnnouncement: Announcement | null;
+  winners: Winner[];
+  twibbons: TwibbonItem[];
+  leaderboard: Array<{
+    rank: number;
+    name: string;
+    institution: string;
+    points: number;
+    badge: string;
+  }>;
+  emergencyMessage?: string | null;
+  eventSettings?: {
+    eventName: string;
+    eventTheme: string;
+    eventYear: string;
+    eventDate: string;
+  } | null;
+}
+
+export async function getMonitorData(): Promise<MonitorDisplayData> {
+  try {
+    const [schedules, competitions, announcements, winners, twibbons, leaderboard] =
+      await Promise.all([
+        getSchedules(),
+        getCompetitions(),
+        getAnnouncements(),
+        getWinners(),
+        getApprovedTwibbons(),
+        getChallengeLeaderboard(),
+      ]);
+
+    const activeCompetition =
+      competitions.find((c) => c.status === "berlangsung") ||
+      competitions.find((c) => c.status === "pendaftaran") ||
+      competitions[0] ||
+      null;
+
+    let liveScores: MonitorScoreItem[] = [];
+    if (activeCompetition?.id) {
+      try {
+        const { getCompetitionScoringRecap } = await import("@/app/actions/assessments");
+        const recapRes = await getCompetitionScoringRecap(activeCompetition.id);
+        if (recapRes.success && recapRes.recaps && recapRes.recaps.length > 0) {
+          liveScores = recapRes.recaps.map((r) => ({
+            rank: r.rank,
+            registrationId: r.registrationId,
+            participantName: r.participantName,
+            institution: r.institution,
+            finalAverageScore: r.finalScore,
+          }));
+        }
+      } catch (err) {
+        console.error("Error fetching live scores for monitor:", err);
+      }
+    }
+
+    const importantAnnouncement =
+      announcements.find((a) => a.isPinned || a.category === "penting") ||
+      announcements[0] ||
+      null;
+
+    let emergencyMessage: string | null = null;
+    try {
+      const { data: display } = await publicClient
+        .from("monitor_displays")
+        .select("emergency_message")
+        .eq("slug", "utama")
+        .maybeSingle();
+      emergencyMessage = display?.emergency_message || null;
+    } catch {
+      // ignore
+    }
+
+    let eventSettings = null;
+    try {
+      const { getEventSettings } = await import("@/app/actions/settings");
+      const settingsRes = await getEventSettings();
+      if (settingsRes.success && settingsRes.settings) {
+        eventSettings = {
+          eventName: settingsRes.settings.eventName,
+          eventTheme: settingsRes.settings.eventTheme,
+          eventYear: settingsRes.settings.eventYear,
+          eventDate: settingsRes.settings.eventDate,
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    return {
+      schedules,
+      competitions,
+      activeCompetition,
+      liveScores,
+      announcements,
+      importantAnnouncement,
+      winners,
+      twibbons,
+      leaderboard,
+      emergencyMessage,
+      eventSettings,
+    };
+  } catch (err) {
+    console.error("Supabase getMonitorData fallback:", err);
+    return {
+      schedules: SCHEDULES,
+      competitions: COMPETITIONS,
+      activeCompetition: COMPETITIONS[0] || null,
+      liveScores: [],
+      announcements: ANNOUNCEMENTS,
+      importantAnnouncement: ANNOUNCEMENTS[0] || null,
+      winners: [],
+      twibbons: [],
+      leaderboard: [],
+      emergencyMessage: null,
+      eventSettings: {
+        eventName: "Gebyar Bulan Bahasa dan Kebudayaan 2026",
+        eventTheme: "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
+        eventYear: "2026",
+        eventDate: "11 November 2026",
+      },
+    };
+  }
+}
