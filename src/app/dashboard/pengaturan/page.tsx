@@ -55,6 +55,10 @@ export default function DashboardPengaturanPage() {
 
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
+  // Penanda sudah ter-hydrate di client. Menjamin render pertama di client
+  // identik dengan HTML dari server sehingga menghindari hydration mismatch
+  // pada atribut seperti `disabled` yang bergantung state loading.
+  const [mounted, setMounted] = React.useState(false);
   const [feedback, setFeedback] = React.useState<{
     type: "success" | "error";
     message: string;
@@ -139,6 +143,10 @@ export default function DashboardPengaturanPage() {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  React.useEffect(() => {
+    setMounted(true);
   }, []);
 
   React.useEffect(() => {
@@ -351,10 +359,10 @@ export default function DashboardPengaturanPage() {
             variant="outline"
             size="sm"
             onClick={loadSettings}
-            disabled={isLoading || isSaving}
+            disabled={mounted && (isLoading || isSaving)}
             className="text-xs gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
           >
-            <RotateCcw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <RotateCcw className={`h-3.5 w-3.5 ${mounted && isLoading ? "animate-spin" : ""}`} />
             <span>Muat Ulang</span>
           </Button>
         </div>
@@ -377,7 +385,7 @@ export default function DashboardPengaturanPage() {
         )}
 
         <Card className="p-6 sm:p-8">
-          {isLoading ? (
+          {!mounted || isLoading ? (
             <div className="py-16 flex flex-col items-center justify-center gap-3 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin text-accent" />
               <p className="text-xs">Memuat konfigurasi dari database event_settings...</p>
