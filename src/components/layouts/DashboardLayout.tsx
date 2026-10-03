@@ -271,9 +271,20 @@ export function DashboardLayout({
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-border/80">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-accent">
-              <Layers className="h-5 w-5" />
-            </div>
+
+          {settings.logoImageUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={settings.logoImageUrl}
+                        alt={`Logo ${settings.eventShortName}`}
+                        className="h-9 w-9 rounded-xl object-contain bg-white shadow-xs ring-1 ring-border/50 transition-transform duration-200 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs transition-transform duration-200 group-hover:scale-105">
+                        <Layers className="h-5 w-5 text-accent" />
+                      </div>
+                    )}
+            
             {!collapsed && (
               <div className="flex flex-col truncate">
                 <span className="font-heading text-sm font-bold tracking-tight text-foreground truncate">
@@ -347,7 +358,7 @@ export function DashboardLayout({
         </div>
 
         {/* Sidebar Footer with Role Switcher Quick Links */}
-        <div className="p-3 border-t border-border bg-muted/20">
+        {/* <div className="p-3 border-t border-border bg-muted/20">
           {!collapsed ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
@@ -411,7 +422,7 @@ export function DashboardLayout({
               </Link>
             </div>
           )}
-        </div>
+        </div> */}
       </aside>
 
       {/* Main Content Area */}
