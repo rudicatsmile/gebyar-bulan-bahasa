@@ -38,6 +38,14 @@ export const metadata: Metadata = {
     "Lomba Pidato",
     "Penilaian Digital",
   ],
+  icons: {
+    icon: [
+      { url: "/icon.png", type: "image/png" },
+      { url: "/favicon.ico", type: "image/x-icon" },
+    ],
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 import { EventJsonLd } from "@/components/seo/JsonLd";

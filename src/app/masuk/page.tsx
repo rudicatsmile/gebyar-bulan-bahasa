@@ -6,15 +6,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, ShieldCheck, UserCheck, Tv, User, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = React.useState("acara@gebyarbulanbahasa.id");
-  const [password, setPassword] = React.useState("rahasia123");
-  const [selectedRole, setSelectedRole] = React.useState<string>("seksi_acara");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(() => {
     return null; // diisi oleh useEffect setelah mount
@@ -35,15 +34,6 @@ function LoginForm() {
     setIsLoading(true);
     setErrorMsg(null);
 
-    const fallbackUrl =
-      selectedRole === "seksi_acara"
-        ? "/dashboard"
-        : selectedRole === "juri"
-        ? "/juri"
-        : selectedRole === "media_center"
-        ? "/media"
-        : "/peserta";
-
     try {
       const supabase = createClient();
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -59,7 +49,7 @@ function LoginForm() {
           .eq("id", data.user.id)
           .maybeSingle();
 
-        const userRole = profile?.role || selectedRole;
+        const userRole = profile?.role || "peserta";
         const isActive = profile?.is_active ?? true;
 
         // Blokir akun nonaktif (kecuali super_admin agar tidak terjadi lockout sistem)
@@ -86,30 +76,14 @@ function LoginForm() {
       }
 
       if (error) {
-        // Jika akun demo resmi digunakan, berikan toleransi redirect mulus
-        const isOfficialDemo = [
-          "admin@gebyarbulanbahasa.id",
-          "acara@gebyarbulanbahasa.id",
-          "juri.siti@gebyarbulanbahasa.id",
-          "juri.bambang@gebyarbulanbahasa.id",
-          "media@gebyarbulanbahasa.id",
-          "ahmad.fauzan@sman1bdg.sch.id",
-        ].includes(email);
-
-        if (isOfficialDemo && password === "rahasia123") {
-          router.push(fallbackUrl);
-          return;
-        }
-
         setErrorMsg(
           error.message === "Invalid login credentials"
-            ? "Email atau kata sandi tidak cocok. Gunakan tombol akun uji coba di bawah untuk mengisi otomatis."
+            ? "Email atau kata sandi tidak cocok. Silakan periksa kembali."
             : error.message
         );
       }
     } catch {
-      // Fallback redirect jika offline
-      router.push(fallbackUrl);
+      setErrorMsg("Terjadi kesalahan saat mencoba masuk. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
     }
@@ -121,48 +95,6 @@ function LoginForm() {
       subtitle="Gunakan akun terdaftar untuk mengakses dashboard operasional atau panel peserta."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Quick Demo Role Picker */}
-        <div className="space-y-2 p-3.5 rounded-xl border border-accent/40 bg-accent/5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-accent font-bold flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Akun Resmi Uji Coba (Klik untuk Isi Cepat):</span>
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground">Pass: rahasia123</span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 text-xs">
-            {[
-              { id: "seksi_acara", label: "Seksi Acara (Admin)", icon: ShieldCheck, email: "acara@gebyarbulanbahasa.id" },
-              { id: "juri", label: "Dewan Juri", icon: UserCheck, email: "juri.siti@gebyarbulanbahasa.id" },
-              { id: "media_center", label: "Media Center", icon: Tv, email: "media@gebyarbulanbahasa.id" },
-              { id: "peserta", label: "Peserta Acara", icon: User, email: "ahmad.fauzan@sman1bdg.sch.id" },
-            ].map((r) => {
-              const Icon = r.icon;
-              const isSelected = selectedRole === r.id;
-              return (
-                <button
-                  type="button"
-                  key={r.id}
-                  onClick={() => {
-                    setSelectedRole(r.id);
-                    setEmail(r.email);
-                    setPassword("rahasia123");
-                    setErrorMsg(null);
-                  }}
-                  className={`p-2 rounded-lg border text-left flex items-center gap-1.5 transition-all cursor-pointer ${
-                    isSelected
-                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
-                      : "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0 text-accent" />
-                  <span className="truncate text-[11px]">{r.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {errorMsg && (
           <div className="p-3 rounded-lg border border-danger/30 bg-danger/10 text-danger text-xs">
             {errorMsg}

@@ -6,11 +6,23 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { TWIBBONS } from "@/lib/dummy-data";
+import { getAllTwibbons } from "@/lib/supabase/queries";
 import { Tv, Camera, PlaySquare, Megaphone, Sliders, ArrowRight, Radio } from "lucide-react";
 
 export default function DashboardMediaCenterPage() {
-  const pendingTwibbonCount = TWIBBONS.filter((t) => t.status === "menunggu").length;
+  const [pendingTwibbonCount, setPendingTwibbonCount] = React.useState(0);
+
+  React.useEffect(() => {
+    async function fetchCount() {
+      try {
+        const all = await getAllTwibbons();
+        setPendingTwibbonCount(all.filter((t) => t.status === "menunggu").length);
+      } catch (err) {
+        console.error("Gagal memuat jumlah twibbon:", err);
+      }
+    }
+    fetchCount();
+  }, []);
 
   return (
     <DashboardLayout role="media_center">

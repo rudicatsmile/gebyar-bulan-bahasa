@@ -18,6 +18,7 @@ import {
   type Stand,
   type Challenge,
   type Reward,
+  type TwibbonItem,
 } from "@/lib/dummy-data";
 
 type DbCompetition = Database["public"]["Tables"]["competitions"]["Row"];
@@ -513,12 +514,12 @@ export async function getWinners(): Promise<Winner[]> {
       .order("rank", { ascending: true });
 
     if (error || !data || data.length === 0) {
-      return WINNERS;
+      return [];
     }
     return (data as unknown as DbWinnerWithCompetition[]).map(formatWinner);
   } catch (err) {
-    console.error("Supabase getWinners fallback:", err);
-    return WINNERS;
+    console.error("Supabase getWinners error:", err);
+    return [];
   }
 }
 
@@ -567,16 +568,16 @@ export async function getRewards(): Promise<Reward[]> {
       .order("sort_order", { ascending: true });
 
     if (error || !data || data.length === 0) {
-      return REWARDS;
+      return [];
     }
     return data.map(formatReward);
   } catch (err) {
-    console.error("Supabase getRewards fallback:", err);
-    return REWARDS;
+    console.error("Supabase getRewards error:", err);
+    return [];
   }
 }
 
-export async function getApprovedTwibbons() {
+export async function getApprovedTwibbons(): Promise<TwibbonItem[]> {
   try {
     const { data, error } = await publicClient
       .from("twibbons")
@@ -586,11 +587,59 @@ export async function getApprovedTwibbons() {
       .order("created_at", { ascending: false });
 
     if (error || !data || data.length === 0) {
-      return TWIBBONS.filter((t) => t.status === "disetujui");
+      return [];
     }
-    return data;
+    return data.map((t) => ({
+      id: t.id,
+      uploaderName: t.uploader_name,
+      institution: t.uploader_institution || "Umum",
+      caption: t.caption || "",
+      imageUrl: t.image_url,
+      status: t.status as "disetujui" | "menunggu" | "ditolak",
+      isFeatured: t.is_featured,
+      likesCount: t.likes_count || 0,
+      uploadedAt: new Date(t.created_at).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    }));
   } catch {
-    return TWIBBONS.filter((t) => t.status === "disetujui");
+    return [];
+  }
+}
+
+export async function getAllTwibbons(): Promise<TwibbonItem[]> {
+  try {
+    const { data, error } = await publicClient
+      .from("twibbons")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return [];
+    }
+    return data.map((t) => ({
+      id: t.id,
+      uploaderName: t.uploader_name,
+      institution: t.uploader_institution || "Umum",
+      caption: t.caption || "",
+      imageUrl: t.image_url,
+      status: t.status as "disetujui" | "menunggu" | "ditolak",
+      isFeatured: t.is_featured,
+      likesCount: t.likes_count || 0,
+      uploadedAt: new Date(t.created_at).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    }));
+  } catch {
+    return [];
   }
 }
 

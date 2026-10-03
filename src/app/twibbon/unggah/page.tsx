@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Camera, Upload, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function UnggahTwibbonPage() {
+  const [eventName, setEventName] = React.useState("Gebyar Bulan Bahasa dan Kebudayaan");
+  const [eventYear, setEventYear] = React.useState("2026");
   const [fullName, setFullName] = React.useState("");
   const [institution, setInstitution] = React.useState("");
   const [regNumber, setRegNumber] = React.useState("");
@@ -19,6 +21,22 @@ export default function UnggahTwibbonPage() {
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
   const [submitted, setSubmitted] = React.useState(false);
   const [error, setError] = React.useState("");
+
+  React.useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && data?.settings) {
+          if (data.settings.eventName) {
+            setEventName(data.settings.eventName);
+          }
+          if (data.settings.eventYear) {
+            setEventYear(String(data.settings.eventYear));
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -70,7 +88,7 @@ export default function UnggahTwibbonPage() {
               Unggah Foto Twibbon
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Kirimkan foto diri terbaikmu dengan bingkai resmi GebyarBulanBahasa 2025. Foto akan melalui verifikasi tim Media Center sebelum tampil di galeri publik dan layar monitor venue.
+              Kirimkan foto diri terbaikmu dengan bingkai resmi {eventName} {eventYear}. Foto akan melalui verifikasi tim Media Center sebelum tampil di galeri publik dan layar monitor venue.
             </p>
           </div>
 
