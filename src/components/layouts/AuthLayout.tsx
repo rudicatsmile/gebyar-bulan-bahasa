@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Layers, Sparkles, BookOpen, HeartHandshake } from "lucide-react";
 import { useEventSettings } from "@/lib/hooks/useEventSettings";
+import { renderBrandText } from "@/components/ui/BrandText";
 
 export function AuthLayout({
   children,
@@ -25,7 +26,7 @@ export function AuthLayout({
               <Layers className="h-4 w-4" />
             </div>
             <span className="font-heading text-sm font-bold tracking-tight text-foreground">
-              Gebyar<span className="text-accent">BulanBahasa</span>
+              {renderBrandText(settings.eventShortName)}
             </span>
           </Link>
           <Link

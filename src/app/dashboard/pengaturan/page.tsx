@@ -21,6 +21,8 @@ import {
 
 export default function DashboardPengaturanPage() {
   const [eventName, setEventName] = React.useState("Gebyar Bulan Bahasa dan Kebudayaan");
+  const [eventShortName, setEventShortName] = React.useState("GebyarBulanBahasa");
+  const [eventOrganizer, setEventOrganizer] = React.useState("SMK DP 2 Jakarta");
   const [eventTheme, setEventTheme] = React.useState(
     "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia."
   );
@@ -65,6 +67,8 @@ export default function DashboardPengaturanPage() {
         const data = await res.json();
         if (data.success && data.settings) {
           setEventName(data.settings.eventName);
+          setEventShortName(data.settings.eventShortName || "GebyarBulanBahasa");
+          setEventOrganizer(data.settings.eventOrganizer || "SMK DP 2 Jakarta");
           setEventTheme(data.settings.eventTheme);
           setEventDate(data.settings.eventDate || "11 November 2026");
           setEventYear(data.settings.eventYear);
@@ -86,6 +90,8 @@ export default function DashboardPengaturanPage() {
       const actionRes = await getEventSettings();
       if (actionRes.success && actionRes.settings) {
         setEventName(actionRes.settings.eventName);
+        setEventShortName(actionRes.settings.eventShortName || "GebyarBulanBahasa");
+        setEventOrganizer(actionRes.settings.eventOrganizer || "SMK DP 2 Jakarta");
         setEventTheme(actionRes.settings.eventTheme);
         setEventDate(actionRes.settings.eventDate || "11 November 2026");
         setEventYear(actionRes.settings.eventYear);
@@ -105,6 +111,8 @@ export default function DashboardPengaturanPage() {
         const actionRes = await getEventSettings();
         if (actionRes.success && actionRes.settings) {
           setEventName(actionRes.settings.eventName);
+          setEventShortName(actionRes.settings.eventShortName || "GebyarBulanBahasa");
+          setEventOrganizer(actionRes.settings.eventOrganizer || "SMK DP 2 Jakarta");
           setEventTheme(actionRes.settings.eventTheme);
           setEventDate(actionRes.settings.eventDate || "11 November 2026");
           setEventYear(actionRes.settings.eventYear);
@@ -187,6 +195,8 @@ export default function DashboardPengaturanPage() {
 
     const payload = {
       eventName: eventName.trim(),
+      eventShortName: eventShortName.trim(),
+      eventOrganizer: eventOrganizer.trim(),
       eventTheme: eventTheme.trim(),
       eventDate: eventDate.trim(),
       eventYear: String(eventYear).trim(),
@@ -335,12 +345,32 @@ export default function DashboardPengaturanPage() {
                   <span>1. Identitas & Tema Resmi Acara</span>
                   <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings (key: general)</span>
                 </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    name="eventName"
+                    label="Nama Acara *"
+                    value={eventName}
+                    onChange={(e) => setEventName(e.target.value)}
+                    placeholder="Contoh: Gebyar Bulan Bahasa dan Kebudayaan"
+                    required
+                  />
+                  <Input
+                    name="eventShortName"
+                    label="Nama Singkat / Brand Logo *"
+                    value={eventShortName}
+                    onChange={(e) => setEventShortName(e.target.value)}
+                    placeholder="Contoh: GebyarBulanBahasa atau Gebyar Bulan Bahasa"
+                    helperText="Tampil pada logo header, footer, sidebar dashboard, & monitor TV."
+                    required
+                  />
+                </div>
                 <Input
-                  name="eventName"
-                  label="Nama Acara *"
-                  value={eventName}
-                  onChange={(e) => setEventName(e.target.value)}
-                  placeholder="Contoh: Gebyar Bulan Bahasa dan Kebudayaan"
+                  name="eventOrganizer"
+                  label="Penyelenggara / Instansi *"
+                  value={eventOrganizer}
+                  onChange={(e) => setEventOrganizer(e.target.value)}
+                  placeholder="Contoh: SMK DP 2 Jakarta"
+                  helperText="Tampil pada header navbar di bawah nama logo acara."
                   required
                 />
                 <Textarea

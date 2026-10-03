@@ -8,6 +8,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface EventSettingsMap {
   eventName: string;
+  eventShortName: string;
+  eventOrganizer: string;
   eventTheme: string;
   eventDate: string;
   eventYear: string;
@@ -24,6 +26,8 @@ export interface EventSettingsMap {
 
 const SaveEventSettingsSchema = z.object({
   eventName: z.string().min(3, "Nama acara minimal 3 karakter"),
+  eventShortName: z.string().optional().default("GebyarBulanBahasa"),
+  eventOrganizer: z.string().optional().default("SMK DP 2 Jakarta"),
   eventTheme: z.string().min(5, "Tema acara minimal 5 karakter"),
   eventDate: z.string().min(2, "Tanggal acara minimal 2 karakter").default("11 November 2026"),
   eventYear: z.string().regex(/^\d{4}$/, "Tahun harus berupa 4 digit angka"),
@@ -66,6 +70,8 @@ export async function getEventSettings(): Promise<{
 
     const settings: EventSettingsMap = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
+      eventShortName: general.shortName || "GebyarBulanBahasa",
+      eventOrganizer: general.organizer || "SMK DP 2 Jakarta",
       eventTheme: general.theme || "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
       eventDate: general.date || `11 November ${general.year || "2026"}`,
       eventYear: String(general.year || "2026"),
@@ -106,6 +112,8 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
 
   const {
     eventName,
+    eventShortName,
+    eventOrganizer,
     eventTheme,
     eventDate,
     eventYear,
@@ -141,6 +149,8 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
     const updatedGeneral = {
       ...currentGeneral,
       name: eventName.trim(),
+      shortName: (eventShortName || "GebyarBulanBahasa").trim(),
+      organizer: (eventOrganizer || "SMK DP 2 Jakarta").trim(),
       theme: eventTheme.trim(),
       date: (eventDate || "11 November 2026").trim(),
       year: Number(eventYear),

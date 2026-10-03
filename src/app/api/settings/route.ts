@@ -24,6 +24,8 @@ export async function GET() {
 
     const settings = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
+      eventShortName: general.shortName || "GebyarBulanBahasa",
+      eventOrganizer: general.organizer || "SMK DP 2 Jakarta",
       eventTheme: general.theme || "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
       eventDate: general.date || `11 November ${general.year || "2026"}`,
       eventYear: String(general.year || "2026"),
@@ -53,6 +55,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       eventName,
+      eventShortName,
+      eventOrganizer,
       eventTheme,
       eventDate,
       eventYear,
@@ -94,6 +98,8 @@ export async function POST(request: Request) {
     const updatedGeneral = {
       ...currentGeneral,
       name: String(eventName).trim(),
+      shortName: String(eventShortName || "GebyarBulanBahasa").trim(),
+      organizer: String(eventOrganizer || "SMK DP 2 Jakarta").trim(),
       theme: String(eventTheme).trim(),
       date: String(eventDate || "11 November 2026").trim(),
       year: Number(eventYear) || 2026,

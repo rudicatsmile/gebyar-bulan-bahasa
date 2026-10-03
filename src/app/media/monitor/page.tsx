@@ -8,8 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tv, Play, Radio, ExternalLink, RefreshCw, AlertTriangle, Layers } from "lucide-react";
+import { useEventSettings } from "@/lib/hooks/useEventSettings";
+import { renderBrandText } from "@/components/ui/BrandText";
 
 export default function MediaMonitorControlPage() {
+  const { settings } = useEventSettings();
   const [currentModule, setCurrentModule] = React.useState("Jadwal & Agenda Berlangsung (LIVE)");
   const [rotationSeconds, setRotationSeconds] = React.useState("15");
   const [emergencyAlert, setEmergencyAlert] = React.useState("");
@@ -77,7 +80,7 @@ export default function MediaMonitorControlPage() {
                     G
                   </div>
                   <span className="font-heading text-sm font-bold text-white">
-                    Gebyar<span className="text-accent">BulanBahasa</span>
+                    {renderBrandText(settings.eventShortName)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 font-mono text-xs text-accent">

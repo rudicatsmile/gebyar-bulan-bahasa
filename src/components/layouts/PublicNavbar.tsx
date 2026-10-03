@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { useEventSettings } from "@/lib/hooks/useEventSettings";
+import { renderBrandText } from "@/components/ui/BrandText";
 
 interface NavLinkItem {
   href: string;
@@ -34,7 +35,7 @@ interface NavLinkItem {
 }
 
 const NAV_LINKS: NavLinkItem[] = [
-  { href: "/", label: "Beranda", icon: Home },
+  // { href: "/", label: "Beranda", icon: Home },
   { href: "/lomba", label: "Lomba", icon: Award },
   { href: "/jadwal", label: "Jadwal", icon: Calendar },
   {
@@ -84,14 +85,14 @@ export function PublicNavbar() {
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
               <span className="font-heading text-base font-bold tracking-tight text-foreground leading-none">
-                Gebyar<span className="text-accent">BulanBahasa</span>
+                {renderBrandText(settings.eventShortName)}
               </span>
               <span className="hidden sm:inline-block rounded-full bg-accent/15 px-1.5 py-0.5 text-[9px] font-semibold text-accent leading-none border border-accent/30">
-                2026
+                {settings.eventYear}
               </span>
             </div>
             <span className="text-[10px] tracking-wider text-muted-foreground uppercase mt-0.5 font-medium">
-              SMK DP 2 Jakarta
+              {settings.eventOrganizer}
             </span>
           </div>
         </Link>

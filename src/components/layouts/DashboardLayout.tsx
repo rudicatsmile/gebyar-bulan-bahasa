@@ -45,6 +45,8 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { useEventSettings } from "@/lib/hooks/useEventSettings";
+import { renderBrandText } from "@/components/ui/BrandText";
 
 type RoleType = "seksi_acara" | "juri" | "media_center" | "peserta";
 
@@ -124,6 +126,7 @@ export function DashboardLayout({
   role: RoleType;
   participantPoints?: number;
 }) {
+  const { settings } = useEventSettings();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -274,7 +277,7 @@ export function DashboardLayout({
             {!collapsed && (
               <div className="flex flex-col truncate">
                 <span className="font-heading text-sm font-bold tracking-tight text-foreground truncate">
-                  Gebyar<span className="text-accent">BulanBahasa</span>
+                  {renderBrandText(settings.eventShortName)}
                 </span>
                 <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
                   {roleLabel}
@@ -429,8 +432,8 @@ export function DashboardLayout({
             </button>
 
             <div className="flex items-center gap-2 text-xs">
-              <Link href="/" className="text-muted-foreground hover:text-foreground">
-                GebyarBulanBahasa
+              <Link href="/" className="text-muted-foreground hover:text-foreground font-heading font-bold">
+                {renderBrandText(settings.eventShortName)}
               </Link>
               <span className="text-muted-foreground">/</span>
               <Badge variant={roleBadgeVariant} className="text-[10px]">
@@ -485,7 +488,7 @@ export function DashboardLayout({
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-accent">
                   <Layers className="h-4 w-4" />
                 </div>
-                <span className="font-heading text-sm font-bold">GebyarBulanBahasa</span>
+                <span className="font-heading text-sm font-bold">{renderBrandText(settings.eventShortName)}</span>
               </div>
               <button
                 onClick={() => setMobileOpen(false)}

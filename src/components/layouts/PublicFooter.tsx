@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Layers } from "lucide-react";
 import { useEventSettings } from "@/lib/hooks/useEventSettings";
+import { renderBrandText } from "@/components/ui/BrandText";
 
 export function PublicFooter() {
   const { settings } = useEventSettings();
@@ -18,7 +19,7 @@ export function PublicFooter() {
                 <Layers className="h-4 w-4" />
               </div>
               <span className="font-heading text-lg font-bold tracking-tight text-foreground">
-                Gebyar<span className="text-accent">BulanBahasa</span>
+                {renderBrandText(settings.eventShortName)}
               </span>
             </div>
             <p className="text-xs text-muted-foreground max-w-md leading-relaxed">
