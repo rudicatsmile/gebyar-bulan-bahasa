@@ -17,8 +17,152 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { JUDGES, Judge, COMPETITIONS } from "@/lib/dummy-data";
-import { UserCheck, UserPlus, ShieldCheck, Mail, Sliders, Loader2, Pencil } from "lucide-react";
+import { UserCheck, UserPlus, ShieldCheck, Mail, Sliders, Loader2, Pencil, Upload, X, ImageIcon, Camera } from "lucide-react";
 import { getJudgeAssignmentData, createJudgeAccount, updateJudgeAccount } from "@/app/actions/competitions";
+import { uploadJudgePhotoAction } from "@/app/actions/settings";
+
+/** Sub-komponen: area upload foto juri */
+function JudgePhotoUpload({
+  currentUrl,
+  onUploaded,
+  label = "Foto Profil Juri",
+}: {
+  currentUrl: string;
+  onUploaded: (url: string) => void;
+  label?: string;
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [preview, setPreview] = React.useState(currentUrl);
+
+  // Sync preview bila currentUrl berubah dari luar (misal: reset form)
+  React.useEffect(() => {
+    setPreview(currentUrl);
+  }, [currentUrl]);
+
+  const handleFile = async (file: File) => {
+    setError("");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await uploadJudgePhotoAction(fd);
+      if (res.success && res.url) {
+        setPreview(res.url);
+        onUploaded(res.url);
+      } else {
+        setError(res.error || "Gagal mengunggah foto.");
+      }
+    } catch {
+      setError("Terjadi kesalahan saat mengunggah foto.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="text-xs font-semibold text-foreground block">{label}</label>
+
+      {preview ? (
+        /* Preview foto yang sudah diupload / existing */
+        <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
+          <img
+            src={preview}
+            alt="Foto Juri"
+            className="h-16 w-16 rounded-full object-cover border-2 border-accent/40 shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-foreground">Foto terpasang</p>
+            <p className="text-[11px] text-muted-foreground truncate">{preview}</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-[11px] h-7 gap-1 cursor-pointer"
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Camera className="h-3 w-3" />
+              )}
+              Ganti
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-[11px] h-7 text-muted-foreground hover:text-danger cursor-pointer"
+              onClick={() => {
+                setPreview("");
+                onUploaded("");
+              }}
+            >
+              <X className="h-3 w-3 mr-0.5" />
+              Hapus
+            </Button>
+          </div>
+        </div>
+      ) : (
+        /* Drop zone / tombol upload */
+        <div
+          onDrop={handleDrop}
+          onDragOver={(e) => e.preventDefault()}
+          onClick={() => inputRef.current?.click()}
+          className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-border hover:border-accent/60 bg-muted/30 hover:bg-accent/5 transition-colors cursor-pointer"
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="h-7 w-7 text-accent animate-spin" />
+              <span className="text-xs text-muted-foreground">Mengunggah foto...</span>
+            </>
+          ) : (
+            <>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 border border-accent/20">
+                <Upload className="h-5 w-5 text-accent" />
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-semibold text-foreground">Klik atau seret foto ke sini</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">JPG, PNG, WEBP · Maks 3MB</p>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="text-[11px] text-danger flex items-center gap-1">
+          <X className="h-3 w-3" />{error}
+        </p>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/jpg,image/png,image/webp"
+        className="hidden"
+        onChange={handleInputChange}
+      />
+    </div>
+  );
+}
 
 export default function DashboardJuriPage() {
   const [loading, setLoading] = React.useState(true);
@@ -31,6 +175,7 @@ export default function DashboardJuriPage() {
   const [title, setTitle] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [expertise, setExpertise] = React.useState("Sastra & Puisi");
+  const [avatarUrl, setAvatarUrl] = React.useState("");
 
   // Form states (Edit Juri)
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
@@ -39,6 +184,7 @@ export default function DashboardJuriPage() {
   const [editTitle, setEditTitle] = React.useState("");
   const [editEmail, setEditEmail] = React.useState("");
   const [editExpertise, setEditExpertise] = React.useState("Sastra & Puisi");
+  const [editAvatarUrl, setEditAvatarUrl] = React.useState("");
   const [isUpdating, setIsUpdating] = React.useState(false);
 
   const loadJudges = React.useCallback(async () => {
@@ -89,6 +235,7 @@ export default function DashboardJuriPage() {
         email,
         expertise,
         title,
+        avatarUrl: avatarUrl || undefined,
       });
 
       if (res.success) {
@@ -98,6 +245,7 @@ export default function DashboardJuriPage() {
         setTitle("");
         setEmail("");
         setExpertise("Sastra & Puisi");
+        setAvatarUrl("");
       } else {
         alert(res.error || "Gagal membuat akun dewan juri.");
       }
@@ -114,6 +262,7 @@ export default function DashboardJuriPage() {
     setEditTitle(j.title || "");
     setEditEmail(j.email || "");
     setEditExpertise(j.expertise || "Sastra & Puisi");
+    setEditAvatarUrl(j.avatarUrl || "");
     setEditDialogOpen(true);
   };
 
@@ -128,6 +277,7 @@ export default function DashboardJuriPage() {
         email: editEmail,
         title: editTitle,
         expertise: editExpertise,
+        avatarUrl: editAvatarUrl,
       });
 
       if (res.success) {
@@ -190,11 +340,17 @@ export default function DashboardJuriPage() {
                   <TableRow key={j.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <img
-                          src={j.avatarUrl}
-                          alt={j.fullName}
-                          className="h-9 w-9 rounded-full object-cover border border-border shrink-0"
-                        />
+                        {j.avatarUrl ? (
+                          <img
+                            src={j.avatarUrl}
+                            alt={j.fullName}
+                            className="h-9 w-9 rounded-full object-cover border border-border shrink-0"
+                          />
+                        ) : (
+                          <div className="h-9 w-9 rounded-full bg-accent/15 border border-accent/20 flex items-center justify-center shrink-0">
+                            <UserCheck className="h-4 w-4 text-accent" />
+                          </div>
+                        )}
                         <div>
                           <strong className="text-foreground text-xs sm:text-sm block">
                             {j.fullName}
@@ -254,6 +410,13 @@ export default function DashboardJuriPage() {
                 Masukkan biodata, bidang keahlian, dan alamat email aktif untuk pembuatan akun penilai digital.
               </DialogDescription>
             </DialogHeader>
+
+            {/* Upload Foto */}
+            <JudgePhotoUpload
+              currentUrl={avatarUrl}
+              onUploaded={setAvatarUrl}
+              label="Foto Profil Juri (Opsional)"
+            />
 
             <Input
               label="Nama Lengkap Beserta Gelar *"
@@ -322,9 +485,16 @@ export default function DashboardJuriPage() {
             <DialogHeader>
               <DialogTitle>Edit Profil Dewan Juri</DialogTitle>
               <DialogDescription>
-                Perbarui biodata, bidang keahlian, dan jabatan akun dewan juri.
+                Perbarui biodata, foto, bidang keahlian, dan jabatan akun dewan juri.
               </DialogDescription>
             </DialogHeader>
+
+            {/* Upload / Ganti Foto */}
+            <JudgePhotoUpload
+              currentUrl={editAvatarUrl}
+              onUploaded={setEditAvatarUrl}
+              label="Foto Profil Juri"
+            />
 
             <Input
               label="Nama Lengkap Beserta Gelar *"

@@ -338,6 +338,7 @@ export async function createJudgeAccount(data: {
   expertise: string;
   title?: string;
   phone?: string;
+  avatarUrl?: string;
 }): Promise<{ success: boolean; userId?: string; error?: string }> {
   try {
     const supabase = createAdminClient();
@@ -381,6 +382,7 @@ export async function createJudgeAccount(data: {
       institution: data.expertise,
       nickname: data.title || null,
       phone: data.phone || null,
+      avatar_url: data.avatarUrl || null,
       is_active: true,
       updated_at: new Date().toISOString(),
     });
@@ -407,21 +409,28 @@ export async function updateJudgeAccount(data: {
   expertise: string;
   title?: string;
   phone?: string;
+  avatarUrl?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createAdminClient();
 
     // 1. Update public.profiles
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        full_name: data.fullName,
-        email: data.email,
-        institution: data.expertise,
-        nickname: data.title || null,
-        phone: data.phone || null,
-        updated_at: new Date().toISOString(),
-      })
+    const updatePayload: Record<string, any> = {
+      full_name: data.fullName,
+      email: data.email,
+      institution: data.expertise,
+      nickname: data.title || null,
+      phone: data.phone || null,
+      updated_at: new Date().toISOString(),
+    };
+    // Hanya update avatar_url jika dikirim (tidak undefined) agar tidak menimpa foto lama
+    if (data.avatarUrl !== undefined) {
+      updatePayload.avatar_url = data.avatarUrl || null;
+    }
+
+    const { error: profileError } = await (supabase
+      .from("profiles") as any)
+      .update(updatePayload)
       .eq("id", data.judgeId);
 
     if (profileError) {
@@ -452,6 +461,7 @@ export async function updateJudgeAccount(data: {
     };
   }
 }
+
 
 export async function getCompetitionMonitoringData(slug: string): Promise<{
   success: boolean;

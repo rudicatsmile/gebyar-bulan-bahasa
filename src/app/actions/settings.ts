@@ -445,3 +445,77 @@ export async function uploadLogoImageAction(formData: FormData): Promise<{
     };
   }
 }
+/**
+ * Server action untuk mengunggah foto profil dewan juri ke Supabase Storage
+ * (folder: judges/) dengan fallback penyimpanan lokal (public/uploads/judges/).
+ */
+export async function uploadJudgePhotoAction(formData: FormData): Promise<{
+  success: boolean;
+  url?: string;
+  error?: string;
+}> {
+  try {
+    const file = formData.get("file") as File | null;
+    if (!file || typeof file === "string") {
+      return { success: false, error: "Berkas foto juri belum dipilih." };
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      return { success: false, error: "Ukuran foto melebihi batas 3MB." };
+    }
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    if (!validTypes.includes(file.type)) {
+      return { success: false, error: "Format foto harus berupa JPG, PNG, atau WEBP." };
+    }
+
+    const ext = file.name.split(".").pop() || "jpg";
+    const uniqueFileName = `judge-${Date.now()}.${ext}`;
+    const storagePath = `judges/${uniqueFileName}`;
+
+    // 1. Coba upload ke Supabase Storage
+    try {
+      const supabase = createAdminClient();
+      const bucketName = process.env.NEXT_PUBLIC_BUCKET_MEDIA || "media-acara";
+
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (!error && data) {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from(bucketName).getPublicUrl(data.path);
+        return { success: true, url: publicUrl };
+      }
+    } catch (e) {
+      console.warn("Notice: Supabase storage upload judge photo fallback to local:", e);
+    }
+
+    // 2. Fallback: Simpan ke public/uploads/judges/
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "judges");
+      await fs.mkdir(uploadDir, { recursive: true });
+      const localFilePath = path.join(uploadDir, uniqueFileName);
+      const arrayBuffer = await file.arrayBuffer();
+      await fs.writeFile(localFilePath, Buffer.from(arrayBuffer));
+      return { success: true, url: `/uploads/judges/${uniqueFileName}` };
+    } catch (fsErr) {
+      return {
+        success: false,
+        error: fsErr instanceof Error ? fsErr.message : "Gagal menyimpan foto juri ke server.",
+      };
+    }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal mengunggah foto juri.",
+    };
+  }
+}
