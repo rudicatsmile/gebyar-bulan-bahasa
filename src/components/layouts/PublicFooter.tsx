@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Layers } from "lucide-react";
+import { useEventSettings } from "@/lib/hooks/useEventSettings";
 
 export function PublicFooter() {
+  const { settings } = useEventSettings();
+
   return (
     <footer className="border-t border-border bg-card mt-auto">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -17,11 +22,11 @@ export function PublicFooter() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground max-w-md leading-relaxed">
-              Sistem Penilaian Digital & Dashboard Operasional Acara &ldquo;Gebyar Bulan Bahasa dan Kebudayaan&rdquo; memperingati Hari Sumpah Pemuda.
+              Sistem Penilaian Digital &amp; Dashboard Operasional Acara &ldquo;{settings.eventName}&rdquo;.
             </p>
             <div className="p-3.5 rounded-lg bg-muted/60 border border-border max-w-md">
               <p className="text-xs italic text-foreground font-medium">
-                &ldquo;Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.&rdquo;
+                &ldquo;{settings.eventTheme}&rdquo;
               </p>
             </div>
           </div>
@@ -106,7 +111,7 @@ export function PublicFooter() {
         </div>
 
         <div className="mt-8 pt-8 border-t border-border/60 flex flex-col sm:flex-row items-center justify-between text-xs text-muted-foreground gap-4">
-          <p>© 2026 GebyarBulanBahasa. Panitia Peringatan Hari Sumpah Pemuda.</p>
+          <p>© {settings.eventYear} GebyarBulanBahasa. Panitia {settings.eventName}.</p>
           <div className="flex items-center gap-4">
             <Link href="/faq" className="hover:text-foreground transition-colors">
               FAQ

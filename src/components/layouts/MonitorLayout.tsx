@@ -100,7 +100,7 @@ export function MonitorLayout({
               </span>
             </div>
             <p className="text-xs text-white/60 tracking-wider uppercase mt-1">
-              Peringatan Hari Sumpah Pemuda {eventYear} • Tema: {eventTheme}
+              {eventName} {eventYear} • Tema: {eventTheme}
             </p>
           </div>
         </div>

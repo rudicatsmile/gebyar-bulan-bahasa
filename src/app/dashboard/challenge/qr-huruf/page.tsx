@@ -545,7 +545,7 @@ export default function DashboardQrHurufPage() {
 
             <Input
               label="Judul Tantangan *"
-              placeholder="Contoh: Jelajah Aksara Sumpah Pemuda"
+              placeholder="Contoh: Jelajah Aksara"
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}
               required
@@ -553,7 +553,7 @@ export default function DashboardQrHurufPage() {
 
             <Input
               label="Kalimat / Kata Target (Jawaban Benar) *"
-              placeholder="Contoh: SUMPAH PEMUDA atau BULAN BAHASA"
+              placeholder="Contoh: GEBYAR BAHASA atau BULAN BAHASA"
               value={formTargetPhrase}
               onChange={(e) => setFormTargetPhrase(e.target.value)}
               helperText={`Akan dipecah menjadi ${cleanPhraseLetters.length} huruf QR (${cleanPhraseLetters})`}

@@ -24,7 +24,7 @@ const MODULES = [
   { key: "jadwal", title: "Jadwal & Agenda Panggung Hari Ini" },
   { key: "papan_skor", title: "Papan Skor Sementara (5 Besar Lomba Aktif)" },
   { key: "pengumuman", title: "Warta Resmi & Arahan Panitia" },
-  { key: "pemenang", title: "Hasil Juara Resmi Peringatan Sumpah Pemuda" },
+  { key: "pemenang", title: "Hasil Juara Resmi Peringatan Hari Besar" },
   { key: "twibbon", title: "Semarak Twibbon Peserta & Pengunjung" },
   { key: "leaderboard", title: "Klasemen Poin Challenge Keliling Stand" },
 ];
@@ -99,11 +99,10 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
                   return (
                     <div
                       key={sch.id}
-                      className={`p-6 sm:p-8 rounded-2xl border transition-all flex flex-col justify-between ${
-                        isLive
+                      className={`p-6 sm:p-8 rounded-2xl border transition-all flex flex-col justify-between ${isLive
                           ? "border-danger bg-danger/15 shadow-lg ring-2 ring-danger/30"
                           : "border-white/10 bg-white/5"
-                      }`}
+                        }`}
                     >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -170,19 +169,17 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
                 {liveScores.map((sc, idx) => (
                   <div
                     key={sc.registrationId || idx}
-                    className={`p-5 sm:p-6 rounded-2xl border flex items-center justify-between gap-4 transition-all ${
-                      sc.rank === 1
+                    className={`p-5 sm:p-6 rounded-2xl border flex items-center justify-between gap-4 transition-all ${sc.rank === 1
                         ? "border-accent bg-accent/15"
                         : "border-white/10 bg-white/5"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-6">
                       <span
-                        className={`h-12 w-12 rounded-xl flex items-center justify-center font-mono font-black text-xl sm:text-2xl ${
-                          sc.rank === 1
+                        className={`h-12 w-12 rounded-xl flex items-center justify-center font-mono font-black text-xl sm:text-2xl ${sc.rank === 1
                             ? "bg-accent text-black shadow-xs"
                             : "bg-white/10 text-white"
-                        }`}
+                          }`}
                       >
                         #{sc.rank || idx + 1}
                       </span>

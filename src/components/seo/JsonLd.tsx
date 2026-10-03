@@ -5,10 +5,10 @@ export function EventJsonLd() {
   const eventSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
-    name: "Gebyar Bulan Bahasa dan Kebudayaan 2025",
-    alternateName: "Peringatan Hari Sumpah Pemuda",
+    name: "Gebyar Bulan Bahasa dan Kebudayaan 2026",
+    alternateName: "Gebyar Bulan Bahasa dan Kebudayaan",
     description:
-      "Sistem penilaian digital dan pameran kebudayaan dalam rangka Peringatan Hari Sumpah Pemuda bertema 'Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.'",
+      "Sistem penilaian digital dan pameran kebudayaan Gebyar Bulan Bahasa dan Kebudayaan bertema 'Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.'",
     startDate: "2025-10-27T08:00:00+07:00",
     endDate: "2025-10-29T18:00:00+07:00",
     eventStatus: "https://schema.org/EventScheduled",

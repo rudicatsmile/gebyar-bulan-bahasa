@@ -1003,7 +1003,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 </p>
                 <textarea
                   rows={3}
-                  placeholder={"Contoh:\nUpacara Protokoler Peringatan Hari Sumpah Pemuda Tingkat Nasional\nSeminar Nasional Bahasa dan Diplomasi Budaya Nusantara\nMalam Penganugerahan Juara & Resepsi Kebudayaan"}
+                  placeholder={"Contoh:\nUpacara Protokoler Peringatan Hari Besar Tingkat Nasional\nSeminar Nasional Bahasa dan Diplomasi Budaya Nusantara\nMalam Penganugerahan Juara & Resepsi Kebudayaan"}
                   value={addEventFormats}
                   onChange={(e) => setAddEventFormats(e.target.value)}
                   className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans leading-relaxed"
@@ -1272,7 +1272,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 </p>
                 <textarea
                   rows={3}
-                  placeholder={"Contoh:\nUpacara Protokoler Peringatan Hari Sumpah Pemuda Tingkat Nasional\nSeminar Nasional Bahasa dan Diplomasi Budaya Nusantara\nMalam Penganugerahan Juara & Resepsi Kebudayaan"}
+                  placeholder={"Contoh:\nUpacara Protokoler Peringatan Hari Besar Tingkat Nasional\nSeminar Nasional Bahasa dan Diplomasi Budaya Nusantara\nMalam Penganugerahan Juara & Resepsi Kebudayaan"}
                   value={editEventFormats}
                   onChange={(e) => setEditEventFormats(e.target.value)}
                   className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans leading-relaxed"

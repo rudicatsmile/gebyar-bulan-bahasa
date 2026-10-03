@@ -61,7 +61,14 @@ const SUPPORT_DIVISIONS = [
   "Keamanan",
 ];
 
-export default function TentangPage() {
+import { getEventSettings } from "@/app/actions/settings";
+
+export default async function TentangPage() {
+  const { settings } = await getEventSettings();
+  const eventName = settings?.eventName || "Gebyar Bulan Bahasa dan Kebudayaan";
+  const eventYear = settings?.eventYear || "2026";
+  const eventTheme = settings?.eventTheme || "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.";
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <PublicNavbar />
@@ -74,10 +81,10 @@ export default function TentangPage() {
               Profil & Identitas Acara
             </Badge>
             <h1 className="font-heading text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
-              Gebyar Bulan Bahasa dan Kebudayaan 2026
+              {eventName} {eventYear}
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Peringatan Hari Sumpah Pemuda bertema &ldquo;Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.&rdquo;
+              {eventName} bertema &ldquo;{eventTheme}&rdquo;
             </p>
           </div>
 

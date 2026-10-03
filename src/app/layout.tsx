@@ -29,10 +29,10 @@ export const metadata: Metadata = {
     default: "GebyarBulanBahasa — Sistem Penilaian Digital & Dashboard Acara",
   },
   description:
-    "Sistem Penilaian Digital dan Dashboard Operasional Acara Gebyar Bulan Bahasa dan Kebudayaan (Peringatan Hari Sumpah Pemuda). Tema: Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
+    "Sistem Penilaian Digital dan Dashboard Operasional Acara Gebyar Bulan Bahasa dan Kebudayaan. Tema: Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
   keywords: [
     "Gebyar Bulan Bahasa",
-    "Sumpah Pemuda",
+    "GebyarBulanBahasa",
     "Lomba Puisi",
     "Lomba Film Pendek",
     "Lomba Pidato",

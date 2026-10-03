@@ -48,14 +48,15 @@ export async function sendEmail({
 }
 
 // Template: Kredensial Juri Baru
-export function getJudgeCredentialsEmailHtml(judgeName: string, email: string, temporaryPass: string) {
+export function getJudgeCredentialsEmailHtml(judgeName: string, email: string, temporaryPass: string, eventName?: string) {
+  const event = eventName || "Gebyar Bulan Bahasa & Kebudayaan";
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e5e5; border-radius: 12px;">
       <h2 style="color: #1c202e; margin-bottom: 8px;">Undangan & Kredensial Dewan Juri</h2>
-      <p style="color: #666; font-size: 14px;">Gebyar Bulan Bahasa & Kebudayaan 2025</p>
+      <p style="color: #666; font-size: 14px;">${event}</p>
       <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
       <p>Yth. <strong>${judgeName}</strong>,</p>
-      <p>Anda telah ditugaskan sebagai Dewan Juri pada peringatan Hari Sumpah Pemuda. Berikut adalah kredensial akun penilaian digital Anda:</p>
+      <p>Anda telah ditugaskan sebagai Dewan Juri pada <strong>${event}</strong>. Berikut adalah kredensial akun penilaian digital Anda:</p>
       <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 14px; margin: 16px 0;">
         <p style="margin: 4px 0;"><strong>Email:</strong> ${email}</p>
         <p style="margin: 4px 0;"><strong>Password Sementara:</strong> ${temporaryPass}</p>
@@ -67,7 +68,8 @@ export function getJudgeCredentialsEmailHtml(judgeName: string, email: string, t
 }
 
 // Template: Broadcast Pengumuman Penting
-export function getBroadcastAnnouncementEmailHtml(title: string, body: string, publishedAt: string) {
+export function getBroadcastAnnouncementEmailHtml(title: string, body: string, publishedAt: string, eventName?: string) {
+  const event = eventName || "Gebyar Bulan Bahasa & Kebudayaan";
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e5e5e5; border-radius: 12px;">
       <span style="background: #e11d48; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase;">PENGUMUMAN RESMI</span>
@@ -76,7 +78,7 @@ export function getBroadcastAnnouncementEmailHtml(title: string, body: string, p
       <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
       <div style="color: #333; line-height: 1.6; font-size: 14px; white-space: pre-wrap;">${body}</div>
       <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px; color: #888;">
-        Seksi Acara & Operasional Gebyar Bulan Bahasa 2025
+        Seksi Acara & Operasional ${event}
       </div>
     </div>
   `;

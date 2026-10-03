@@ -28,7 +28,7 @@ interface MediaContent {
 }
 
 const INITIAL_MEDIA: MediaContent[] = [
-  { id: "med-1", title: "Poster Resmi Gebyar Bulan Bahasa 2025", contentType: "poster", excerpt: "Desain visual tema Sumpah Pemuda resolusi Full HD untuk media sosial.", publishedAt: "20 Okt 2025" },
+  { id: "med-1", title: "Poster Resmi Gebyar Bulan Bahasa 2025", contentType: "poster", excerpt: "Desain visual tema Peringatan Hari Besar resolusi Full HD untuk media sosial.", publishedAt: "20 Okt 2025" },
   { id: "med-2", title: "Rilis Berita Pembukaan Hari Pertama & Palang Pintu", contentType: "berita", excerpt: "Kemeriahan adu pantun Betawi dan pembukaan resmi oleh panitia pelaksana.", publishedAt: "26 Okt 2025" },
   { id: "med-3", title: "Video Teaser 8 Lomba Nusantara (Reels)", contentType: "reels", excerpt: "Kompilasi kilasan persiapan lomba puisi, film pendek, monolog, dan tari.", publishedAt: "24 Okt 2025" },
 ];

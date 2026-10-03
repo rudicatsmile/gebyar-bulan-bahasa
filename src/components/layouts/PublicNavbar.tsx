@@ -23,6 +23,8 @@ import {
   LogIn,
 } from "lucide-react";
 
+import { useEventSettings } from "@/lib/hooks/useEventSettings";
+
 interface NavLinkItem {
   href: string;
   label: string;
@@ -52,6 +54,7 @@ const NAV_LINKS: NavLinkItem[] = [
 export function PublicNavbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const { settings } = useEventSettings();
 
   // Auto-close menu saat halaman berpindah
   React.useEffect(() => {
@@ -289,7 +292,7 @@ export function PublicNavbar() {
                 </Link>
 
                 <div className="text-center pt-2 text-[11px] text-muted-foreground font-medium">
-                  Peringatan Hari Sumpah Pemuda 2026 • SMK DP 2 Jakarta
+                  {settings.eventName} {settings.eventYear}
                 </div>
               </div>
             </div>

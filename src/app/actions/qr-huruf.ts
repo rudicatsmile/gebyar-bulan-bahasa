@@ -68,7 +68,7 @@ const DEFAULT_CODES: QrLetterCode[] = [
   { id: "code-06", challengeId: DEFAULT_CHALLENGE_ID, letter: "B", letterIndex: 6,  qrToken: "QR-HURUF-B-06", locationHint: "Meja Informasi Registrasi", createdAt: new Date().toISOString() },
   { id: "code-07", challengeId: DEFAULT_CHALLENGE_ID, letter: "A", letterIndex: 7,  qrToken: "QR-HURUF-A-07", locationHint: "Kantin Budaya Nusantara", createdAt: new Date().toISOString() },
   { id: "code-08", challengeId: DEFAULT_CHALLENGE_ID, letter: "H", letterIndex: 8,  qrToken: "QR-HURUF-H-08", locationHint: "Pojok Dongeng & Pidato", createdAt: new Date().toISOString() },
-  { id: "code-09", challengeId: DEFAULT_CHALLENGE_ID, letter: "A", letterIndex: 9,  qrToken: "QR-HURUF-A-09", locationHint: "Panggung Utama Sumpah Pemuda", createdAt: new Date().toISOString() },
+  { id: "code-09", challengeId: DEFAULT_CHALLENGE_ID, letter: "A", letterIndex: 9,  qrToken: "QR-HURUF-A-09", locationHint: "Panggung Utama Acara", createdAt: new Date().toISOString() },
   { id: "code-10", challengeId: DEFAULT_CHALLENGE_ID, letter: "S", letterIndex: 10, qrToken: "QR-HURUF-S-10", locationHint: "Taman Baca Mini", createdAt: new Date().toISOString() },
   { id: "code-11", challengeId: DEFAULT_CHALLENGE_ID, letter: "A", letterIndex: 11, qrToken: "QR-HURUF-A-11", locationHint: "Area Parkir VIP & Tamu", createdAt: new Date().toISOString() },
 ];

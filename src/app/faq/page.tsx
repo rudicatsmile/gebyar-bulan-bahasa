@@ -8,35 +8,38 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronDown, HelpCircle, MessageSquare } from "lucide-react";
 
-const FAQ_ITEMS = [
-  {
-    q: "Apakah pendaftaran seluruh lomba dan challenge ini dipungut biaya?",
-    a: "Tidak ada biaya sama sekali (100% gratis). Seluruh rangkaian lomba dan challenge Gebyar Bulan Bahasa diselenggarakan secara bebas biaya untuk memperingati Hari Sumpah Pemuda.",
-  },
-  {
-    q: "Bagaimana cara kerja sistem penilaian digital oleh dewan juri?",
-    a: "Dewan juri login ke aplikasi menggunakan tablet/laptop masing-masing. Setiap juri memberikan nilai per kriteria berbobot (total 100%). Nilai langsung diagregasikan secara otomatis oleh sistem tanpa kertas.",
-  },
-  {
-    q: "Bagaimana jika terjadi nilai seri (draw) antar peserta?",
-    a: "Sistem secara otomatis memprioritaskan peserta dengan perolehan skor tertinggi pada kriteria yang memiliki bobot persentase terbesar. Bila masih sama persis, Seksi Acara dan Juri Utama dapat menggelar sidang penetapan manual dengan catatan pertimbangan tertulis.",
-  },
-  {
-    q: "Bagaimana cara pengunjung non-lomba mengumpulkan poin challenge?",
-    a: "Pengunjung cukup mendaftarkan akun di laman /daftar, lalu mengunjungi 8 stand lomba untuk memindai kode QR atau memasukkan kode unik stand (misal: PUISI01, FILM02). Poin akan langsung bertambah di akun Anda.",
-  },
-  {
-    q: "Kapan dan di mana hadiah poin challenge dapat ditukarkan?",
-    a: "Penukaran merchandise (pin, tote bag, voucher, buku) dapat dilakukan di Stand Media Center setiap hari pukul 10.00 s/d 18.00 WIB selama kuota hadiah masih tersedia.",
-  },
-  {
-    q: "Berapa lama waktu tunggu moderasi foto twibbon?",
-    a: "Tim Media Center memoderasi setiap unggahan twibbon secara berkala dengan target waktu tunggu kurang dari 30 menit. Foto yang disetujui akan langsung tampil di galeri publik dan layar monitor venue.",
-  },
-];
+import { useEventSettings } from "@/lib/hooks/useEventSettings";
 
 export default function FAQPage() {
+  const { settings } = useEventSettings();
   const [openIdx, setOpenIdx] = React.useState<number | null>(0);
+
+  const faqItems = [
+    {
+      q: "Apakah pendaftaran seluruh lomba dan challenge ini dipungut biaya?",
+      a: `Tidak ada biaya sama sekali (100% gratis). Seluruh rangkaian lomba dan challenge ${settings.eventName} diselenggarakan secara bebas biaya bagi seluruh peserta.`,
+    },
+    {
+      q: "Bagaimana cara kerja sistem penilaian digital oleh dewan juri?",
+      a: "Dewan juri login ke aplikasi menggunakan tablet/laptop masing-masing. Setiap juri memberikan nilai per kriteria berbobot (total 100%). Nilai langsung diagregasikan secara otomatis oleh sistem tanpa kertas.",
+    },
+    {
+      q: "Bagaimana jika terjadi nilai seri (draw) antar peserta?",
+      a: "Sistem secara otomatis memprioritaskan peserta dengan perolehan skor tertinggi pada kriteria yang memiliki bobot persentase terbesar. Bila masih sama persis, Seksi Acara dan Juri Utama dapat menggelar sidang penetapan manual dengan catatan pertimbangan tertulis.",
+    },
+    {
+      q: "Bagaimana cara pengunjung non-lomba mengumpulkan poin challenge?",
+      a: "Pengunjung cukup mendaftarkan akun di laman /daftar, lalu mengunjungi 8 stand lomba untuk memindai kode QR atau memasukkan kode unik stand (misal: PUISI01, FILM02). Poin akan langsung bertambah di akun Anda.",
+    },
+    {
+      q: "Kapan dan di mana hadiah poin challenge dapat ditukarkan?",
+      a: "Penukaran merchandise (pin, tote bag, voucher, buku) dapat dilakukan di Stand Media Center setiap hari pukul 10.00 s/d 18.00 WIB selama kuota hadiah masih tersedia.",
+    },
+    {
+      q: "Berapa lama waktu tunggu moderasi foto twibbon?",
+      a: "Tim Media Center memoderasi setiap unggahan twibbon secara berkala dengan target waktu tunggu kurang dari 30 menit. Foto yang disetujui akan langsung tampil di galeri publik dan layar monitor venue.",
+    },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -57,7 +60,7 @@ export default function FAQPage() {
           </div>
 
           <div className="space-y-3">
-            {FAQ_ITEMS.map((item, idx) => {
+            {faqItems.map((item, idx) => {
               const isOpen = openIdx === idx;
               return (
                 <div

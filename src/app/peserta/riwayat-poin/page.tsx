@@ -29,7 +29,7 @@ const DEMO_LEDGER_ITEMS: PointLedgerItem[] = [
   { id: "tx-2", source: "Scan QR", description: "Kunjungan Stand Melukis Tas Kanvas (KANVAS04)", pointsDelta: 10, timestamp: "27 Okt 2025, 09:40 WIB" },
   { id: "tx-3", source: "Scan QR", description: "Kunjungan Stand Tradisi Palang Pintu (PALANG06)", pointsDelta: 10, timestamp: "27 Okt 2025, 10:05 WIB" },
   { id: "tx-4", source: "Tantangan Twibbon", description: "Verifikasi unggahan twibbon media sosial", pointsDelta: 20, timestamp: "27 Okt 2025, 10:30 WIB" },
-  { id: "tx-5", source: "Misi Video", description: "Rekam Video Ikrar Sumpah Pemuda", pointsDelta: 50, timestamp: "27 Okt 2025, 11:10 WIB" },
+  { id: "tx-5", source: "Misi Video", description: "Rekam Videoa", pointsDelta: 50, timestamp: "27 Okt 2025, 11:10 WIB" },
   { id: "tx-6", source: "Kuis EYD", description: "Kuis Bahasa Indonesia 10 Soal", pointsDelta: 30, timestamp: "27 Okt 2025, 11:35 WIB" },
   { id: "tx-7", source: "Bonus Panitia", description: "Apresiasi keaktifan sesi diskusi budaya", pointsDelta: 10, timestamp: "27 Okt 2025, 11:50 WIB" },
 ];

@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Layers, Sparkles, BookOpen, HeartHandshake } from "lucide-react";
+import { useEventSettings } from "@/lib/hooks/useEventSettings";
 
 export function AuthLayout({
   children,
@@ -10,6 +13,7 @@ export function AuthLayout({
   title: string;
   subtitle: string;
 }) {
+  const { settings } = useEventSettings();
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-background">
       {/* Kolom Kiri: Form */}
@@ -47,11 +51,11 @@ export function AuthLayout({
 
         {/* Footer */}
         <div className="pt-6 border-t border-border/60 text-center sm:text-left text-xs text-muted-foreground">
-          © 2026 Panitia Gebyar Bulan Bahasa dan Kebudayaan
+          © {settings.eventYear} Panitia {settings.eventName}
         </div>
       </div>
 
-      {/* Kolom Kanan: Tipografi & Visual Sumpah Pemuda */}
+      {/* Kolom Kanan: Tipografi & Visual */}
       <div className="hidden lg:col-span-6 xl:col-span-7 bg-primary text-primary-foreground p-12 lg:p-16 flex flex-col justify-between relative overflow-hidden">
         {/* Subtle decorative circles */}
         <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-accent/10 blur-3xl pointer-events-none" />
@@ -59,7 +63,7 @@ export function AuthLayout({
 
         <div className="flex items-center gap-2 text-xs font-semibold tracking-widest uppercase text-accent">
           <Sparkles className="h-4 w-4 text-accent" />
-          <span>Peringatan Hari Sumpah Pemuda 2026</span>
+          <span>{settings.eventName} {settings.eventYear}</span>
         </div>
 
         <div className="space-y-6 max-w-xl">
@@ -68,7 +72,7 @@ export function AuthLayout({
               Tema Resmi Acara
             </span>
             <blockquote className="font-heading text-3xl xl:text-4xl font-bold leading-tight tracking-tight text-white">
-              &ldquo;Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.&rdquo;
+              &ldquo;{settings.eventTheme}&rdquo;
             </blockquote>
           </div>
           <p className="text-sm text-primary-foreground/75 leading-relaxed">

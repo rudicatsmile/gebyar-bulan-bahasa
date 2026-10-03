@@ -184,7 +184,7 @@ export const COMPETITIONS: Competition[] = [
     category: "individu",
     status: "berlangsung",
     description:
-      "Lomba membaca karya puisi sastra nusantara dan puisi bertema Sumpah Pemuda untuk mengobarkan semangat persatuan generasi penerus bangsa.",
+      "Lomba membaca karya puisi sastra nusantara dan puisi persatuan untuk mengobarkan semangat persatuan generasi penerus bangsa.",
     venue: "Ruang 12",
     stage: "Stage A1",
     date: "27 Oktober 2025",
@@ -293,7 +293,7 @@ export const COMPETITIONS: Competition[] = [
       },
       {
         id: "crit-flm-5",
-        name: "Keselarasan Tema Sumpah Pemuda",
+        name: "Keselarasan Tema Lomba",
         description: "Kesesuaian pesan dengan semangat persatuan bangsa",
         weight: 10,
         maxScore: 100,
@@ -394,7 +394,7 @@ export const COMPETITIONS: Competition[] = [
       {
         id: "crit-kvs-2",
         name: "Keselarasan Tema",
-        description: "Representasi tema Sumpah Pemuda dan kekayaan budaya",
+        description: "Representasi tema Gebyar Bulan Bahasa dan kekayaan budaya",
         weight: 30,
         maxScore: 100,
       },
@@ -482,7 +482,7 @@ export const COMPETITIONS: Competition[] = [
     category: "individu",
     status: "terjadwal",
     description:
-      "Uji keahlian memandu protokoler kenegaraan dan upacara peringatan Hari Sumpah Pemuda menggunakan bahasa Indonesia baku yang anggun.",
+      "Uji keahlian memandu protokoler kenegaraan dan upacara peringatan hari besar menggunakan bahasa Indonesia baku yang anggun.",
     venue: "Panggung Utama",
     stage: "Stage A",
     date: "28 Oktober 2025",
@@ -493,7 +493,7 @@ export const COMPETITIONS: Competition[] = [
     currentParticipantsCount: 19,
     aggregation: "rata_rata",
     rules: [
-      "Simulasi memandu Upacara Peringatan Hari Sumpah Pemuda tingkat nasional.",
+      "Simulasi memandu Upacara Peringatan Hari Besar tingkat nasional.",
       "Durasi 5 menit per peserta dengan pembacaan teks protokoler.",
       "Mengenakan busana formal jas / kebaya nasional lengkap.",
     ],
@@ -528,12 +528,12 @@ export const COMPETITIONS: Competition[] = [
       },
     ],
     manuscripts: [
-      "Naskah Protokoler Upacara Peringatan Hari Sumpah Pemuda Tingkat Nasional",
+      "Naskah Protokoler Upacara Peringatan Hari Besar Tingkat Nasional",
       "Naskah Protokoler Upacara Pembukaan Gebyar Bulan Bahasa & Kebudayaan",
       "Naskah Pemandu Acara Sidang Paripurna Pemuda Indonesia",
     ],
     eventFormats: [
-      "Upacara Protokoler Peringatan Hari Sumpah Pemuda Tingkat Nasional",
+      "Upacara Protokoler Peringatan Hari Besar Tingkat Nasional",
       "Seminar Nasional Bahasa dan Diplomasi Budaya Nusantara",
       "Malam Penganugerahan Juara & Resepsi Kebudayaan",
     ],
@@ -559,7 +559,7 @@ export const COMPETITIONS: Competition[] = [
     rules: [
       "Terdiri dari 1 jawara pantun, 2 pesilat beksi, dan pendamping rebana ketimpring.",
       "Durasi penampilan 10-12 menit per rombongan.",
-      "Pantun wajib orisinal bertema pelestarian budaya nusantara dan sumpah pemuda.",
+      "Pantun wajib orisinal bertema pelestarian budaya nusantara dan bahasa Indonesia.",
     ],
     criteria: [
       {
@@ -1050,7 +1050,7 @@ export const SCHEDULES: ScheduleItem[] = [
   },
   {
     id: "sch-11",
-    title: "Malam Penganugerahan Juara & Ikrar Sumpah Pemuda",
+    title: "Malam Penganugerahan Juara & Pentas Kebudayaan",
     day: 2,
     date: "11 November 2026",
     time: "21:30 - 23:00 WIB",
@@ -1172,9 +1172,9 @@ export const CHALLENGES: Challenge[] = [
   },
   {
     id: "ch-2",
-    slug: "ikrar-sumpah-pemuda",
-    title: "Rekam Video Ikrar Sumpah Pemuda",
-    description: "Rekam video berdurasi 30-60 detik membacakan teks asli Sumpah Pemuda di spot foto resmi panitia.",
+    slug: "orasi-kebahasaan",
+    title: "Rekam Video Orasi Kebahasaan",
+    description: "Rekam video berdurasi 30-60 detik membacakan narasi kebahasaan di spot foto resmi panitia.",
     type: "unggah_bukti",
     pointReward: 50,
     badge: "Pilar Pemuda",
@@ -1185,7 +1185,7 @@ export const CHALLENGES: Challenge[] = [
     id: "ch-3",
     slug: "kuis-bahasa-indonesia",
     title: "Kuis Cerdas Cermat Bahasa Indonesia (10 Soal)",
-    description: "Jawab kuis 10 pertanyaan seputar kaidah EYD, asal-usul kata serapan, dan sejarah Sumpah Pemuda 1928.",
+    description: "Jawab kuis 10 pertanyaan seputar kaidah EYD, asal-usul kata serapan, dan sejarah Bahasa Indonesia.",
     type: "kode_unik",
     pointReward: 30,
     badge: "Kamus Berjalan",

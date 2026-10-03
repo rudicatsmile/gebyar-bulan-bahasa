@@ -24,7 +24,7 @@ const INITIAL_SUBMISSIONS: PendingSubmission[] = [
     id: "sub-1",
     participantName: "Bagas Prasetyo Wibowo",
     institution: "Universitas Indonesia",
-    challengeTitle: "Rekam Video Ikrar Sumpah Pemuda",
+    challengeTitle: "Rekam Video Orasi Kebahasaan",
     proofType: "video",
     description: "Video rekaman ikrar 45 detik di pelataran Panggung Utama bersama 5 pemuda daerah.",
     points: 50,

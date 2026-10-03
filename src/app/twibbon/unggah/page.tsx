@@ -35,7 +35,7 @@ export default function UnggahTwibbonPage() {
           }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,7 +180,7 @@ export default function UnggahTwibbonPage() {
 
                 <Input
                   label="Asal Sekolah / Instansi / Kampus *"
-                  placeholder="Contoh: SMAN 1 Bandung / Universitas Indonesia"
+                  placeholder="Contoh: SMK Dinamika Pembangunan 2 Jakarta"
                   value={institution}
                   onChange={(e) => setInstitution(e.target.value)}
                   required
@@ -195,7 +195,7 @@ export default function UnggahTwibbonPage() {
                 />
 
                 <Textarea
-                  label="Pesan / Caption Semangat Sumpah Pemuda *"
+                  label="Pesan / Caption *"
                   placeholder="Tuliskan ucapan atau kutipan semangat pemuda Anda..."
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}

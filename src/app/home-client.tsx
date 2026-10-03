@@ -582,18 +582,16 @@ export function HomeClient({
                             key={d}
                             type="button"
                             onClick={() => setSelectedDay(d)}
-                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                              selectedDay === d
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${selectedDay === d
                                 ? "bg-primary text-primary-foreground shadow-xs"
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                            }`}
+                              }`}
                           >
                             <span>Hari ke-{d}</span>
                             {isCurrentActive && (
                               <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  activeInfo.isLive ? "bg-danger animate-pulse" : "bg-accent"
-                                }`}
+                                className={`w-1.5 h-1.5 rounded-full ${activeInfo.isLive ? "bg-danger animate-pulse" : "bg-accent"
+                                  }`}
                                 title="Hari Aktif Acara"
                               />
                             )}
@@ -622,11 +620,10 @@ export function HomeClient({
                     return (
                       <div
                         key={sch.id}
-                        className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                          isLive
+                        className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isLive
                             ? "border-danger/40 bg-danger/5 shadow-xs"
                             : "border-border bg-card hover:border-accent/40"
-                        }`}
+                          }`}
                       >
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -744,12 +741,12 @@ export function HomeClient({
         </section>
 
         {/* ============================================================= */}
-        {/* BANNER TEMA SUMPAH PEMUDA */}
+        {/* BANNER TEMA PERINGATAN */}
         {/* ============================================================= */}
         <section className="bg-primary text-primary-foreground py-16 px-4 sm:px-6 lg:px-8 border-t border-border">
           <div className="max-w-4xl mx-auto text-center space-y-6">
             <Badge variant="gold" className="text-xs">
-              Semangat 97 Tahun Sumpah Pemuda
+              Semangat {currentEventName} {currentEventYear}
             </Badge>
             <h3 className="font-heading text-3xl sm:text-4xl font-bold leading-tight">
               &ldquo;Kami poetra dan poetri Indonesia, mendjoendjoeng bahasa persatoean, bahasa Indonesia.&rdquo;

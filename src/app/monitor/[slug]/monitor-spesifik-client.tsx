@@ -63,7 +63,7 @@ export function MonitorSpesifikClient({ slug: rawSlug, initialData }: MonitorSpe
       case "papan-skor":
         return `Papan Skor Langsung — ${activeComp?.name || "Penilaian Lomba"}`;
       case "pemenang":
-        return "Daftar Juara & Pemenang Resmi Sumpah Pemuda";
+        return "Daftar Juara & Pemenang";
       case "twibbon":
         return "Semarak Galeri Twibbon Peserta & Pengunjung";
       case "leaderboard":
@@ -97,11 +97,10 @@ export function MonitorSpesifikClient({ slug: rawSlug, initialData }: MonitorSpe
                   return (
                     <div
                       key={sch.id}
-                      className={`p-6 sm:p-8 rounded-2xl border transition-all flex flex-col justify-between ${
-                        isLive
+                      className={`p-6 sm:p-8 rounded-2xl border transition-all flex flex-col justify-between ${isLive
                           ? "border-danger bg-danger/15 shadow-xl ring-2 ring-danger/30"
                           : "border-white/10 bg-white/5"
-                      }`}
+                        }`}
                     >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -195,15 +194,14 @@ export function MonitorSpesifikClient({ slug: rawSlug, initialData }: MonitorSpe
                   >
                     <div className="flex items-center gap-6">
                       <span
-                        className={`font-mono text-3xl sm:text-4xl font-extrabold w-12 text-center ${
-                          idx === 0
+                        className={`font-mono text-3xl sm:text-4xl font-extrabold w-12 text-center ${idx === 0
                             ? "text-accent"
                             : idx === 1
-                            ? "text-white/90"
-                            : idx === 2
-                            ? "text-amber-500"
-                            : "text-white/40"
-                        }`}
+                              ? "text-white/90"
+                              : idx === 2
+                                ? "text-amber-500"
+                                : "text-white/40"
+                          }`}
                       >
                         0{idx + 1}
                       </span>
@@ -436,15 +434,14 @@ export function MonitorSpesifikClient({ slug: rawSlug, initialData }: MonitorSpe
                   >
                     <div className="flex items-center gap-4">
                       <span
-                        className={`font-mono text-2xl font-black w-8 text-center ${
-                          item.rank === 1
+                        className={`font-mono text-2xl font-black w-8 text-center ${item.rank === 1
                             ? "text-accent"
                             : item.rank === 2
-                            ? "text-white"
-                            : item.rank === 3
-                            ? "text-amber-500"
-                            : "text-white/40"
-                        }`}
+                              ? "text-white"
+                              : item.rank === 3
+                                ? "text-amber-500"
+                                : "text-white/40"
+                          }`}
                       >
                         #{item.rank}
                       </span>
@@ -540,57 +537,57 @@ export function MonitorSpesifikClient({ slug: rawSlug, initialData }: MonitorSpe
           "leaderboard",
           "pengumuman",
         ].includes(slug) && (
-          <div className="p-12 rounded-2xl border border-white/10 bg-white/5 text-center space-y-6 max-w-xl mx-auto">
-            <AlertTriangle className="h-16 w-16 text-accent mx-auto" />
-            <div className="space-y-2">
-              <h3 className="font-heading text-3xl font-bold text-white">
-                Saluran Monitor Tidak Ditemukan
-              </h3>
-              <p className="text-white/60">
-                Saluran <code className="text-accent font-mono">&quot;{rawSlug}&quot;</code> tidak
-                tersedia. Silakan pilih salah satu saluran monitor resmi berikut:
-              </p>
+            <div className="p-12 rounded-2xl border border-white/10 bg-white/5 text-center space-y-6 max-w-xl mx-auto">
+              <AlertTriangle className="h-16 w-16 text-accent mx-auto" />
+              <div className="space-y-2">
+                <h3 className="font-heading text-3xl font-bold text-white">
+                  Saluran Monitor Tidak Ditemukan
+                </h3>
+                <p className="text-white/60">
+                  Saluran <code className="text-accent font-mono">&quot;{rawSlug}&quot;</code> tidak
+                  tersedia. Silakan pilih salah satu saluran monitor resmi berikut:
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <Link
+                  href="/monitor/jadwal"
+                  className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
+                >
+                  /monitor/jadwal
+                </Link>
+                <Link
+                  href="/monitor/papan-skor"
+                  className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
+                >
+                  /monitor/papan-skor
+                </Link>
+                <Link
+                  href="/monitor/pemenang"
+                  className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
+                >
+                  /monitor/pemenang
+                </Link>
+                <Link
+                  href="/monitor/twibbon"
+                  className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
+                >
+                  /monitor/twibbon
+                </Link>
+                <Link
+                  href="/monitor/leaderboard"
+                  className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
+                >
+                  /monitor/leaderboard
+                </Link>
+                <Link
+                  href="/monitor"
+                  className="p-3 rounded-lg border border-accent/40 bg-accent/20 text-accent hover:bg-accent/30 text-sm font-mono text-center"
+                >
+                  /monitor (Utama Auto)
+                </Link>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 pt-4">
-              <Link
-                href="/monitor/jadwal"
-                className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
-              >
-                /monitor/jadwal
-              </Link>
-              <Link
-                href="/monitor/papan-skor"
-                className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
-              >
-                /monitor/papan-skor
-              </Link>
-              <Link
-                href="/monitor/pemenang"
-                className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
-              >
-                /monitor/pemenang
-              </Link>
-              <Link
-                href="/monitor/twibbon"
-                className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
-              >
-                /monitor/twibbon
-              </Link>
-              <Link
-                href="/monitor/leaderboard"
-                className="p-3 rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 text-sm font-mono text-center"
-              >
-                /monitor/leaderboard
-              </Link>
-              <Link
-                href="/monitor"
-                className="p-3 rounded-lg border border-accent/40 bg-accent/20 text-accent hover:bg-accent/30 text-sm font-mono text-center"
-              >
-                /monitor (Utama Auto)
-              </Link>
-            </div>
-          </div>
-        )}
+          )}
 
         {/* Quick Nav Bar between channels on the bottom for field operators */}
         <div className="mt-8 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-white/50">
@@ -612,11 +609,10 @@ export function MonitorSpesifikClient({ slug: rawSlug, initialData }: MonitorSpe
                 <Link
                   key={ch}
                   href={`/monitor/${ch}`}
-                  className={`px-2 py-1 rounded transition-colors ${
-                    slug === ch
+                  className={`px-2 py-1 rounded transition-colors ${slug === ch
                       ? "bg-accent text-ink font-bold"
                       : "bg-white/5 text-white/60 hover:text-white hover:bg-white/10"
-                  }`}
+                    }`}
                 >
                   {ch}
                 </Link>
