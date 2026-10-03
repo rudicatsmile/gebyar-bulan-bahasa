@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { MonitorLayout } from "@/components/layouts/MonitorLayout";
+import { createClient } from "@/lib/supabase/client";
 import type { MonitorDisplayData } from "@/lib/supabase/queries";
 import {
   Calendar,
@@ -18,6 +19,8 @@ import {
   ChevronRight,
   Radio,
   Award,
+  AlertTriangle,
+  Siren,
 } from "lucide-react";
 
 const MODULES = [
@@ -39,32 +42,107 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
   const [isPaused, setIsPaused] = React.useState(false);
   const ROTATION_SECONDS = 15;
 
-  // Background polling to keep monitor synchronized with database
-  React.useEffect(() => {
-    const fetchLatest = async () => {
-      try {
-        const res = await fetch("/api/monitor", { cache: "no-store" });
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
-        }
-      } catch (err) {
-        console.error("Failed to refresh monitor data:", err);
-      }
-    };
+  // ===== SIARAN DARURAT (Emergency Takeover) =====
+  const [isTakeoverActive, setIsTakeoverActive] = React.useState(false);
+  const lastEmergencySigRef = React.useRef<string>("");
+  const takeoverTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const pollInterval = setInterval(fetchLatest, 15000);
-    return () => clearInterval(pollInterval);
+  const emergencyMessage = data.emergencyMessage || null;
+
+  // Ambil data monitor terbaru (dipakai polling & realtime bersama-sama)
+  const fetchLatest = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/monitor", { cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch (err) {
+      console.error("Failed to refresh monitor data:", err);
+    }
   }, []);
 
-  // Auto rotation timer
+  // Polling cepat + subscribe realtime monitor_displays agar status darurat
+  // langsung sampai ke layar (bukan hanya menunggu siklus 15 detik).
   React.useEffect(() => {
-    if (isPaused) return;
+    const pollInterval = setInterval(fetchLatest, 5000);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let channel: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let supabase: any = null;
+    try {
+      supabase = createClient();
+      channel = supabase
+        .channel("monitor-emergency-utama")
+        .on(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          "postgres_changes" as any,
+          { event: "UPDATE", schema: "public", table: "monitor_displays" },
+          () => {
+            fetchLatest();
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("Realtime monitor_displays tak tersedia, andalkan polling:", err);
+    }
+
+    return () => {
+      clearInterval(pollInterval);
+      if (channel && supabase) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [fetchLatest]);
+
+  // Deteksi siaran darurat baru -> jeda rotasi & tampilkan banner takeover penuh.
+  React.useEffect(() => {
+    if (!emergencyMessage) {
+      if (takeoverTimerRef.current) {
+        clearTimeout(takeoverTimerRef.current);
+        takeoverTimerRef.current = null;
+      }
+      lastEmergencySigRef.current = "";
+      setIsTakeoverActive(false);
+      return;
+    }
+
+    const sig = `${data.emergencyUpdatedAt ?? ""}::${emergencyMessage}`;
+    if (sig === lastEmergencySigRef.current) return; // sudah pernah diproses
+    lastEmergencySigRef.current = sig;
+
+    if (data.emergencyTakeover !== false) {
+      setIsTakeoverActive(true);
+      if (takeoverTimerRef.current) clearTimeout(takeoverTimerRef.current);
+      const durMs =
+        Math.min(Math.max(data.emergencyDurationSeconds ?? 20, 5), 120) * 1000;
+      takeoverTimerRef.current = setTimeout(() => {
+        setIsTakeoverActive(false);
+        takeoverTimerRef.current = null;
+      }, durMs);
+    }
+  }, [emergencyMessage, data.emergencyUpdatedAt, data.emergencyTakeover, data.emergencyDurationSeconds]);
+
+  // Bersihkan timer takeover saat unmount.
+  React.useEffect(() => {
+    return () => {
+      if (takeoverTimerRef.current) clearTimeout(takeoverTimerRef.current);
+    };
+  }, []);
+
+  // Auto rotation timer (dijeda saat manual pause ATAU saat takeover darurat)
+  React.useEffect(() => {
+    if (isPaused || isTakeoverActive) return;
     const timer = setInterval(() => {
       setCurrentIdx((prev) => (prev + 1) % MODULES.length);
     }, ROTATION_SECONDS * 1000);
     return () => clearInterval(timer);
-  }, [isPaused]);
+  }, [isPaused, isTakeoverActive]);
 
   const activeModule = MODULES[currentIdx];
 
@@ -79,13 +157,46 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
 
   return (
     <MonitorLayout
-      activeModuleTitle={activeModule.title}
-      currentCycleText={`Modul ${currentIdx + 1} dari ${MODULES.length} • Rotasi Otomatis 15 Detik`}
-      emergencyMessage={data.emergencyMessage || undefined}
+      activeModuleTitle={isTakeoverActive ? "SIARAN DARURAT AKTIF" : activeModule.title}
+      currentCycleText={
+        isTakeoverActive
+          ? "Rotasi modul dijeda sementara"
+          : `Modul ${currentIdx + 1} dari ${MODULES.length} • Rotasi Otomatis 15 Detik`
+      }
+      emergencyMessage={isTakeoverActive ? undefined : data.emergencyMessage || undefined}
       eventName={data.eventSettings?.eventName}
       eventTheme={data.eventSettings?.eventTheme}
       eventYear={data.eventSettings?.eventYear}
     >
+      {/* ===== FULL-SCREEN EMERGENCY TAKEOVER (kontras tinggi) ===== */}
+      {isTakeoverActive && emergencyMessage && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-red-600 text-white px-6 sm:px-16 text-center select-none">
+          {/* Striping peringatan di atas & bawah */}
+          <div className="absolute inset-x-0 top-0 h-6 bg-[repeating-linear-gradient(45deg,#000_0, #000_20px, #facc15_20px, #facc15_40px)]" />
+          <div className="absolute inset-x-0 bottom-0 h-6 bg-[repeating-linear-gradient(45deg,#000_0, #000_20px, #facc15_20px, #facc15_40px)]" />
+
+          <div className="animate-pulse mb-6">
+            <Siren className="h-24 w-24 sm:h-32 sm:w-32 text-white drop-shadow-lg" />
+          </div>
+
+          <span className="inline-flex items-center gap-2 rounded-full bg-black/25 px-5 py-2 text-base sm:text-2xl font-mono font-black uppercase tracking-[0.2em] mb-8">
+            <AlertTriangle className="h-6 w-6" />
+            Pengumuman Darurat
+          </span>
+
+          <p className="font-heading text-3xl sm:text-6xl lg:text-7xl font-black leading-tight tracking-tight max-w-6xl drop-shadow-md">
+            {emergencyMessage}
+          </p>
+
+          <div className="mt-10 flex items-center gap-3 text-sm sm:text-lg font-semibold text-white/90">
+            <span className="h-3 w-3 rounded-full bg-white animate-ping" />
+            <span className="font-mono uppercase tracking-wider">
+              Rotasi layar dijeda sementara • {data.eventSettings?.eventName || "Gebyar Bulan Bahasa"}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="h-full flex flex-col justify-center">
         {/* ============================================================= */}
         {/* MODUL 1: JADWAL LIVE */}

@@ -744,12 +744,41 @@ export interface MonitorDisplayData {
     badge: string;
   }>;
   emergencyMessage?: string | null;
+  emergencyTakeover?: boolean;
+  emergencyDurationSeconds?: number;
+  emergencyUpdatedAt?: string | null;
   eventSettings?: {
     eventName: string;
     eventTheme: string;
     eventYear: string;
     eventDate: string;
   } | null;
+}
+
+/**
+ * Parsing kolom emergency_message monitor_displays. Mendukung payload
+ * terstruktur (JSON { __v:1, message, takeover, durationSeconds }) hasil
+ * siaran darurat, sekaligus fallback teks polos agar tetap kompatibel
+ * dengan data lama / update via updateMonitorConfig.
+ */
+function parseEmergencyPayload(raw: string): {
+  message: string;
+  takeover: boolean;
+  durationSeconds: number;
+} {
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === "object" && obj.__v === 1) {
+      return {
+        message: String(obj.message ?? ""),
+        takeover: obj.takeover !== false,
+        durationSeconds: Number(obj.durationSeconds) || 20,
+      };
+    }
+  } catch {
+    // Bukan JSON -> perlakukan seluruh string sebagai pesan darurat polos.
+  }
+  return { message: raw, takeover: true, durationSeconds: 20 };
 }
 
 export async function getMonitorData(): Promise<MonitorDisplayData> {
@@ -795,13 +824,24 @@ export async function getMonitorData(): Promise<MonitorDisplayData> {
       null;
 
     let emergencyMessage: string | null = null;
+    let emergencyTakeover = true;
+    let emergencyDurationSeconds = 20;
+    let emergencyUpdatedAt: string | null = null;
     try {
       const { data: display } = await publicClient
         .from("monitor_displays")
-        .select("emergency_message")
+        .select("emergency_message, updated_at")
         .eq("slug", "utama")
         .maybeSingle();
-      emergencyMessage = display?.emergency_message || null;
+
+      emergencyUpdatedAt = display?.updated_at ?? null;
+      const raw = display?.emergency_message ?? null;
+      if (raw) {
+        const parsed = parseEmergencyPayload(raw);
+        emergencyMessage = parsed.message;
+        emergencyTakeover = parsed.takeover;
+        emergencyDurationSeconds = parsed.durationSeconds;
+      }
     } catch {
       // ignore
     }
@@ -833,6 +873,9 @@ export async function getMonitorData(): Promise<MonitorDisplayData> {
       twibbons,
       leaderboard,
       emergencyMessage,
+      emergencyTakeover,
+      emergencyDurationSeconds,
+      emergencyUpdatedAt,
       eventSettings,
     };
   } catch (err) {
@@ -848,6 +891,9 @@ export async function getMonitorData(): Promise<MonitorDisplayData> {
       twibbons: [],
       leaderboard: [],
       emergencyMessage: null,
+      emergencyTakeover: true,
+      emergencyDurationSeconds: 20,
+      emergencyUpdatedAt: null,
       eventSettings: {
         eventName: "Gebyar Bulan Bahasa dan Kebudayaan 2026",
         eventTheme: "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",

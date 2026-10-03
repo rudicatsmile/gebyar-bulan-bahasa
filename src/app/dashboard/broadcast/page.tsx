@@ -8,20 +8,76 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Radio, ArrowLeft, Megaphone, Tv, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Radio, ArrowLeft, Megaphone, Tv, CheckCircle2, AlertTriangle, Loader2, Ban } from "lucide-react";
+import { setEmergencyAlert } from "@/app/actions/monitor";
 
 export default function DashboardBroadcastPage() {
   const [message, setMessage] = React.useState("");
   const [targetAudience, setTargetAudience] = React.useState("semua");
   const [forceMonitorTakeover, setForceMonitorTakeover] = React.useState(true);
   const [sentNotice, setSentNotice] = React.useState(false);
+  const [isSending, setIsSending] = React.useState(false);
+  const [sendError, setSendError] = React.useState<string | null>(null);
+  const [activeEmergency, setActiveEmergency] = React.useState<string | null>(null);
 
-  const handleBroadcast = (e: React.FormEvent) => {
+  // Pantau status siaran darurat aktif pada monitor (polling ringan).
+  const refreshActiveEmergency = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/monitor", { cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        setActiveEmergency(json?.emergencyMessage || null);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refreshActiveEmergency();
+    const id = setInterval(refreshActiveEmergency, 5000);
+    return () => clearInterval(id);
+  }, [refreshActiveEmergency]);
+
+  const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message) return;
-    setSentNotice(true);
-    setTimeout(() => setSentNotice(false), 3500);
-    setMessage("");
+    if (!message.trim()) return;
+
+    setIsSending(true);
+    setSendError(null);
+    try {
+      const res = await setEmergencyAlert(message.trim(), {
+        takeover: forceMonitorTakeover,
+        durationSeconds: 20,
+      });
+      if (!res.success) {
+        setSendError(res.error || "Gagal mengirim siaran darurat ke monitor.");
+        return;
+      }
+      setActiveEmergency(message.trim());
+      setSentNotice(true);
+      setMessage("");
+      setTimeout(() => setSentNotice(false), 4500);
+    } catch (err: unknown) {
+      setSendError(err instanceof Error ? err.message : "Terjadi kendala saat mengirim siaran.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleStopEmergency = async () => {
+    setIsSending(true);
+    setSendError(null);
+    try {
+      const res = await setEmergencyAlert(null);
+      if (res.success) {
+        setActiveEmergency(null);
+      } else {
+        setSendError(res.error || "Gagal menghentikan siaran darurat.");
+      }
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -50,8 +106,15 @@ export default function DashboardBroadcastPage() {
           <div className="p-4 rounded-xl border border-success/40 bg-success/10 text-success text-xs flex items-center gap-2 animate-in fade-in-50">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
             <span>
-              Siaran darurat berhasil dikirim! Layar monitor venue telah dialihkan untuk menampilkan pesan darurat ini.
+              Siaran darurat berhasil dipublikasikan! Monitor venue akan segera menampilkan pesan darurat dan menjeda rotasi modul.
             </span>
+          </div>
+        )}
+
+        {sendError && (
+          <div className="p-4 rounded-xl border border-destructive/40 bg-destructive/10 text-destructive text-xs flex items-center gap-2 animate-in fade-in-50">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span>{sendError}</span>
           </div>
         )}
 
@@ -103,16 +166,55 @@ export default function DashboardBroadcastPage() {
                   type="submit"
                   size="lg"
                   variant="destructive"
+                  disabled={isSending || !message.trim()}
                   className="w-full text-xs font-semibold gap-2"
                 >
-                  <Radio className="h-4 w-4" />
-                  <span>Kirimkan Siaran Darurat Sekarang</span>
+                  {isSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Radio className="h-4 w-4" />
+                  )}
+                  <span>{isSending ? "Mengirim ke monitor..." : "Kirimkan Siaran Darurat Sekarang"}</span>
                 </Button>
               </form>
             </Card>
           </div>
 
           <div className="lg:col-span-4 space-y-4">
+            <Card
+              className={`p-5 space-y-3 ${activeEmergency ? "border-danger/50 bg-danger/5" : ""}`}
+            >
+              <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-1.5">
+                <span className={`h-2.5 w-2.5 rounded-full ${activeEmergency ? "bg-danger animate-pulse" : "bg-muted-foreground/40"}`} />
+                <span>Status Siaran di Monitor</span>
+              </h3>
+              {activeEmergency ? (
+                <div className="space-y-3">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-danger font-bold">
+                    Darurat sedang aktif
+                  </p>
+                  <p className="text-xs text-foreground leading-relaxed line-clamp-4">
+                    &ldquo;{activeEmergency}&rdquo;
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStopEmergency}
+                    disabled={isSending}
+                    className="w-full text-xs gap-1.5 border-danger/40 text-danger hover:bg-danger/10 hover:text-danger"
+                  >
+                    {isSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                    <span>Hentikan Siaran Darurat</span>
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Tidak ada siaran darurat aktif. Monitor sedang menjalankan rotasi modul normal.
+                </p>
+              )}
+            </Card>
+
             <Card className="p-5 space-y-3">
               <h3 className="font-heading text-sm font-bold text-foreground flex items-center gap-1.5">
                 <AlertTriangle className="h-4 w-4 text-accent" />

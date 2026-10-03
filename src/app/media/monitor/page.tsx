@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Tv, Play, Radio, ExternalLink, RefreshCw, AlertTriangle, Layers } from "lucide-react";
 import { useEventSettings } from "@/lib/hooks/useEventSettings";
 import { renderBrandText } from "@/components/ui/BrandText";
+import { setEmergencyAlert as publishEmergency } from "@/app/actions/monitor";
 
 export default function MediaMonitorControlPage() {
   const { settings } = useEventSettings();
@@ -17,15 +18,24 @@ export default function MediaMonitorControlPage() {
   const [rotationSeconds, setRotationSeconds] = React.useState("15");
   const [emergencyAlert, setEmergencyAlert] = React.useState("");
   const [alertNotice, setAlertNotice] = React.useState(false);
+  const [isSendingEmergency, setIsSendingEmergency] = React.useState(false);
 
-  const handleForceBroadcast = (e: React.FormEvent) => {
+  const handleForceBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!emergencyAlert) return;
-    setAlertNotice(true);
-    setTimeout(() => {
-      setAlertNotice(false);
-      setEmergencyAlert("");
-    }, 4000);
+    if (!emergencyAlert.trim()) return;
+    setIsSendingEmergency(true);
+    try {
+      const res = await publishEmergency(emergencyAlert.trim(), { takeover: true, durationSeconds: 20 });
+      if (res.success) {
+        setAlertNotice(true);
+        setTimeout(() => {
+          setAlertNotice(false);
+          setEmergencyAlert("");
+        }, 4000);
+      }
+    } finally {
+      setIsSendingEmergency(false);
+    }
   };
 
   return (
@@ -169,8 +179,8 @@ export default function MediaMonitorControlPage() {
                   onChange={(e) => setEmergencyAlert(e.target.value)}
                   required
                 />
-                <Button type="submit" size="sm" variant="destructive" className="w-full text-xs">
-                  Tayangkan Mendesak Sekarang
+                <Button type="submit" size="sm" variant="destructive" disabled={isSendingEmergency} className="w-full text-xs">
+                  {isSendingEmergency ? "Mengirim..." : "Tayangkan Mendesak Sekarang"}
                 </Button>
               </form>
             </Card>

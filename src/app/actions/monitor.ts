@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const UpdateMonitorConfigSchema = z.object({
   displaySlug: z.string().default("utama"),
@@ -56,19 +57,52 @@ export async function updateMonitorConfig(data: z.infer<typeof UpdateMonitorConf
   }
 }
 
-export async function setEmergencyAlert(message: string | null) {
+export async function setEmergencyAlert(
+  message: string | null,
+  options?: { takeover?: boolean; durationSeconds?: number }
+): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = await createClient();
+    // Gunakan admin client agar penulisan tidak gagal senyap akibat RLS.
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
+    const clean = (message ?? "").trim();
 
-    const { error } = await supabase
+    // Simpan sebagai payload terstruktur agar monitor tahu apakah perlu
+    // melakukan takeover penuh & berapa lama. Fallback: teks polos diperlakukan
+    // sebagai darurat biasa dengan takeover aktif.
+    let emergencyValue: string | null = null;
+    if (clean.length > 0) {
+      const payload = {
+        __v: 1,
+        message: clean,
+        takeover: options?.takeover !== false,
+        durationSeconds: Math.min(Math.max(options?.durationSeconds ?? 20, 5), 120),
+        sentAt: now,
+      };
+      emergencyValue = JSON.stringify(payload);
+    }
+
+    // 1. Update baris 'utama' bila sudah ada (mempertahankan konfigurasi rotasi)
+    const { data: updated } = await supabase
       .from("monitor_displays")
-      .update({
-        emergency_message: message || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("slug", "utama");
+      .update({ emergency_message: emergencyValue, updated_at: now })
+      .eq("slug", "utama")
+      .select("id");
 
-    if (error) return { success: false, error: error.message };
+    // 2. Buat baris 'utama' bila belum ada (seed tidak membuatnya)
+    if (!updated || updated.length === 0) {
+      const { error: insErr } = await supabase.from("monitor_displays").insert({
+        slug: "utama",
+        name: "Layar Monitor Utama (Panggung)",
+        layout_type: "rotasi",
+        rotation_interval_seconds: 15,
+        theme: "dark",
+        is_active: true,
+        emergency_message: emergencyValue,
+        updated_at: now,
+      });
+      if (insErr) return { success: false, error: insErr.message };
+    }
 
     revalidatePath("/monitor");
     revalidatePath("/media/monitor");
