@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { getEventSettings, saveEventSettings, uploadHeroImageAction } from "@/app/actions/settings";
+import { getEventSettings, saveEventSettings, uploadHeroImageAction, uploadLogoImageAction } from "@/app/actions/settings";
 import {
   Settings,
   Save,
@@ -31,6 +31,10 @@ export default function DashboardPengaturanPage() {
   const [heroImageUrl, setHeroImageUrl] = React.useState("");
   const [isUploadingHero, setIsUploadingHero] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const [logoImageUrl, setLogoImageUrl] = React.useState("");
+  const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
+  const logoFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [scoreGapThreshold, setScoreGapThreshold] = React.useState("20");
   const [maxCompetitions, setMaxCompetitions] = React.useState("3");
@@ -73,6 +77,7 @@ export default function DashboardPengaturanPage() {
           setEventDate(data.settings.eventDate || "11 November 2026");
           setEventYear(data.settings.eventYear);
           setHeroImageUrl(data.settings.heroImageUrl || "");
+          setLogoImageUrl(data.settings.logoImageUrl || "");
           setScoreGapThreshold(String(data.settings.scoreGapThreshold));
           setMaxCompetitions(String(data.settings.maxCompetitions));
           setRotationInterval(String(data.settings.rotationInterval));
@@ -96,6 +101,7 @@ export default function DashboardPengaturanPage() {
         setEventDate(actionRes.settings.eventDate || "11 November 2026");
         setEventYear(actionRes.settings.eventYear);
         setHeroImageUrl(actionRes.settings.heroImageUrl || "");
+        setLogoImageUrl(actionRes.settings.logoImageUrl || "");
         setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
         setMaxCompetitions(String(actionRes.settings.maxCompetitions));
         setRotationInterval(String(actionRes.settings.rotationInterval));
@@ -117,6 +123,7 @@ export default function DashboardPengaturanPage() {
           setEventDate(actionRes.settings.eventDate || "11 November 2026");
           setEventYear(actionRes.settings.eventYear);
           setHeroImageUrl(actionRes.settings.heroImageUrl || "");
+          setLogoImageUrl(actionRes.settings.logoImageUrl || "");
           setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
           setMaxCompetitions(String(actionRes.settings.maxCompetitions));
           setRotationInterval(String(actionRes.settings.rotationInterval));
@@ -181,6 +188,49 @@ export default function DashboardPengaturanPage() {
     }
   };
 
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setFeedback({
+        type: "error",
+        message: "Ukuran berkas logo melebihi batas 2MB. Silakan pilih berkas yang lebih kecil.",
+      });
+      return;
+    }
+
+    try {
+      setIsUploadingLogo(true);
+      setFeedback(null);
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await uploadLogoImageAction(formData);
+      if (res.success && res.url) {
+        setLogoImageUrl(res.url);
+        setFeedback({
+          type: "success",
+          message: "Logo berhasil diunggah! Klik 'Simpan Seluruh Pengaturan' untuk menerapkan ke database.",
+        });
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal mengunggah berkas logo.",
+        });
+      }
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Terjadi kendala saat mengunggah logo.",
+      });
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoFileInputRef.current) logoFileInputRef.current.value = "";
+    }
+  };
+
   const handleSave = async () => {
     if (!eventName.trim() || !eventTheme.trim() || !eventDate.trim()) {
       setFeedback({
@@ -201,6 +251,7 @@ export default function DashboardPengaturanPage() {
       eventDate: eventDate.trim(),
       eventYear: String(eventYear).trim(),
       heroImageUrl: heroImageUrl.trim(),
+      logoImageUrl: logoImageUrl.trim(),
       scoreGapThreshold: Number(scoreGapThreshold) || 20,
       maxCompetitions: Number(maxCompetitions) || 3,
       rotationInterval: Number(rotationInterval) || 15,
@@ -399,6 +450,87 @@ export default function DashboardPengaturanPage() {
                     onChange={(e) => setEventYear(e.target.value)}
                     placeholder="2026"
                     required
+                  />
+                </div>
+
+                {/* Upload Logo Acara */}
+                <div className="space-y-2 pt-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                    <span>Logo Acara (Navbar, Sidebar &amp; Monitor)</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">Maksimal 2MB (PNG, WEBP, SVG, JPG)</span>
+                  </label>
+
+                  {logoImageUrl ? (
+                    <div className="space-y-3 p-4 rounded-xl border border-accent/30 bg-accent/5">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl overflow-hidden border border-border bg-white">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={logoImageUrl}
+                            alt="Preview Logo"
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2 min-w-0 flex-1">
+                          <span className="text-[11px] text-muted-foreground truncate font-mono">{logoImageUrl}</span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => logoFileInputRef.current?.click()}
+                              disabled={isUploadingLogo}
+                              className="text-xs gap-1.5 cursor-pointer shrink-0"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              <span>Ganti Logo</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setLogoImageUrl("")}
+                              className="text-xs gap-1.5 cursor-pointer shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>Hapus</span>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Jika logo dihapus, sistem akan menampilkan ikon default.
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => logoFileInputRef.current?.click()}
+                      className="border-2 border-dashed border-border hover:border-accent/60 rounded-xl p-5 sm:p-6 text-center cursor-pointer transition-colors bg-muted/20 hover:bg-muted/40"
+                    >
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="p-3 rounded-full bg-accent/10 text-accent">
+                          {isUploadingLogo ? (
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                          ) : (
+                            <ImageIcon className="h-6 w-6" />
+                          )}
+                        </div>
+                        <p className="text-xs sm:text-sm font-medium text-foreground">
+                          {isUploadingLogo ? "Sedang mengunggah logo..." : "Klik untuk unggah logo acara"}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Rekomendasi gambar kotak (persegi) dengan latar transparan, mis. 512x512
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <input
+                    ref={logoFileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/jpg,image/svg+xml"
+                    onChange={handleLogoFileChange}
+                    className="hidden"
                   />
                 </div>
 

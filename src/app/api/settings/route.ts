@@ -30,6 +30,7 @@ export async function GET() {
       eventDate: general.date || `11 November ${general.year || "2026"}`,
       eventYear: String(general.year || "2026"),
       heroImageUrl: general.heroImageUrl || "",
+      logoImageUrl: general.logoImageUrl || "",
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       eventDate,
       eventYear,
       heroImageUrl,
+      logoImageUrl,
       scoreGapThreshold,
       maxCompetitions,
       rotationInterval,
@@ -104,6 +106,7 @@ export async function POST(request: Request) {
       date: String(eventDate || "11 November 2026").trim(),
       year: Number(eventYear) || 2026,
       heroImageUrl: String(heroImageUrl || "").trim(),
+      logoImageUrl: String(logoImageUrl || "").trim(),
     };
 
     const { error: errGeneral } = await supabase.from("event_settings").upsert(

@@ -10,6 +10,7 @@ export interface PublicEventSettings {
   eventDate: string;
   eventYear: string;
   heroImageUrl: string;
+  logoImageUrl: string;
   contactEmail: string;
   contactPhone: string;
   contactLocation: string;
@@ -23,6 +24,7 @@ const DEFAULT_SETTINGS: PublicEventSettings = {
   eventDate: "11 November 2026",
   eventYear: "2026",
   heroImageUrl: "",
+  logoImageUrl: "",
   contactEmail: "panitia@gebyarbulanbahasa.id",
   contactPhone: "0812-3456-7890 (Seksi Acara)",
   contactLocation: "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A.",
@@ -62,6 +64,7 @@ export function useEventSettings() {
               eventDate: json.settings.eventDate || DEFAULT_SETTINGS.eventDate,
               eventYear: json.settings.eventYear || DEFAULT_SETTINGS.eventYear,
               heroImageUrl: json.settings.heroImageUrl || "",
+              logoImageUrl: json.settings.logoImageUrl || "",
               contactEmail: json.settings.contactEmail || DEFAULT_SETTINGS.contactEmail,
               contactPhone: json.settings.contactPhone || DEFAULT_SETTINGS.contactPhone,
               contactLocation: json.settings.contactLocation || DEFAULT_SETTINGS.contactLocation,

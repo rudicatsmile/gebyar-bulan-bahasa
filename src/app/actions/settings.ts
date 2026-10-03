@@ -14,6 +14,7 @@ export interface EventSettingsMap {
   eventDate: string;
   eventYear: string;
   heroImageUrl: string;
+  logoImageUrl: string;
   scoreGapThreshold: string;
   maxCompetitions: string;
   rotationInterval: string;
@@ -32,6 +33,7 @@ const SaveEventSettingsSchema = z.object({
   eventDate: z.string().min(2, "Tanggal acara minimal 2 karakter").default("11 November 2026"),
   eventYear: z.string().regex(/^\d{4}$/, "Tahun harus berupa 4 digit angka"),
   heroImageUrl: z.string().optional().default(""),
+  logoImageUrl: z.string().optional().default(""),
   scoreGapThreshold: z.coerce.number().min(1, "Ambang selisih skor minimal 1").max(100, "Ambang selisih skor maksimal 100"),
   maxCompetitions: z.coerce.number().min(1, "Batas maksimal lomba minimal 1").max(10, "Batas maksimal lomba maksimal 10"),
   rotationInterval: z.coerce.number().min(5, "Durasi rotasi monitor minimal 5 detik").max(120, "Durasi rotasi monitor maksimal 120 detik"),
@@ -76,6 +78,7 @@ export async function getEventSettings(): Promise<{
       eventDate: general.date || `11 November ${general.year || "2026"}`,
       eventYear: String(general.year || "2026"),
       heroImageUrl: general.heroImageUrl || "",
+      logoImageUrl: general.logoImageUrl || "",
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
@@ -118,6 +121,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
     eventDate,
     eventYear,
     heroImageUrl,
+    logoImageUrl,
     scoreGapThreshold,
     maxCompetitions,
     rotationInterval,
@@ -155,6 +159,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       date: (eventDate || "11 November 2026").trim(),
       year: Number(eventYear),
       heroImageUrl: (heroImageUrl || "").trim(),
+      logoImageUrl: (logoImageUrl || "").trim(),
     };
 
     const { error: errGeneral } = await supabase
@@ -358,6 +363,85 @@ export async function uploadHeroImageAction(formData: FormData): Promise<{
     return {
       success: false,
       error: err instanceof Error ? err.message : "Gagal mengunggah berkas gambar.",
+    };
+  }
+}
+
+/**
+ * Server action untuk mengunggah berkas Logo Acara ke Supabase Storage
+ * dengan fallback penyimpanan lokal (public/uploads/logo).
+ * Logo ini tampil pada navbar publik, sidebar dashboard, monitor TV, & footer.
+ */
+export async function uploadLogoImageAction(formData: FormData): Promise<{
+  success: boolean;
+  url?: string;
+  error?: string;
+}> {
+  try {
+    const file = formData.get("file") as File | null;
+    if (!file || typeof file === "string") {
+      return { success: false, error: "Berkas gambar logo belum dipilih." };
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      return { success: false, error: "Ukuran berkas logo melebihi batas 2MB." };
+    }
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg", "image/svg+xml"];
+    if (!validTypes.includes(file.type)) {
+      return { success: false, error: "Format logo harus berupa JPG, PNG, WEBP, atau SVG." };
+    }
+
+    const ext = file.name.split(".").pop() || "png";
+    const uniqueFileName = `event-logo-${Date.now()}.${ext}`;
+    const storagePath = `logo/${uniqueFileName}`;
+
+    // 1. Coba upload ke Supabase Storage terlebih dahulu
+    try {
+      const supabase = createAdminClient();
+      const bucketName = process.env.NEXT_PUBLIC_BUCKET_MEDIA || "media-acara";
+
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (!error && data) {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from(bucketName).getPublicUrl(data.path);
+
+        return { success: true, url: publicUrl };
+      }
+    } catch (e) {
+      console.warn("Notice: Supabase storage upload logo fallback to local:", e);
+    }
+
+    // 2. Fallback: Simpan file ke direktori public/uploads/logo/
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "logo");
+      await fs.mkdir(uploadDir, { recursive: true });
+      const localFilePath = path.join(uploadDir, uniqueFileName);
+      const arrayBuffer = await file.arrayBuffer();
+      await fs.writeFile(localFilePath, Buffer.from(arrayBuffer));
+
+      const localUrl = `/uploads/logo/${uniqueFileName}`;
+      return { success: true, url: localUrl };
+    } catch (fsErr) {
+      return {
+        success: false,
+        error: fsErr instanceof Error ? fsErr.message : "Gagal menyimpan berkas logo ke server.",
+      };
+    }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal mengunggah berkas logo.",
     };
   }
 }
