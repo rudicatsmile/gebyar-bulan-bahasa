@@ -583,8 +583,8 @@ export function HomeClient({
                             type="button"
                             onClick={() => setSelectedDay(d)}
                             className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${selectedDay === d
-                                ? "bg-primary text-primary-foreground shadow-xs"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
                               }`}
                           >
                             <span>Hari ke-{d}</span>
@@ -621,8 +621,8 @@ export function HomeClient({
                       <div
                         key={sch.id}
                         className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isLive
-                            ? "border-danger/40 bg-danger/5 shadow-xs"
-                            : "border-border bg-card hover:border-accent/40"
+                          ? "border-danger/40 bg-danger/5 shadow-xs"
+                          : "border-border bg-card hover:border-accent/40"
                           }`}
                       >
                         <div className="space-y-1">
@@ -746,7 +746,7 @@ export function HomeClient({
         <section className="bg-primary text-primary-foreground py-16 px-4 sm:px-6 lg:px-8 border-t border-border">
           <div className="max-w-4xl mx-auto text-center space-y-6">
             <Badge variant="gold" className="text-xs">
-              Semangat {currentEventName} {currentEventYear}
+              Semangat {currentEventName}
             </Badge>
             <h3 className="font-heading text-3xl sm:text-4xl font-bold leading-tight">
               &ldquo;Kami poetra dan poetri Indonesia, mendjoendjoeng bahasa persatoean, bahasa Indonesia.&rdquo;

@@ -34,7 +34,7 @@ export default function GaleriTwibbonPage() {
           }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     async function loadTwibbons() {
       try {
@@ -82,7 +82,7 @@ export default function GaleriTwibbonPage() {
                 Galeri Twibbon {eventName}
               </h1>
               <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                Koleksi foto peserta dan pegiat kebudayaan yang mengibarkan semangat {eventName} {eventYear}. Foto terkurasi tayang pada Layar Monitor Lapangan venue.
+                Koleksi foto peserta dan pegiat kebudayaan yang mengibarkan semangat {eventName}. Foto terkurasi tayang pada Layar Monitor Lapangan venue.
               </p>
             </div>
 

@@ -81,7 +81,7 @@ export default async function TentangPage() {
               Profil & Identitas Acara
             </Badge>
             <h1 className="font-heading text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
-              {eventName} {eventYear}
+              {eventName}
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
               {eventName} bertema &ldquo;{eventTheme}&rdquo;

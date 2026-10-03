@@ -33,7 +33,7 @@ export function PemenangClient({ initialWinners, competitions }: PemenangClientP
           }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const filteredWinners = winners.filter((w) => {
@@ -87,7 +87,7 @@ export function PemenangClient({ initialWinners, competitions }: PemenangClientP
               Daftar Pemenang & Penganugerahan Juara
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Selamat kepada para juara yang telah berkarya dan menorehkan prestasi gemilang dalam {eventName} {eventYear}.
+              Selamat kepada para juara yang telah berkarya dan menorehkan prestasi gemilang dalam {eventName}.
             </p>
           </div>
 
@@ -95,11 +95,10 @@ export function PemenangClient({ initialWinners, competitions }: PemenangClientP
           <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               onClick={() => setSelectedFilter("semua")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${
-                selectedFilter === "semua"
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${selectedFilter === "semua"
                   ? "bg-primary text-primary-foreground font-bold shadow-xs"
                   : "bg-muted text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               Semua Cabang
             </button>
@@ -107,11 +106,10 @@ export function PemenangClient({ initialWinners, competitions }: PemenangClientP
               <button
                 key={c.id}
                 onClick={() => setSelectedFilter(c.id)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${
-                  selectedFilter === c.id
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${selectedFilter === c.id
                     ? "bg-primary text-primary-foreground font-bold shadow-xs"
                     : "bg-muted text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 {c.shortName || c.name}
               </button>

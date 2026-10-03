@@ -45,7 +45,7 @@ export function MonitorLayout({
             if (data.settings.eventYear) setEventYear(String(data.settings.eventYear));
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [initialEventName, initialEventTheme, initialEventYear]);
 
@@ -67,9 +67,9 @@ export function MonitorLayout({
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+      document.documentElement.requestFullscreen().catch(() => { });
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { });
     }
   };
 
@@ -100,7 +100,7 @@ export function MonitorLayout({
               </span>
             </div>
             <p className="text-xs text-white/60 tracking-wider uppercase mt-1">
-              {eventName} {eventYear} • Tema: {eventTheme}
+              {eventName} • Tema: {eventTheme}
             </p>
           </div>
         </div>

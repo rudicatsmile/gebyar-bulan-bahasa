@@ -88,7 +88,7 @@ export default function UnggahTwibbonPage() {
               Unggah Foto Twibbon
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Kirimkan foto diri terbaikmu dengan bingkai resmi {eventName} {eventYear}. Foto akan melalui verifikasi tim Media Center sebelum tampil di galeri publik dan layar monitor venue.
+              Kirimkan foto diri terbaikmu dengan bingkai resmi {eventName}. Foto akan melalui verifikasi tim Media Center sebelum tampil di galeri publik dan layar monitor venue.
             </p>
           </div>
 
