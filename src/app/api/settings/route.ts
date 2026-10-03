@@ -20,6 +20,7 @@ export async function GET() {
     const general = map["general"] || {};
     const registration = map["registration"] || {};
     const monitor = map["monitor"] || {};
+    const contact = map["contact"] || {};
 
     const settings = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
@@ -30,6 +31,13 @@ export async function GET() {
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
+      contactLocation: contact.location || "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A.",
+      contactHours: contact.hours || "07.30 - 21.00 WIB (Selama Acara Berlangsung)",
+      contactEmail: contact.email || "panitia@gebyarbulanbahasa.id",
+      contactPhone: contact.phone || "0812-3456-7890 (Seksi Acara)",
+      contactStageMap:
+        contact.stageMap ||
+        "• Panggung Utama (Stage A): Puisi, MC Formal, Vokal Grup\n• Ruang Bioskop Mini Lt. 2: Lomba Film Pendek\n• Aula Serbaguna: Pidato Bahasa Indonesia\n• Area Kreatif Selasar: Melukis Tas Kanvas\n• Ruang Teater A: Seni Teater Monolog\n• Pelataran Budaya: Seni Tradisi Palang Pintu Betawi",
     };
 
     return NextResponse.json({ success: true, settings });
@@ -52,6 +60,11 @@ export async function POST(request: Request) {
       scoreGapThreshold,
       maxCompetitions,
       rotationInterval,
+      contactLocation,
+      contactHours,
+      contactEmail,
+      contactPhone,
+      contactStageMap,
     } = body;
 
     if (!eventName || !eventTheme) {
@@ -73,6 +86,7 @@ export async function POST(request: Request) {
     const currentGeneral = existingMap["general"] || {};
     const currentRegistration = existingMap["registration"] || {};
     const currentMonitor = existingMap["monitor"] || {};
+    const currentContact = existingMap["contact"] || {};
 
     const now = new Date().toISOString();
 
@@ -155,7 +169,35 @@ export async function POST(request: Request) {
       );
     }
 
-    // 5. Sinkronkan ke tabel monitor_displays
+    // 5. Simpan key 'contact'
+    const updatedContact = {
+      ...currentContact,
+      location: String(contactLocation || "").trim(),
+      hours: String(contactHours || "").trim(),
+      email: String(contactEmail || "").trim(),
+      phone: String(contactPhone || "").trim(),
+      stageMap: String(contactStageMap || "").trim(),
+    };
+
+    const { error: errContact } = await supabase.from("event_settings").upsert(
+      {
+        key: "contact",
+        value: updatedContact,
+        description: "Informasi kontak, sekretariat, dan narahubung panitia",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
+    if (errContact) {
+      console.error("API POST errContact:", errContact);
+      return NextResponse.json(
+        { success: false, error: "Gagal menyimpan contact settings: " + errContact.message },
+        { status: 500 }
+      );
+    }
+
+    // 6. Sinkronkan ke tabel monitor_displays
     try {
       await supabase
         .from("monitor_displays")
@@ -168,12 +210,13 @@ export async function POST(request: Request) {
       console.warn("Notice updating monitor_displays:", e);
     }
 
-    // 6. Revalidate cache Next.js
+    // 7. Revalidate cache Next.js
     try {
       revalidatePath("/dashboard/pengaturan");
       revalidatePath("/dashboard");
       revalidatePath("/monitor");
       revalidatePath("/media/monitor");
+      revalidatePath("/kontak");
       revalidatePath("/");
     } catch {
       // Safe fallback
@@ -186,6 +229,7 @@ export async function POST(request: Request) {
         general: updatedGeneral,
         registration: updatedRegistration,
         monitor: updatedMonitor,
+        contact: updatedContact,
       },
     });
   } catch (err: unknown) {

@@ -3,6 +3,163 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export interface AdminChallengeItem {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  type: "scan_qr" | "kode_unik" | "unggah_bukti" | "input_panitia";
+  pointReward: number;
+  badge: string;
+  participantsCount: number;
+  status: "aktif" | "selesai";
+  isActive: boolean;
+  createdAt: string;
+}
+
+const ChallengeInputSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(3, "Judul challenge minimal 3 karakter"),
+  description: z.string().min(5, "Deskripsi challenge minimal 5 karakter"),
+  type: z.enum(["scan_qr", "kode_unik", "unggah_bukti", "input_panitia"]).default("scan_qr"),
+  pointReward: z.coerce.number().min(1, "Reward poin minimal 1"),
+  badge: z.string().min(2, "Lencana kehormatan wajib diisi").default("Peserta Aktif"),
+  isActive: z.boolean().default(true),
+});
+
+export type ChallengeInput = z.infer<typeof ChallengeInputSchema>;
+
+export async function getAdminChallenges(): Promise<{
+  success: boolean;
+  challenges: AdminChallengeItem[];
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("challenges")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const mapped: AdminChallengeItem[] = (data || []).map((row: any) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      description: row.description,
+      type: row.type,
+      pointReward: Number(row.point_reward) || 25,
+      badge: row.badge_icon || "Peserta Aktif",
+      participantsCount: 0,
+      status: row.is_active ? "aktif" : "selesai",
+      isActive: Boolean(row.is_active),
+      createdAt: row.created_at,
+    }));
+
+    return { success: true, challenges: mapped };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memuat daftar challenge.";
+    return { success: false, challenges: [], error: message };
+  }
+}
+
+export async function upsertChallenge(data: ChallengeInput) {
+  const parsed = ChallengeInputSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message };
+  }
+
+  try {
+    const supabase = createAdminClient();
+    const slug = parsed.data.title
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    const payload = {
+      title: parsed.data.title,
+      slug: slug || `challenge-${Date.now()}`,
+      description: parsed.data.description,
+      type: parsed.data.type,
+      point_reward: parsed.data.pointReward,
+      badge_icon: parsed.data.badge,
+      is_active: parsed.data.isActive,
+    };
+
+    if (parsed.data.id) {
+      const { error } = await supabase
+        .from("challenges")
+        .update(payload)
+        .eq("id", parsed.data.id);
+
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("challenges")
+        .insert({
+          ...payload,
+          start_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+    }
+
+    revalidatePath("/dashboard/challenge");
+    revalidatePath("/challenge");
+    revalidatePath("/peserta/challenge");
+    revalidatePath("/peserta");
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menyimpan challenge.";
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteChallenge(challengeId: string) {
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("challenges")
+      .delete()
+      .eq("id", challengeId);
+
+    if (error) throw error;
+
+    revalidatePath("/dashboard/challenge");
+    revalidatePath("/challenge");
+    revalidatePath("/peserta/challenge");
+    revalidatePath("/peserta");
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menghapus challenge.";
+    return { success: false, error: message };
+  }
+}
+
+export async function toggleChallengeStatus(challengeId: string, isActive: boolean) {
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("challenges")
+      .update({ is_active: isActive })
+      .eq("id", challengeId);
+
+    if (error) throw error;
+
+    revalidatePath("/dashboard/challenge");
+    revalidatePath("/challenge");
+    revalidatePath("/peserta/challenge");
+    revalidatePath("/peserta");
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal mengubah status challenge.";
+    return { success: false, error: message };
+  }
+}
 
 const ScanStandSchema = z.object({
   participantId: z.string().uuid("ID Peserta tidak valid"),

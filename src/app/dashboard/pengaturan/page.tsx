@@ -34,6 +34,19 @@ export default function DashboardPengaturanPage() {
   const [maxCompetitions, setMaxCompetitions] = React.useState("3");
   const [rotationInterval, setRotationInterval] = React.useState("15");
 
+  // Kontak & Sekretariat Panitia
+  const [contactLocation, setContactLocation] = React.useState(
+    "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A."
+  );
+  const [contactHours, setContactHours] = React.useState(
+    "07.30 - 21.00 WIB (Selama Acara Berlangsung)"
+  );
+  const [contactEmail, setContactEmail] = React.useState("panitia@gebyarbulanbahasa.id");
+  const [contactPhone, setContactPhone] = React.useState("0812-3456-7890 (Seksi Acara)");
+  const [contactStageMap, setContactStageMap] = React.useState(
+    "• Panggung Utama (Stage A): Puisi, MC Formal, Vokal Grup\n• Ruang Bioskop Mini Lt. 2: Lomba Film Pendek\n• Aula Serbaguna: Pidato Bahasa Indonesia\n• Area Kreatif Selasar: Melukis Tas Kanvas\n• Ruang Teater A: Seni Teater Monolog\n• Pelataran Budaya: Seni Tradisi Palang Pintu Betawi"
+  );
+
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
   const [feedback, setFeedback] = React.useState<{
@@ -59,6 +72,11 @@ export default function DashboardPengaturanPage() {
           setScoreGapThreshold(String(data.settings.scoreGapThreshold));
           setMaxCompetitions(String(data.settings.maxCompetitions));
           setRotationInterval(String(data.settings.rotationInterval));
+          if (data.settings.contactLocation) setContactLocation(data.settings.contactLocation);
+          if (data.settings.contactHours) setContactHours(data.settings.contactHours);
+          if (data.settings.contactEmail) setContactEmail(data.settings.contactEmail);
+          if (data.settings.contactPhone) setContactPhone(data.settings.contactPhone);
+          if (data.settings.contactStageMap) setContactStageMap(data.settings.contactStageMap);
           setIsLoading(false);
           return;
         }
@@ -75,6 +93,11 @@ export default function DashboardPengaturanPage() {
         setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
         setMaxCompetitions(String(actionRes.settings.maxCompetitions));
         setRotationInterval(String(actionRes.settings.rotationInterval));
+        if (actionRes.settings.contactLocation) setContactLocation(actionRes.settings.contactLocation);
+        if (actionRes.settings.contactHours) setContactHours(actionRes.settings.contactHours);
+        if (actionRes.settings.contactEmail) setContactEmail(actionRes.settings.contactEmail);
+        if (actionRes.settings.contactPhone) setContactPhone(actionRes.settings.contactPhone);
+        if (actionRes.settings.contactStageMap) setContactStageMap(actionRes.settings.contactStageMap);
       }
     } catch (err) {
       console.error("Gagal load settings:", err);
@@ -89,6 +112,11 @@ export default function DashboardPengaturanPage() {
           setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
           setMaxCompetitions(String(actionRes.settings.maxCompetitions));
           setRotationInterval(String(actionRes.settings.rotationInterval));
+          if (actionRes.settings.contactLocation) setContactLocation(actionRes.settings.contactLocation);
+          if (actionRes.settings.contactHours) setContactHours(actionRes.settings.contactHours);
+          if (actionRes.settings.contactEmail) setContactEmail(actionRes.settings.contactEmail);
+          if (actionRes.settings.contactPhone) setContactPhone(actionRes.settings.contactPhone);
+          if (actionRes.settings.contactStageMap) setContactStageMap(actionRes.settings.contactStageMap);
         }
       } catch (fallbackErr) {
         console.error("Fallback load failed:", fallbackErr);
@@ -166,6 +194,11 @@ export default function DashboardPengaturanPage() {
       scoreGapThreshold: Number(scoreGapThreshold) || 20,
       maxCompetitions: Number(maxCompetitions) || 3,
       rotationInterval: Number(rotationInterval) || 15,
+      contactLocation: contactLocation.trim(),
+      contactHours: contactHours.trim(),
+      contactEmail: contactEmail.trim(),
+      contactPhone: contactPhone.trim(),
+      contactStageMap: contactStageMap.trim(),
     };
 
     try {
@@ -458,6 +491,68 @@ export default function DashboardPengaturanPage() {
                   value={rotationInterval}
                   onChange={(e) => setRotationInterval(e.target.value)}
                   helperText="Waktu jeda per modul tayangan (Jadwal, Skor, Pemenang, Twibbon, Leaderboard)."
+                  required
+                />
+              </div>
+
+              {/* Bagian 4 */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <h3 className="font-heading text-base font-bold text-foreground border-b border-border pb-2 flex items-center justify-between">
+                  <span>4. Informasi Kontak, Sekretariat & Denah Lomba</span>
+                  <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings (key: contact)</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    name="contactLocation"
+                    label="Lokasi Sekretariat Panitia *"
+                    value={contactLocation}
+                    onChange={(e) => setContactLocation(e.target.value)}
+                    placeholder="Contoh: Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A."
+                    helperText="Lokasi fisik sekretariat yang tampil di halaman /kontak."
+                    required
+                  />
+                  <Input
+                    name="contactHours"
+                    label="Jam Layanan Operasional *"
+                    value={contactHours}
+                    onChange={(e) => setContactHours(e.target.value)}
+                    placeholder="Contoh: 07.30 - 21.00 WIB (Selama Acara Berlangsung)"
+                    helperText="Waktu operasional bantuan & sekretariat."
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    name="contactEmail"
+                    label="Email Resmi Panitia *"
+                    type="email"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    placeholder="panitia@gebyarbulanbahasa.id"
+                    helperText="Alamat email kontak panitia resmi."
+                    required
+                  />
+                  <Input
+                    name="contactPhone"
+                    label="Narahubung / WhatsApp Panitia *"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    placeholder="0812-3456-7890 (Seksi Acara)"
+                    helperText="Nomor telepon WhatsApp narahubung."
+                    required
+                  />
+                </div>
+
+                <Textarea
+                  name="contactStageMap"
+                  label="Denah Panggung & Lokasi Lomba (1 baris per lokasi) *"
+                  value={contactStageMap}
+                  onChange={(e) => setContactStageMap(e.target.value)}
+                  rows={6}
+                  placeholder="• Panggung Utama: Lomba Puisi&#10;• Aula: Pidato..."
+                  helperText="Daftar lokasi lomba panggung/ruangan yang ditampilkan pada denah mini halaman /kontak."
                   required
                 />
               </div>
