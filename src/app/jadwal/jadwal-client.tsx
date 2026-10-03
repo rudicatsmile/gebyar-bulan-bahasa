@@ -36,7 +36,7 @@ export function JadwalClient({ initialSchedules, competitions }: JadwalClientPro
           {/* Header */}
           <div className="space-y-4 max-w-3xl">
             <Badge variant="gold" className="text-xs">
-              Rangkaian Acara 3 Hari
+              Rangkaian Acara 2 Hari
             </Badge>
             <h1 className="font-heading text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
               Jadwal Lengkap & Agenda Panggung
@@ -47,11 +47,10 @@ export function JadwalClient({ initialSchedules, competitions }: JadwalClientPro
           </div>
 
           {/* Day Selector Tabs */}
-          <div className="grid grid-cols-3 gap-2 p-1.5 rounded-xl border border-border bg-card">
+          <div className="grid grid-cols-2 gap-2 p-1.5 rounded-xl border border-border bg-card">
             {[
-              { day: 1, date: "26 Okt 2025", label: "Hari 1: Pembuka & Palang Pintu" },
-              { day: 2, date: "27 Okt 2025", label: "Hari 2: Puisi, Melukis & Pidato", isToday: true },
-              { day: 3, date: "28 Okt 2025", label: "Hari 3: Puncak Sumpah Pemuda" },
+              { day: 1, date: "10 Nov 2026", label: "Hari 1: Pembukaan & Lomba Budaya" },
+              { day: 2, date: "11 Nov 2026", label: "Hari 2: Lomba Lanjutan & Malam Penganugerahan", isToday: true },
             ].map((d) => (
               <button
                 key={d.day}

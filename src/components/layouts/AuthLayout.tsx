@@ -94,7 +94,7 @@ export function AuthLayout({
         </div>
 
         <div className="flex items-center justify-between text-xs text-primary-foreground/60 border-t border-white/10 pt-4 font-mono">
-          <span>Jakarta, 26 - 28 Oktober 2026</span>
+          <span>Jakarta, 10 - 11 November 2026</span>
           <span>Versi 1.0.0 (Digital Scoring)</span>
         </div>
       </div>

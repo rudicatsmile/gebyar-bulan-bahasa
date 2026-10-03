@@ -24,7 +24,7 @@ export async function GET() {
     const settings = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
       eventTheme: general.theme || "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
-      eventDate: general.date || `28 Oktober ${general.year || "2026"}`,
+      eventDate: general.date || `11 November ${general.year || "2026"}`,
       eventYear: String(general.year || "2026"),
       heroImageUrl: general.heroImageUrl || "",
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       ...currentGeneral,
       name: String(eventName).trim(),
       theme: String(eventTheme).trim(),
-      date: String(eventDate || "28 Oktober 2026").trim(),
+      date: String(eventDate || "11 November 2026").trim(),
       year: Number(eventYear) || 2026,
       heroImageUrl: String(heroImageUrl || "").trim(),
     };

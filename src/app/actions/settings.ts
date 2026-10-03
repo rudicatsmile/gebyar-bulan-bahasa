@@ -20,7 +20,7 @@ export interface EventSettingsMap {
 const SaveEventSettingsSchema = z.object({
   eventName: z.string().min(3, "Nama acara minimal 3 karakter"),
   eventTheme: z.string().min(5, "Tema acara minimal 5 karakter"),
-  eventDate: z.string().min(2, "Tanggal acara minimal 2 karakter").default("28 Oktober 2026"),
+  eventDate: z.string().min(2, "Tanggal acara minimal 2 karakter").default("11 November 2026"),
   eventYear: z.string().regex(/^\d{4}$/, "Tahun harus berupa 4 digit angka"),
   heroImageUrl: z.string().optional().default(""),
   scoreGapThreshold: z.coerce.number().min(1, "Ambang selisih skor minimal 1").max(100, "Ambang selisih skor maksimal 100"),
@@ -56,7 +56,7 @@ export async function getEventSettings(): Promise<{
     const settings: EventSettingsMap = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
       eventTheme: general.theme || "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
-      eventDate: general.date || `28 Oktober ${general.year || "2026"}`,
+      eventDate: general.date || `11 November ${general.year || "2026"}`,
       eventYear: String(general.year || "2026"),
       heroImageUrl: general.heroImageUrl || "",
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
@@ -118,7 +118,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       ...currentGeneral,
       name: eventName.trim(),
       theme: eventTheme.trim(),
-      date: (eventDate || "28 Oktober 2026").trim(),
+      date: (eventDate || "11 November 2026").trim(),
       year: Number(eventYear),
       heroImageUrl: (heroImageUrl || "").trim(),
     };

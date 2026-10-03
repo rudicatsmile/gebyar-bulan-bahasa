@@ -22,8 +22,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ScheduleItem, Competition } from "@/lib/dummy-data";
-import { setScheduleStatus, upsertSchedule } from "@/app/actions/schedules";
-import { Plus, Radio, AlertCircle, Trophy, Pencil } from "lucide-react";
+import { setScheduleStatus, upsertSchedule, deleteSchedule } from "@/app/actions/schedules";
+import { Plus, Radio, AlertCircle, Trophy, Pencil, Trash2 } from "lucide-react";
 
 interface JadwalManageClientProps {
   initialSchedules: ScheduleItem[];
@@ -36,6 +36,8 @@ export function JadwalManageClient({
 }: JadwalManageClientProps) {
   const [schedules, setSchedules] = React.useState<ScheduleItem[]>(initialSchedules);
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [deleteConfirmSchedule, setDeleteConfirmSchedule] = React.useState<ScheduleItem | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
   const [conflictWarning, setConflictWarning] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -133,12 +135,34 @@ export function JadwalManageClient({
     }
   };
 
+  const handleDeleteSchedule = async () => {
+    if (!deleteConfirmSchedule) return;
+    setIsDeleting(true);
+    const targetId = deleteConfirmSchedule.id;
+
+    // Optimistic UI update
+    setSchedules((prev) => prev.filter((s) => s.id !== targetId));
+
+    try {
+      const res = await deleteSchedule(targetId);
+      if (!res.success) {
+        setConflictWarning(res.error || "Gagal menghapus jadwal.");
+      }
+    } catch (err) {
+      console.error("Gagal menghapus jadwal:", err);
+      setConflictWarning("Terjadi kesalahan saat menghapus jadwal.");
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmSchedule(null);
+    }
+  };
+
   const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     const eventDate =
-      day === "1" ? "2025-10-26" : day === "2" ? "2025-10-27" : "2025-10-28";
+      day === "1" ? "2026-11-10" : "2026-11-11";
     const startTimeParts = time.split("-")[0]?.trim() || "09:00";
     const endTimeParts = time.split("-")[1]?.replace("WIB", "").trim() || "12:00";
     const compIdPayload = selectedCompId || null;
@@ -148,7 +172,7 @@ export function JadwalManageClient({
       competitionId: compIdPayload || undefined,
       title,
       day: parseInt(day),
-      date: day === "1" ? "26 Oktober 2025" : day === "2" ? "27 Oktober 2025" : "28 Oktober 2025",
+      date: day === "1" ? "10 November 2026" : "11 November 2026",
       time,
       venue,
       stage,
@@ -310,6 +334,16 @@ export function JadwalManageClient({
                           <Pencil className="h-3 w-3" />
                           <span className="hidden sm:inline">Ubah</span>
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDeleteConfirmSchedule(sch)}
+                          className="text-[11px] h-7 gap-1 px-2 text-danger hover:bg-danger/10 hover:text-danger hover:border-danger/40 cursor-pointer"
+                          title="Hapus Agenda"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span className="hidden sm:inline">Hapus</span>
+                        </Button>
                         {!isLive && (
                           <Button
                             variant="accent"
@@ -388,9 +422,8 @@ export function JadwalManageClient({
                     value={day}
                     onChange={(e) => setDay(e.target.value)}
                   >
-                    <option value="1">Hari 1 (26 Okt)</option>
-                    <option value="2">Hari 2 (27 Okt)</option>
-                    <option value="3">Hari 3 (28 Okt)</option>
+                    <option value="1">Hari 1 (10 November 2026)</option>
+                    <option value="2">Hari 2 (11 November 2026)</option>
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -444,6 +477,44 @@ export function JadwalManageClient({
               </Button>
             </DialogFooter>
           </form>
+        </Dialog>
+
+        {/* Modal Konfirmasi Hapus Jadwal */}
+        <Dialog open={!!deleteConfirmSchedule} onOpenChange={(open) => !open && setDeleteConfirmSchedule(null)}>
+          <div className="space-y-4">
+            <DialogHeader>
+              <DialogTitle className="text-danger flex items-center gap-2">
+                <Trash2 className="h-5 w-5" />
+                <span>Hapus Agenda Jadwal</span>
+              </DialogTitle>
+              <DialogDescription>
+                Apakah Anda yakin ingin menghapus agenda <strong>&ldquo;{deleteConfirmSchedule?.title}&rdquo;</strong>? Agenda yang dihapus akan terhapus secara permanen dari database, jadwal publik, dan monitor panggung.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter className="flex gap-2 justify-end pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteConfirmSchedule(null)}
+                disabled={isDeleting}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteSchedule}
+                disabled={isDeleting}
+                className="gap-1.5"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>{isDeleting ? "Menghapus..." : "Ya, Hapus Jadwal"}</span>
+              </Button>
+            </DialogFooter>
+          </div>
         </Dialog>
       </div>
     </DashboardLayout>

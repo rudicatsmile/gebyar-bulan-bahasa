@@ -17,10 +17,25 @@ import { CHALLENGE_LEADERBOARD } from "@/lib/dummy-data";
 import { Trophy, Download, ArrowLeft } from "lucide-react";
 
 export default function DashboardLeaderboardInternalPage() {
+  const [leaderboard, setLeaderboard] = React.useState<typeof CHALLENGE_LEADERBOARD>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetch("/api/leaderboard")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && Array.isArray(data?.leaderboard)) {
+          setLeaderboard(data.leaderboard);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
   const handleExport = () => {
     const csvContent =
       "Rank,Nama Peserta,Instansi,Poin,Lencana\n" +
-      CHALLENGE_LEADERBOARD.map(
+      leaderboard.map(
         (p) => `${p.rank},"${p.name}","${p.institution}",${p.points},"${p.badge}"`
       ).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -53,7 +68,7 @@ export default function DashboardLeaderboardInternalPage() {
               </p>
             </div>
 
-            <Button onClick={handleExport} size="sm" variant="outline" className="text-xs gap-1.5 cursor-pointer">
+            <Button onClick={handleExport} size="sm" variant="outline" className="text-xs gap-1.5 cursor-pointer" disabled={leaderboard.length === 0}>
               <Download className="h-3.5 w-3.5" />
               <span>Ekspor Klasemen CSV</span>
             </Button>
@@ -72,27 +87,41 @@ export default function DashboardLeaderboardInternalPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {CHALLENGE_LEADERBOARD.map((item) => (
-                <TableRow key={item.rank}>
-                  <TableCell className="text-center font-mono font-bold text-xs">
-                    #{item.rank}
-                  </TableCell>
-                  <TableCell className="font-semibold text-foreground text-xs sm:text-sm">
-                    {item.name}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {item.institution}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="gold" className="text-[10px]">
-                      {item.badge}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
-                    {item.points} Poin
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">
+                    Memuat data klasemen peserta...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : leaderboard.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">
+                    Belum ada data peserta yang terdaftar pada challenge stand.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                leaderboard.map((item) => (
+                  <TableRow key={item.rank}>
+                    <TableCell className="text-center font-mono font-bold text-xs">
+                      #{item.rank}
+                    </TableCell>
+                    <TableCell className="font-semibold text-foreground text-xs sm:text-sm">
+                      {item.name}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {item.institution}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="gold" className="text-[10px]">
+                        {item.badge}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
+                      {item.points} Poin
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

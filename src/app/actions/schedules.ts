@@ -83,6 +83,7 @@ export async function upsertSchedule(data: z.infer<typeof ScheduleInputSchema>) 
     revalidatePath("/jadwal");
     revalidatePath("/monitor");
     revalidatePath("/monitor/jadwal");
+    revalidatePath("/");
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal menyimpan jadwal.";
@@ -133,9 +134,33 @@ export async function setScheduleStatus(
     revalidatePath("/dashboard/jadwal");
     revalidatePath("/jadwal");
     revalidatePath("/monitor");
+    revalidatePath("/");
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal memperbarui status jadwal.";
+    return { success: false, error: message };
+  }
+}
+
+export async function deleteSchedule(scheduleId: string) {
+  try {
+    const supabase = createAdminClient();
+
+    const { error } = await supabase
+      .from("schedules")
+      .delete()
+      .eq("id", scheduleId);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/dashboard/jadwal");
+    revalidatePath("/jadwal");
+    revalidatePath("/monitor");
+    revalidatePath("/monitor/jadwal");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menghapus jadwal.";
     return { success: false, error: message };
   }
 }

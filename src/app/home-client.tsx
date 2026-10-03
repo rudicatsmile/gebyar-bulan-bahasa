@@ -40,12 +40,12 @@ interface HomeClientProps {
 }
 
 /**
- * Mengubah string tanggal acara bebas (mis. "28 Oktober 2026", "27 - 28 Oktober 2026", "2026-10-28")
+ * Mengubah string tanggal acara bebas (mis. "11 November 2026", "10 - 11 November 2026", "2026-11-11")
  * menjadi objek Date target yang valid pada pukul 08:00 WIB.
  */
 function parseEventTargetDate(dateStr?: string, yearStr?: string): Date {
   const defaultYear = parseInt(yearStr || "", 10) || new Date().getFullYear();
-  if (!dateStr) return new Date(defaultYear, 9, 28, 8, 0, 0);
+  if (!dateStr) return new Date(defaultYear, 10, 11, 8, 0, 0);
 
   const str = String(dateStr).trim();
   const MONTHS: Record<string, number> = {
@@ -63,7 +63,7 @@ function parseEventTargetDate(dateStr?: string, yearStr?: string): Date {
     desember: 11, des: 11, dec: 11,
   };
 
-  // 1. Format teks tanggal: "28 Oktober 2026", "27 - 28 Oktober 2026", "28 Okt"
+  // 1. Format teks tanggal: "11 November 2026", "10 - 11 November 2026", "11 Nov"
   const textMatch = str.match(/(?:(\d{1,2})\s*[-–]\s*)?(\d{1,2})\s+([a-zA-Z]+)(?:\s+(\d{4}))?/i);
   if (textMatch) {
     const day = parseInt(textMatch[2], 10);
@@ -75,7 +75,7 @@ function parseEventTargetDate(dateStr?: string, yearStr?: string): Date {
     }
   }
 
-  // 2. Format ISO: "2026-10-28"
+  // 2. Format ISO: "2026-11-11"
   const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     return new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), 8, 0, 0);
@@ -90,7 +90,7 @@ function parseEventTargetDate(dateStr?: string, yearStr?: string): Date {
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) return parsed;
 
-  return new Date(defaultYear, 9, 28, 8, 0, 0);
+  return new Date(defaultYear, 10, 11, 8, 0, 0);
 }
 
 function calculateTimeRemaining(targetDate: Date) {
@@ -109,6 +109,86 @@ function calculateTimeRemaining(targetDate: Date) {
   return { days, hours, minutes, seconds, isExpired: false };
 }
 
+interface ActiveDayInfo {
+  day: number;
+  isToday: boolean;
+  isLive: boolean;
+  formattedDate: string;
+}
+
+function resolveInitialActiveDay(items: ScheduleItem[]): ActiveDayInfo {
+  if (!items || items.length === 0) {
+    return { day: 1, isToday: false, isLive: false, formattedDate: "" };
+  }
+
+  // 1. Cek apakah ada jadwal yang cocok persis dengan tanggal hari ini (WIB / UTC+7)
+  const today = new Date();
+  const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(today);
+  const todayIndo = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(today);
+  const todayMonthDay = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    timeZone: "Asia/Jakarta",
+  }).format(today);
+
+  const exactTodayMatch = items.find((s) => {
+    if (!s.date) return false;
+    const sDateClean = s.date.trim().toLowerCase();
+    return (
+      sDateClean === todayIso.toLowerCase() ||
+      sDateClean.includes(todayIndo.toLowerCase()) ||
+      sDateClean.includes(todayMonthDay.toLowerCase())
+    );
+  });
+
+  if (exactTodayMatch) {
+    return {
+      day: exactTodayMatch.day,
+      isToday: true,
+      isLive: exactTodayMatch.status === "berlangsung",
+      formattedDate: exactTodayMatch.date,
+    };
+  }
+
+  // 2. Cek apakah ada agenda yang statusnya sedang 'berlangsung' (LIVE saat ini)
+  const liveMatch = items.find((s) => s.status === "berlangsung");
+  if (liveMatch) {
+    return {
+      day: liveMatch.day,
+      isToday: false,
+      isLive: true,
+      formattedDate: liveMatch.date,
+    };
+  }
+
+  // 3. Cek apakah ada agenda yang statusnya 'terjadwal'
+  const scheduledMatch = items.find((s) => s.status === "terjadwal");
+  if (scheduledMatch) {
+    return {
+      day: scheduledMatch.day,
+      isToday: false,
+      isLive: false,
+      formattedDate: scheduledMatch.date,
+    };
+  }
+
+  // 4. Jika semua selesai, tampilkan hari terakhir dari rangkaian acara
+  const allDays = Array.from(new Set(items.map((s) => s.day))).sort((a, b) => a - b);
+  const lastDay = allDays[allDays.length - 1] || 1;
+  const lastDayItem = items.find((s) => s.day === lastDay);
+  return {
+    day: lastDay,
+    isToday: false,
+    isLive: false,
+    formattedDate: lastDayItem?.date || "",
+  };
+}
+
 export function HomeClient({
   competitions,
   schedules,
@@ -116,7 +196,7 @@ export function HomeClient({
   leaderboard,
   eventName = "Gebyar Bulan Bahasa dan Kebudayaan",
   eventTheme = "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
-  eventDate = "28 Oktober 2026",
+  eventDate = "11 November 2026",
   eventYear = "2026",
   heroImageUrl = "",
 }: HomeClientProps) {
@@ -125,6 +205,8 @@ export function HomeClient({
   const [currentEventDate, setCurrentEventDate] = React.useState(eventDate);
   const [currentEventYear, setCurrentEventYear] = React.useState(eventYear);
   const [currentHeroImageUrl, setCurrentHeroImageUrl] = React.useState(heroImageUrl);
+  const [currentSchedules, setCurrentSchedules] = React.useState<ScheduleItem[]>(schedules);
+  const [currentLeaderboard, setCurrentLeaderboard] = React.useState(leaderboard);
 
   React.useEffect(() => {
     setCurrentEventName(eventName);
@@ -145,6 +227,14 @@ export function HomeClient({
   React.useEffect(() => {
     setCurrentHeroImageUrl(heroImageUrl);
   }, [heroImageUrl]);
+
+  React.useEffect(() => {
+    setCurrentSchedules(schedules);
+  }, [schedules]);
+
+  React.useEffect(() => {
+    setCurrentLeaderboard(leaderboard);
+  }, [leaderboard]);
 
   React.useEffect(() => {
     // Sinkronisasi realtime / client-side dari pengaturan acara jika baru diperbarui di dashboard
@@ -170,7 +260,57 @@ export function HomeClient({
         }
       })
       .catch(() => { });
+
+    // Sinkronisasi realtime / client-side dari database schedules
+    fetch("/api/schedules")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && Array.isArray(data?.schedules) && data.schedules.length > 0) {
+          setCurrentSchedules(data.schedules);
+        }
+      })
+      .catch(() => { });
+
+    // Sinkronisasi realtime / client-side dari database leaderboard challenge
+    fetch("/api/leaderboard")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && Array.isArray(data?.leaderboard)) {
+          setCurrentLeaderboard(data.leaderboard);
+        }
+      })
+      .catch(() => { });
   }, []);
+
+  // Hitung hari aktif secara dinamis dari database dan kalender
+  const activeInfo = React.useMemo(() => resolveInitialActiveDay(currentSchedules), [currentSchedules]);
+  const [selectedDay, setSelectedDay] = React.useState<number>(() => activeInfo.day);
+
+  // Jika activeInfo berubah (misal setelah fetch data terbaru), update selectedDay
+  React.useEffect(() => {
+    setSelectedDay(activeInfo.day);
+  }, [activeInfo.day]);
+
+  // Daftar semua hari yang tersedia di jadwal
+  const availableDays = React.useMemo(() => {
+    return Array.from(new Set(currentSchedules.map((s) => s.day))).sort((a, b) => a - b);
+  }, [currentSchedules]);
+
+  // Jadwal untuk hari yang dipilih
+  const todaySchedules = React.useMemo(() => {
+    return currentSchedules.filter((s) => s.day === selectedDay);
+  }, [currentSchedules, selectedDay]);
+
+  // Tanggal untuk hari yang sedang dipilih
+  const selectedDayDate = React.useMemo(() => {
+    const item = currentSchedules.find((s) => s.day === selectedDay);
+    return item?.date || "";
+  }, [currentSchedules, selectedDay]);
+
+  const isSelectedActive = selectedDay === activeInfo.day;
+  const titleText = isSelectedActive
+    ? `Jadwal Hari Ini (Hari ke-${selectedDay})`
+    : `Jadwal Agenda Panggung (Hari ke-${selectedDay})`;
 
   // Countdown dinamis yang menghitung selisih waktu nyata ke tanggal acara target
   const [timeLeft, setTimeLeft] = React.useState(() => {
@@ -189,9 +329,8 @@ export function HomeClient({
     return () => clearInterval(timer);
   }, [currentEventDate, currentEventYear]);
 
-  const todaySchedules = schedules.filter((s) => s.day === 2);
   const featuredAnnouncements = announcements.slice(0, 3);
-  const topParticipants = leaderboard.slice(0, 5);
+  const topParticipants = currentLeaderboard.slice(0, 5);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -410,59 +549,114 @@ export function HomeClient({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-10">
             {/* Jadwal Hari Ini */}
             <div className="lg:col-span-7 space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <span className="text-xs font-mono tracking-widest text-accent uppercase font-bold">
-                    Agenda Panggung
-                  </span>
-                  <h3 className="font-heading text-xl sm:text-2xl font-bold text-foreground">
-                    Jadwal Hari Ini (Hari ke-2)
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-mono tracking-widest text-accent uppercase font-bold">
+                      Agenda Panggung
+                    </span>
+                    {selectedDayDate && (
+                      <span className="text-xs font-mono text-muted-foreground">
+                        • {selectedDayDate}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-heading text-xl sm:text-2xl font-bold text-foreground flex items-center gap-2">
+                    <span>{titleText}</span>
+                    {isSelectedActive && activeInfo.isLive && (
+                      <Badge variant="live" className="text-[10px] hidden sm:inline-flex">
+                        Sedang Berlangsung
+                      </Badge>
+                    )}
                   </h3>
                 </div>
-                <Link href="/jadwal" className="text-xs font-semibold text-accent hover:underline">
-                  Semua Hari →
-                </Link>
+
+                <div className="flex items-center gap-3">
+                  {/* Selector Tombol Hari (Dihasilkan dinamis dari database) */}
+                  {availableDays.length > 1 && (
+                    <div className="inline-flex items-center gap-1 p-1 rounded-xl border border-border bg-card">
+                      {availableDays.map((d) => {
+                        const isCurrentActive = d === activeInfo.day;
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setSelectedDay(d)}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              selectedDay === d
+                                ? "bg-primary text-primary-foreground shadow-xs"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            }`}
+                          >
+                            <span>Hari ke-{d}</span>
+                            {isCurrentActive && (
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  activeInfo.isLive ? "bg-danger animate-pulse" : "bg-accent"
+                                }`}
+                                title="Hari Aktif Acara"
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <Link href="/jadwal" className="text-xs font-semibold text-accent hover:underline whitespace-nowrap">
+                    Semua Hari →
+                  </Link>
+                </div>
               </div>
 
               <div className="space-y-3">
-                {todaySchedules.map((sch) => {
-                  const isLive = sch.status === "berlangsung";
-                  return (
-                    <div
-                      key={sch.id}
-                      className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isLive
-                          ? "border-danger/40 bg-danger/5 shadow-xs"
-                          : "border-border bg-card hover:border-accent/40"
+                {todaySchedules.length === 0 ? (
+                  <div className="p-8 text-center rounded-xl border border-dashed border-border bg-card/50">
+                    <p className="text-sm text-muted-foreground">
+                      Belum ada agenda panggung yang dijadwalkan untuk Hari ke-{selectedDay}.
+                    </p>
+                  </div>
+                ) : (
+                  todaySchedules.map((sch) => {
+                    const isLive = sch.status === "berlangsung";
+                    return (
+                      <div
+                        key={sch.id}
+                        className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          isLive
+                            ? "border-danger/40 bg-danger/5 shadow-xs"
+                            : "border-border bg-card hover:border-accent/40"
                         }`}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-foreground">
-                            {sch.time}
-                          </span>
-                          {isLive && (
-                            <Badge variant="live" className="text-[10px]">
-                              Sedang Berlangsung
-                            </Badge>
-                          )}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-foreground">
+                              {sch.time}
+                            </span>
+                            {isLive && (
+                              <Badge variant="live" className="text-[10px]">
+                                Sedang Berlangsung
+                              </Badge>
+                            )}
+                          </div>
+                          <h4 className="font-heading text-sm font-bold text-foreground">
+                            {sch.title}
+                          </h4>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3 text-accent" />
+                            <span>{sch.venue} ({sch.stage})</span>
+                          </div>
                         </div>
-                        <h4 className="font-heading text-sm font-bold text-foreground">
-                          {sch.title}
-                        </h4>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <MapPin className="h-3 w-3 text-accent" />
-                          <span>{sch.venue} ({sch.stage})</span>
-                        </div>
-                      </div>
 
-                      <div className="text-right sm:shrink-0">
-                        <span className="text-[11px] text-muted-foreground block">
-                          Host: {sch.host}
-                        </span>
+                        <div className="text-right sm:shrink-0">
+                          <span className="text-[11px] text-muted-foreground block">
+                            Host: {sch.host}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -517,26 +711,32 @@ export function HomeClient({
                   </Link>
                 </div>
                 <div className="rounded-xl border border-border bg-card divide-y divide-border/60">
-                  {topParticipants.map((p) => (
-                    <div key={p.rank} className="flex items-center justify-between p-2.5 text-xs">
-                      <div className="flex items-center gap-2.5 truncate">
-                        <span className="font-mono font-bold text-muted-foreground w-4">
-                          #{p.rank}
-                        </span>
-                        <div className="truncate">
-                          <span className="font-medium text-foreground block truncate">
-                            {p.name}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground truncate block">
-                            {p.institution}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="font-mono font-bold text-accent shrink-0 ml-2">
-                        {p.points} Poin
-                      </span>
+                  {topParticipants.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-muted-foreground">
+                      Belum ada poin terkumpul dari challenge stand.
                     </div>
-                  ))}
+                  ) : (
+                    topParticipants.map((p) => (
+                      <div key={p.rank} className="flex items-center justify-between p-2.5 text-xs">
+                        <div className="flex items-center gap-2.5 truncate">
+                          <span className="font-mono font-bold text-muted-foreground w-4">
+                            #{p.rank}
+                          </span>
+                          <div className="truncate">
+                            <span className="font-medium text-foreground block truncate">
+                              {p.name}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground truncate block">
+                              {p.institution}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="font-mono font-bold text-accent shrink-0 ml-2">
+                          {p.points} Poin
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

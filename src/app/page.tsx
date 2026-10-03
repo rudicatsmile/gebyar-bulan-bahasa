@@ -31,7 +31,7 @@ export default async function HomePage() {
   const eventDate =
     settingsRes.success && settingsRes.settings?.eventDate
       ? settingsRes.settings.eventDate
-      : "28 Oktober 2026";
+      : "11 November 2026";
 
   const eventYear =
     settingsRes.success && settingsRes.settings?.eventYear

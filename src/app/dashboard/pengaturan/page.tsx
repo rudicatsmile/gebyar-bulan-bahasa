@@ -24,7 +24,7 @@ export default function DashboardPengaturanPage() {
   const [eventTheme, setEventTheme] = React.useState(
     "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia."
   );
-  const [eventDate, setEventDate] = React.useState("28 Oktober 2026");
+  const [eventDate, setEventDate] = React.useState("11 November 2026");
   const [eventYear, setEventYear] = React.useState("2026");
   const [heroImageUrl, setHeroImageUrl] = React.useState("");
   const [isUploadingHero, setIsUploadingHero] = React.useState(false);
@@ -53,7 +53,7 @@ export default function DashboardPengaturanPage() {
         if (data.success && data.settings) {
           setEventName(data.settings.eventName);
           setEventTheme(data.settings.eventTheme);
-          setEventDate(data.settings.eventDate || "28 Oktober 2026");
+          setEventDate(data.settings.eventDate || "11 November 2026");
           setEventYear(data.settings.eventYear);
           setHeroImageUrl(data.settings.heroImageUrl || "");
           setScoreGapThreshold(String(data.settings.scoreGapThreshold));
@@ -69,7 +69,7 @@ export default function DashboardPengaturanPage() {
       if (actionRes.success && actionRes.settings) {
         setEventName(actionRes.settings.eventName);
         setEventTheme(actionRes.settings.eventTheme);
-        setEventDate(actionRes.settings.eventDate || "28 Oktober 2026");
+        setEventDate(actionRes.settings.eventDate || "11 November 2026");
         setEventYear(actionRes.settings.eventYear);
         setHeroImageUrl(actionRes.settings.heroImageUrl || "");
         setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
@@ -83,7 +83,7 @@ export default function DashboardPengaturanPage() {
         if (actionRes.success && actionRes.settings) {
           setEventName(actionRes.settings.eventName);
           setEventTheme(actionRes.settings.eventTheme);
-          setEventDate(actionRes.settings.eventDate || "28 Oktober 2026");
+          setEventDate(actionRes.settings.eventDate || "11 November 2026");
           setEventYear(actionRes.settings.eventYear);
           setHeroImageUrl(actionRes.settings.heroImageUrl || "");
           setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
@@ -325,7 +325,7 @@ export default function DashboardPengaturanPage() {
                     label="Tanggal Acara *"
                     value={eventDate}
                     onChange={(e) => setEventDate(e.target.value)}
-                    placeholder="Contoh: 28 Oktober 2026 atau 27 - 28 Oktober 2026"
+                    placeholder="Contoh: 11 November 2026 atau 10 - 11 November 2026"
                     helperText="Tanggal pelaksanaan acara yang tampil pada hitung mundur beranda."
                     required
                   />

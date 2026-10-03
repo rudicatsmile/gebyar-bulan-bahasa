@@ -133,7 +133,7 @@ function formatCompetition(
       const raw = row.theme_link || "";
       return raw.includes(" | ") ? raw.split(" | ")[1].trim() : "";
     })(),
-    date: "27-28 Oktober 2025",
+    date: "10-11 November 2026",
     time: "09:00 - 16:00 WIB",
     minMembers: row.min_team_members ?? 1,
     maxMembers: row.max_team_members ?? 1,
@@ -145,6 +145,28 @@ function formatCompetition(
     manuscripts,
     eventFormats,
   };
+}
+
+function formatEventDateIndo(dateStr?: string | null): string {
+  if (!dateStr) return "10 November 2026";
+  if (dateStr.includes("November") || dateStr.includes("Oktober") || dateStr.includes(" ")) return dateStr;
+  try {
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      const day = parseInt(parts[2]);
+      const d = new Date(year, month, day);
+      return new Intl.DateTimeFormat("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(d);
+    }
+  } catch {
+    // fallback
+  }
+  return dateStr;
 }
 
 /**
@@ -163,7 +185,7 @@ function formatSchedule(row: DbSchedule): ScheduleItem {
     competitionId: row.competition_id || undefined,
     title: row.title,
     day: row.event_day,
-    date: row.event_date || "27 Oktober 2025",
+    date: formatEventDateIndo(row.event_date),
     time: `${startTime} - ${endTime} WIB`,
     venue: row.venue,
     stage: row.stage || "Stage A",
@@ -580,15 +602,20 @@ export async function getChallengeLeaderboard() {
       .order("total_points", { ascending: false })
       .limit(10);
 
-    if (error || !data || data.length === 0) {
+    if (error) {
+      console.error("Supabase getChallengeLeaderboard error:", error);
       return CHALLENGE_LEADERBOARD;
+    }
+
+    if (!data || data.length === 0) {
+      return [];
     }
 
     return data.map((p, idx) => ({
       rank: idx + 1,
       name: p.full_name,
       institution: p.institution || "Umum",
-      points: p.total_points,
+      points: Number(p.total_points) || 0,
       badge:
         idx === 0
           ? "Penjelajah Bahasa"
@@ -598,7 +625,8 @@ export async function getChallengeLeaderboard() {
           ? "Duta Bahasa"
           : "Pilar Pemuda",
     }));
-  } catch {
+  } catch (err) {
+    console.error("Supabase getChallengeLeaderboard fallback:", err);
     return CHALLENGE_LEADERBOARD;
   }
 }
