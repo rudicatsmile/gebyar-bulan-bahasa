@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { getEventSettings, saveEventSettings } from "@/app/actions/settings";
+import { getEventSettings, saveEventSettings, uploadHeroImageAction } from "@/app/actions/settings";
 import {
   Settings,
   Save,
@@ -14,6 +14,9 @@ import {
   AlertCircle,
   Loader2,
   RotateCcw,
+  ImageIcon,
+  Upload,
+  Trash2,
 } from "lucide-react";
 
 export default function DashboardPengaturanPage() {
@@ -21,7 +24,12 @@ export default function DashboardPengaturanPage() {
   const [eventTheme, setEventTheme] = React.useState(
     "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia."
   );
-  const [eventYear, setEventYear] = React.useState("2025");
+  const [eventDate, setEventDate] = React.useState("28 Oktober 2026");
+  const [eventYear, setEventYear] = React.useState("2026");
+  const [heroImageUrl, setHeroImageUrl] = React.useState("");
+  const [isUploadingHero, setIsUploadingHero] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   const [scoreGapThreshold, setScoreGapThreshold] = React.useState("20");
   const [maxCompetitions, setMaxCompetitions] = React.useState("3");
   const [rotationInterval, setRotationInterval] = React.useState("15");
@@ -45,7 +53,9 @@ export default function DashboardPengaturanPage() {
         if (data.success && data.settings) {
           setEventName(data.settings.eventName);
           setEventTheme(data.settings.eventTheme);
+          setEventDate(data.settings.eventDate || "28 Oktober 2026");
           setEventYear(data.settings.eventYear);
+          setHeroImageUrl(data.settings.heroImageUrl || "");
           setScoreGapThreshold(String(data.settings.scoreGapThreshold));
           setMaxCompetitions(String(data.settings.maxCompetitions));
           setRotationInterval(String(data.settings.rotationInterval));
@@ -59,7 +69,9 @@ export default function DashboardPengaturanPage() {
       if (actionRes.success && actionRes.settings) {
         setEventName(actionRes.settings.eventName);
         setEventTheme(actionRes.settings.eventTheme);
+        setEventDate(actionRes.settings.eventDate || "28 Oktober 2026");
         setEventYear(actionRes.settings.eventYear);
+        setHeroImageUrl(actionRes.settings.heroImageUrl || "");
         setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
         setMaxCompetitions(String(actionRes.settings.maxCompetitions));
         setRotationInterval(String(actionRes.settings.rotationInterval));
@@ -71,7 +83,9 @@ export default function DashboardPengaturanPage() {
         if (actionRes.success && actionRes.settings) {
           setEventName(actionRes.settings.eventName);
           setEventTheme(actionRes.settings.eventTheme);
+          setEventDate(actionRes.settings.eventDate || "28 Oktober 2026");
           setEventYear(actionRes.settings.eventYear);
+          setHeroImageUrl(actionRes.settings.heroImageUrl || "");
           setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
           setMaxCompetitions(String(actionRes.settings.maxCompetitions));
           setRotationInterval(String(actionRes.settings.rotationInterval));
@@ -88,11 +102,54 @@ export default function DashboardPengaturanPage() {
     loadSettings();
   }, [loadSettings]);
 
-  const handleSave = async () => {
-    if (!eventName.trim() || !eventTheme.trim()) {
+  const handleHeroFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
       setFeedback({
         type: "error",
-        message: "Nama acara dan tema acara wajib diisi.",
+        message: "Ukuran berkas melebihi batas 5MB. Silakan pilih berkas yang lebih kecil.",
+      });
+      return;
+    }
+
+    try {
+      setIsUploadingHero(true);
+      setFeedback(null);
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await uploadHeroImageAction(formData);
+      if (res.success && res.url) {
+        setHeroImageUrl(res.url);
+        setFeedback({
+          type: "success",
+          message: "Gambar hero berhasil diunggah! Klik 'Simpan Seluruh Pengaturan' untuk menerapkan ke database.",
+        });
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal mengunggah berkas gambar hero.",
+        });
+      }
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Terjadi kendala saat mengunggah gambar hero.",
+      });
+    } finally {
+      setIsUploadingHero(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSave = async () => {
+    if (!eventName.trim() || !eventTheme.trim() || !eventDate.trim()) {
+      setFeedback({
+        type: "error",
+        message: "Nama acara, tema acara, dan tanggal acara wajib diisi.",
       });
       return;
     }
@@ -103,7 +160,9 @@ export default function DashboardPengaturanPage() {
     const payload = {
       eventName: eventName.trim(),
       eventTheme: eventTheme.trim(),
+      eventDate: eventDate.trim(),
       eventYear: String(eventYear).trim(),
+      heroImageUrl: heroImageUrl.trim(),
       scoreGapThreshold: Number(scoreGapThreshold) || 20,
       maxCompetitions: Number(maxCompetitions) || 3,
       rotationInterval: Number(rotationInterval) || 15,
@@ -209,11 +268,10 @@ export default function DashboardPengaturanPage() {
         {/* Feedback Alert di Atas */}
         {feedback && (
           <div
-            className={`p-4 rounded-xl border text-xs flex items-center gap-2.5 animate-in fade-in-50 ${
-              feedback.type === "success"
+            className={`p-4 rounded-xl border text-xs flex items-center gap-2.5 animate-in fade-in-50 ${feedback.type === "success"
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 : "border-destructive/40 bg-destructive/10 text-destructive"
-            }`}
+              }`}
           >
             {feedback.type === "success" ? (
               <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
@@ -254,21 +312,103 @@ export default function DashboardPengaturanPage() {
                 />
                 <Textarea
                   name="eventTheme"
-                  label="Tema Peringatan Sumpah Pemuda *"
+                  label="Tema Peringatan  *"
                   value={eventTheme}
                   onChange={(e) => setEventTheme(e.target.value)}
                   rows={2}
                   placeholder="Tema resmi festival bahasa"
                   required
                 />
-                <Input
-                  name="eventYear"
-                  label="Tahun Penyelenggaraan *"
-                  value={eventYear}
-                  onChange={(e) => setEventYear(e.target.value)}
-                  placeholder="2025"
-                  required
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    name="eventDate"
+                    label="Tanggal Acara *"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    placeholder="Contoh: 28 Oktober 2026 atau 27 - 28 Oktober 2026"
+                    helperText="Tanggal pelaksanaan acara yang tampil pada hitung mundur beranda."
+                    required
+                  />
+                  <Input
+                    name="eventYear"
+                    label="Tahun Penyelenggaraan *"
+                    value={eventYear}
+                    onChange={(e) => setEventYear(e.target.value)}
+                    placeholder="2026"
+                    required
+                  />
+                </div>
+
+                {/* Upload Image Hero Acara */}
+                <div className="space-y-2 pt-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                    <span>Gambar / Banner Hero Acara (Halaman Beranda)</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">Maksimal 5MB (JPG, PNG, WEBP)</span>
+                  </label>
+
+                  {heroImageUrl ? (
+                    <div className="space-y-3 p-4 rounded-xl border border-accent/30 bg-accent/5">
+                      <div className="relative aspect-[21/9] sm:aspect-[16/7] w-full max-h-60 rounded-lg overflow-hidden border border-border bg-background">
+                        <img
+                          src={heroImageUrl}
+                          alt="Preview Banner Hero"
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setHeroImageUrl("")}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors shadow-sm cursor-pointer"
+                          title="Hapus gambar hero"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <span className="text-muted-foreground truncate max-w-md font-mono text-[11px]">{heroImageUrl}</span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingHero}
+                          className="text-xs gap-1.5 cursor-pointer self-start sm:self-auto shrink-0"
+                        >
+                          <Upload className="h-3.5 w-3.5" />
+                          <span>Ganti Gambar</span>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-border hover:border-accent/60 rounded-xl p-6 sm:p-8 text-center cursor-pointer transition-colors bg-muted/20 hover:bg-muted/40"
+                    >
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="p-3 rounded-full bg-accent/10 text-accent">
+                          {isUploadingHero ? (
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                          ) : (
+                            <ImageIcon className="h-6 w-6" />
+                          )}
+                        </div>
+                        <p className="text-xs sm:text-sm font-medium text-foreground">
+                          {isUploadingHero ? "Sedang mengunggah berkas..." : "Klik untuk unggah gambar hero beranda"}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Rekomendasi rasio lanskap 16:9 atau panorama (Full HD 1920x1080)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                    onChange={handleHeroFileChange}
+                    className="hidden"
+                  />
+                </div>
               </div>
 
               {/* Bagian 2 */}

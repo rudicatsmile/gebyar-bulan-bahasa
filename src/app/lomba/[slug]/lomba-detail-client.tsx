@@ -39,6 +39,7 @@ import {
   Trophy,
   Loader2,
   BookOpen,
+  Mic,
 } from "lucide-react";
 
 export interface PublicJudgeItem {
@@ -375,6 +376,39 @@ export function LombaDetailClient({ competition, initialJudges }: LombaDetailCli
                   className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/40 text-xs sm:text-sm text-foreground font-medium hover:border-accent/40 transition-colors"
                 >
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent text-xs font-bold font-mono">
+                    {idx + 1}
+                  </span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Format Acara yang Dibawakan (Khusus Lomba Pembawa Acara / MC / Protokoler) */}
+      {competition.eventFormats && competition.eventFormats.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-heading text-xl sm:text-2xl font-bold text-foreground flex items-center gap-2">
+              <Mic className="h-5 w-5 text-amber-500" />
+              <span>Format Acara yang Dibawakan</span>
+            </h2>
+            <Badge variant="warning" className="text-xs">
+              {competition.eventFormats.length} Format Tersedia
+            </Badge>
+          </div>
+          <div className="p-6 rounded-xl border border-amber-500/20 bg-card space-y-3">
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Peserta pada cabang lomba ini dapat membawakan salah satu format atau tema agenda acara resmi berikut:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {competition.eventFormats.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/40 text-xs sm:text-sm text-foreground font-medium hover:border-amber-500/40 transition-colors"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-bold font-mono">
                     {idx + 1}
                   </span>
                   <span>{item}</span>

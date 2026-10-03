@@ -31,6 +31,7 @@ export interface Competition {
   rules: string[];
   criteria: CompetitionCriterion[];
   manuscripts?: string[];
+  eventFormats?: string[];
 }
 
 export interface Participant {
@@ -530,6 +531,11 @@ export const COMPETITIONS: Competition[] = [
       "Naskah Protokoler Upacara Peringatan Hari Sumpah Pemuda Tingkat Nasional",
       "Naskah Protokoler Upacara Pembukaan Gebyar Bulan Bahasa & Kebudayaan",
       "Naskah Pemandu Acara Sidang Paripurna Pemuda Indonesia",
+    ],
+    eventFormats: [
+      "Upacara Protokoler Peringatan Hari Sumpah Pemuda Tingkat Nasional",
+      "Seminar Nasional Bahasa dan Diplomasi Budaya Nusantara",
+      "Malam Penganugerahan Juara & Resepsi Kebudayaan",
     ],
   },
   {

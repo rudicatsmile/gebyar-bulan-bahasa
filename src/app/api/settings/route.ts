@@ -24,7 +24,9 @@ export async function GET() {
     const settings = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
       eventTheme: general.theme || "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
-      eventYear: String(general.year || "2025"),
+      eventDate: general.date || `28 Oktober ${general.year || "2026"}`,
+      eventYear: String(general.year || "2026"),
+      heroImageUrl: general.heroImageUrl || "",
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
@@ -44,7 +46,9 @@ export async function POST(request: Request) {
     const {
       eventName,
       eventTheme,
+      eventDate,
       eventYear,
+      heroImageUrl,
       scoreGapThreshold,
       maxCompetitions,
       rotationInterval,
@@ -77,7 +81,9 @@ export async function POST(request: Request) {
       ...currentGeneral,
       name: String(eventName).trim(),
       theme: String(eventTheme).trim(),
-      year: Number(eventYear) || 2025,
+      date: String(eventDate || "28 Oktober 2026").trim(),
+      year: Number(eventYear) || 2026,
+      heroImageUrl: String(heroImageUrl || "").trim(),
     };
 
     const { error: errGeneral } = await supabase.from("event_settings").upsert(

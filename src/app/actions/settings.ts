@@ -1,5 +1,7 @@
 "use server";
 
+import fs from "fs/promises";
+import path from "path";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -7,7 +9,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export interface EventSettingsMap {
   eventName: string;
   eventTheme: string;
+  eventDate: string;
   eventYear: string;
+  heroImageUrl: string;
   scoreGapThreshold: string;
   maxCompetitions: string;
   rotationInterval: string;
@@ -16,7 +20,9 @@ export interface EventSettingsMap {
 const SaveEventSettingsSchema = z.object({
   eventName: z.string().min(3, "Nama acara minimal 3 karakter"),
   eventTheme: z.string().min(5, "Tema acara minimal 5 karakter"),
+  eventDate: z.string().min(2, "Tanggal acara minimal 2 karakter").default("28 Oktober 2026"),
   eventYear: z.string().regex(/^\d{4}$/, "Tahun harus berupa 4 digit angka"),
+  heroImageUrl: z.string().optional().default(""),
   scoreGapThreshold: z.coerce.number().min(1, "Ambang selisih skor minimal 1").max(100, "Ambang selisih skor maksimal 100"),
   maxCompetitions: z.coerce.number().min(1, "Batas maksimal lomba minimal 1").max(10, "Batas maksimal lomba maksimal 10"),
   rotationInterval: z.coerce.number().min(5, "Durasi rotasi monitor minimal 5 detik").max(120, "Durasi rotasi monitor maksimal 120 detik"),
@@ -50,7 +56,9 @@ export async function getEventSettings(): Promise<{
     const settings: EventSettingsMap = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
       eventTheme: general.theme || "Berkarya dengan Bahasa, Bersatu dalam Budaya, Menginspirasi Indonesia.",
-      eventYear: String(general.year || "2025"),
+      eventDate: general.date || `28 Oktober ${general.year || "2026"}`,
+      eventYear: String(general.year || "2026"),
+      heroImageUrl: general.heroImageUrl || "",
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
@@ -81,7 +89,9 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
   const {
     eventName,
     eventTheme,
+    eventDate,
     eventYear,
+    heroImageUrl,
     scoreGapThreshold,
     maxCompetitions,
     rotationInterval,
@@ -108,7 +118,9 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       ...currentGeneral,
       name: eventName.trim(),
       theme: eventTheme.trim(),
+      date: (eventDate || "28 Oktober 2026").trim(),
       year: Number(eventYear),
+      heroImageUrl: (heroImageUrl || "").trim(),
     };
 
     const { error: errGeneral } = await supabase
@@ -206,6 +218,84 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
     return {
       success: false,
       error: err instanceof Error ? err.message : "Terjadi kesalahan internal sistem saat menyimpan pengaturan.",
+    };
+  }
+}
+
+/**
+ * Server action untuk mengunggah berkas gambar Hero Beranda ke Supabase Storage
+ * dengan fallback penyimpanan lokal (public/uploads/hero).
+ */
+export async function uploadHeroImageAction(formData: FormData): Promise<{
+  success: boolean;
+  url?: string;
+  error?: string;
+}> {
+  try {
+    const file = formData.get("file") as File | null;
+    if (!file || typeof file === "string") {
+      return { success: false, error: "Berkas gambar belum dipilih." };
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return { success: false, error: "Ukuran berkas melebihi batas 5MB." };
+    }
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg", "image/svg+xml"];
+    if (!validTypes.includes(file.type)) {
+      return { success: false, error: "Format gambar harus berupa JPG, PNG, WEBP, atau SVG." };
+    }
+
+    const ext = file.name.split(".").pop() || "png";
+    const uniqueFileName = `hero-banner-${Date.now()}.${ext}`;
+    const storagePath = `hero/${uniqueFileName}`;
+
+    // 1. Coba upload ke Supabase Storage terlebih dahulu
+    try {
+      const supabase = createAdminClient();
+      const bucketName = process.env.NEXT_PUBLIC_BUCKET_MEDIA || "media-acara";
+
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (!error && data) {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from(bucketName).getPublicUrl(data.path);
+
+        return { success: true, url: publicUrl };
+      }
+    } catch (e) {
+      console.warn("Notice: Supabase storage upload hero fallback to local:", e);
+    }
+
+    // 2. Fallback: Simpan file ke direktori public/uploads/hero/
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "hero");
+      await fs.mkdir(uploadDir, { recursive: true });
+      const localFilePath = path.join(uploadDir, uniqueFileName);
+      const arrayBuffer = await file.arrayBuffer();
+      await fs.writeFile(localFilePath, Buffer.from(arrayBuffer));
+
+      const localUrl = `/uploads/hero/${uniqueFileName}`;
+      return { success: true, url: localUrl };
+    } catch (fsErr) {
+      return {
+        success: false,
+        error: fsErr instanceof Error ? fsErr.message : "Gagal menyimpan berkas gambar ke server.",
+      };
+    }
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal mengunggah berkas gambar.",
     };
   }
 }

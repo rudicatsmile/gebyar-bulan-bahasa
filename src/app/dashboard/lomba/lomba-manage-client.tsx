@@ -39,6 +39,7 @@ import {
   ClipboardList,
   RotateCw,
   BookOpen,
+  Mic,
 } from "lucide-react";
 
 /**
@@ -62,6 +63,31 @@ export function isManuscriptEligible(slug: string, name?: string): boolean {
   if (eligibleSlugs.some((es) => s.includes(es))) return true;
 
   const keywords = ["puisi", "pidato", "monolog", "mc", "teater", "naskah", "orasi", "esai", "cerpen"];
+  return keywords.some((kw) => s.includes(kw) || n.includes(kw));
+}
+
+/**
+ * Menentukan apakah sebuah cabang lomba memerlukan input Format Acara yang dibawakan
+ * (misalnya MC Formal / Pembawa Acara / Protokoler / Presenter / Moderator / Penyiar)
+ * berdasarkan slug atau kata kunci nama lomba.
+ */
+export function isEventFormatEligible(slug: string, name?: string): boolean {
+  const eligibleSlugs = [
+    "mc-formal",
+    "mc",
+    "pembawa-acara",
+    "protokoler",
+    "presenter",
+    "moderator",
+    "penyiar",
+    "host",
+  ];
+  const s = (slug || "").toLowerCase();
+  const n = (name || "").toLowerCase();
+
+  if (eligibleSlugs.some((es) => s.includes(es))) return true;
+
+  const keywords = ["mc", "pembawa acara", "protokoler", "presenter", "moderator", "penyiar", "host"];
   return keywords.some((kw) => s.includes(kw) || n.includes(kw));
 }
 
@@ -284,6 +310,8 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [addRules, setAddRules] = React.useState("");
   const [addNeedsManuscripts, setAddNeedsManuscripts] = React.useState(false);
   const [addManuscripts, setAddManuscripts] = React.useState("");
+  const [addNeedsEventFormats, setAddNeedsEventFormats] = React.useState(false);
+  const [addEventFormats, setAddEventFormats] = React.useState("");
   const [addStatus, setAddStatus] = React.useState<"draft" | "pendaftaran">("pendaftaran");
   const [isSubmittingAdd, setIsSubmittingAdd] = React.useState(false);
 
@@ -303,15 +331,23 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [editRules, setEditRules] = React.useState("");
   const [editNeedsManuscripts, setEditNeedsManuscripts] = React.useState(false);
   const [editManuscripts, setEditManuscripts] = React.useState("");
+  const [editNeedsEventFormats, setEditNeedsEventFormats] = React.useState(false);
+  const [editEventFormats, setEditEventFormats] = React.useState("");
   const [editStatus, setEditStatus] = React.useState<"draft" | "pendaftaran" | "berlangsung" | "selesai" | "dibatalkan">("pendaftaran");
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
 
-  // Auto-detect jika nama di Modal Tambah Lomba cocok dengan kategori berbasis naskah
+  // Auto-detect jika nama di Modal Tambah Lomba cocok dengan kategori berbasis naskah atau format acara
   React.useEffect(() => {
     if (addOpen && !addNeedsManuscripts && isManuscriptEligible("", addName)) {
       setAddNeedsManuscripts(true);
     }
   }, [addName, addOpen, addNeedsManuscripts]);
+
+  React.useEffect(() => {
+    if (addOpen && !addNeedsEventFormats && isEventFormatEligible("", addName)) {
+      setAddNeedsEventFormats(true);
+    }
+  }, [addName, addOpen, addNeedsEventFormats]);
 
   // Modal Hapus / Arsip
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -410,6 +446,18 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         : ""
     );
 
+    // Conditional Format Acara yang dibawakan
+    const hasExistingEventFormats = Boolean(
+      comp.eventFormats && Array.isArray(comp.eventFormats) && comp.eventFormats.length > 0
+    );
+    const eligibleEventFormat = isEventFormatEligible(comp.slug, comp.name) || hasExistingEventFormats;
+    setEditNeedsEventFormats(eligibleEventFormat);
+    setEditEventFormats(
+      comp.eventFormats && Array.isArray(comp.eventFormats) && comp.eventFormats.length > 0
+        ? comp.eventFormats.join("\n")
+        : ""
+    );
+
     const mappedStatus = comp.status === "terjadwal" ? "pendaftaran" : comp.status;
     setEditStatus(mappedStatus);
     setEditOpen(true);
@@ -440,6 +488,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         description: editDescription,
         rules: editRules,
         manuscripts: editNeedsManuscripts ? editManuscripts : "",
+        eventFormats: editNeedsEventFormats ? editEventFormats : "",
         status: editStatus,
       });
 
@@ -453,6 +502,13 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
           ? editManuscripts
               .split("\n")
               .map((m) => m.trim())
+              .filter(Boolean)
+          : [];
+
+        const updatedEventFormats = editNeedsEventFormats
+          ? editEventFormats
+              .split("\n")
+              .map((ef) => ef.trim())
               .filter(Boolean)
           : [];
 
@@ -473,6 +529,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                   description: editDescription,
                   rules: updatedRules,
                   manuscripts: updatedManuscripts,
+                  eventFormats: updatedEventFormats,
                   status: editStatus,
                 }
               : c
@@ -515,6 +572,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         description: addDescription,
         rules: addRules,
         manuscripts: addNeedsManuscripts ? addManuscripts : "",
+        eventFormats: addNeedsEventFormats ? addEventFormats : "",
         status: addStatus,
       });
 
@@ -526,6 +584,8 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         setAddRules("");
         setAddManuscripts("");
         setAddNeedsManuscripts(false);
+        setAddEventFormats("");
+        setAddNeedsEventFormats(false);
         setNotification({
           type: "success",
           message: `Cabang lomba baru "${addName}" berhasil ditambahkan ke database!`,
@@ -654,6 +714,15 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                           >
                             <BookOpen className="h-3 w-3" />
                             <span>{comp.manuscripts.length} Naskah</span>
+                          </span>
+                        )}
+                        {comp.eventFormats && comp.eventFormats.length > 0 && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-normal"
+                            title={`${comp.eventFormats.length} Pilihan Format Acara Tersedia`}
+                          >
+                            <Mic className="h-3 w-3" />
+                            <span>{comp.eventFormats.length} Format Acara</span>
                           </span>
                         )}
                       </div>
@@ -910,6 +979,57 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
               </div>
             )}
 
+            {/* Conditional: Format Acara yang dibawakan (Hanya untuk Lomba Tertentu seperti MC/Pembawa Acara) */}
+            {addNeedsEventFormats ? (
+              <div className="space-y-2 text-left p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 transition-all">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <Mic className="h-4 w-4" />
+                    <span>Format Acara yang Dibawakan</span>
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium">
+                    Khusus Lomba MC &amp; Pembawa Acara
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Daftar format, tema agenda acara, atau simulasi keprotokoleran yang dapat dipilih atau dibawakan oleh peserta.
+                </p>
+                <textarea
+                  rows={3}
+                  placeholder={"Contoh:\nUpacara Protokoler Peringatan Hari Sumpah Pemuda Tingkat Nasional\nSeminar Nasional Bahasa dan Diplomasi Budaya Nusantara\nMalam Penganugerahan Juara & Resepsi Kebudayaan"}
+                  value={addEventFormats}
+                  onChange={(e) => setAddEventFormats(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans leading-relaxed"
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    Tekan <strong>Enter</strong> untuk format acara baru (1 baris = 1 format acara).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddNeedsEventFormats(false);
+                      setAddEventFormats("");
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-destructive underline decoration-dotted cursor-pointer"
+                  >
+                    Batal sertakan format acara
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-left pt-1">
+                <button
+                  type="button"
+                  onClick={() => setAddNeedsEventFormats(true)}
+                  className="text-xs text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1.5 font-medium cursor-pointer"
+                >
+                  <Mic className="h-3.5 w-3.5" />
+                  <span>+ Sertakan Format Acara yang dibawakan untuk lomba ini</span>
+                </button>
+              </div>
+            )}
+
             <div className="space-y-1.5 text-left">
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Status Awal Lomba *
@@ -1124,6 +1244,57 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 >
                   <BookOpen className="h-3.5 w-3.5" />
                   <span>+ Sertakan Pilihan Naskah untuk lomba ini</span>
+                </button>
+              </div>
+            )}
+
+            {/* Conditional: Format Acara yang dibawakan (Hanya untuk Lomba Tertentu seperti MC/Pembawa Acara) */}
+            {editNeedsEventFormats ? (
+              <div className="space-y-2 text-left p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 transition-all">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <Mic className="h-4 w-4" />
+                    <span>Format Acara yang Dibawakan</span>
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium">
+                    Khusus Lomba MC &amp; Pembawa Acara
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Daftar format, tema agenda acara, atau simulasi keprotokoleran yang dapat dipilih atau dibawakan oleh peserta.
+                </p>
+                <textarea
+                  rows={3}
+                  placeholder={"Contoh:\nUpacara Protokoler Peringatan Hari Sumpah Pemuda Tingkat Nasional\nSeminar Nasional Bahasa dan Diplomasi Budaya Nusantara\nMalam Penganugerahan Juara & Resepsi Kebudayaan"}
+                  value={editEventFormats}
+                  onChange={(e) => setEditEventFormats(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-background p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans leading-relaxed"
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    Tekan <strong>Enter</strong> untuk format acara baru (1 baris = 1 format acara).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditNeedsEventFormats(false);
+                      setEditEventFormats("");
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-destructive underline decoration-dotted cursor-pointer"
+                  >
+                    Hapus / Sembunyikan format acara
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-left pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditNeedsEventFormats(true)}
+                  className="text-xs text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1.5 font-medium cursor-pointer"
+                >
+                  <Mic className="h-3.5 w-3.5" />
+                  <span>+ Sertakan Format Acara yang dibawakan untuk lomba ini</span>
                 </button>
               </div>
             )}
