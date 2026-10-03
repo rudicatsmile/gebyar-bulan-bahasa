@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   PARTICIPANTS,
-  ACTIVITY_LOGS,
   JUDGES,
 } from "@/lib/dummy-data";
 import {
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import { getCompetitions } from "@/lib/supabase/queries";
 import { publicClient } from "@/lib/supabase/public";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -31,15 +31,28 @@ export default async function DashboardSeksiAcaraPage() {
   let verifiedParticipants = PARTICIPANTS.filter((p) => p.status === "terverifikasi").length;
   let pendingParticipants = PARTICIPANTS.filter((p) => p.status === "menunggu_verifikasi").length;
   let activeJudges = JUDGES.length;
-  let activityLogs = ACTIVITY_LOGS;
+  // Mulai dari array kosong: tampilkan data asli dari activity_logs.
+  // Tidak lagi memakai ACTIVITY_LOGS dummy agar tidak menyesatkan
+  // saat tabel memang belum berisi aktivitas.
+  let activityLogs: Array<{
+    id: string;
+    actor: string;
+    role: string;
+    action: string;
+    description: string;
+    timestamp: string;
+  }> = [];
 
   try {
+    // activity_logs memiliki RLS "select for is_admin()"; baca memakai admin client
+    // (service role) agar log asli tampil, bukan jatuh ke data dummy.
+    const adminClient = createAdminClient();
     const [partRes, verRes, pendRes, judgeRes, logRes] = await Promise.all([
       publicClient.from("participants").select("*", { count: "exact", head: true }),
       publicClient.from("participants").select("*", { count: "exact", head: true }).eq("status", "terverifikasi"),
       publicClient.from("participants").select("*", { count: "exact", head: true }).eq("status", "menunggu_verifikasi"),
       publicClient.from("profiles").select("*", { count: "exact", head: true }).eq("role", "juri"),
-      publicClient.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(6),
+      adminClient.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(6),
     ]);
 
     if (partRes.count !== null && partRes.count > 0) {
@@ -238,15 +251,28 @@ export default async function DashboardSeksiAcaraPage() {
             </div>
 
             <div className="rounded-xl border border-border bg-card p-4 space-y-3.5">
-              {activityLogs.map((log) => (
-                <div key={log.id} className="text-xs space-y-1 pb-3 border-b border-border/60 last:border-0 last:pb-0">
-                  <div className="flex items-center justify-between">
-                    <strong className="text-foreground">{log.actor}</strong>
-                    <span className="text-[10px] font-mono text-muted-foreground">{log.timestamp}</span>
-                  </div>
-                  <p className="text-muted-foreground leading-relaxed">{log.description}</p>
+              {activityLogs.length === 0 ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-center">
+                  <Clock className="h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Belum ada aktivitas tercatat.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/70 leading-relaxed max-w-xs">
+                    Log akan muncul otomatis saat panitia melakukan aksi seperti
+                    verifikasi peserta, input nilai juri, atau publikasi pemenang.
+                  </p>
                 </div>
-              ))}
+              ) : (
+                activityLogs.map((log) => (
+                  <div key={log.id} className="text-xs space-y-1 pb-3 border-b border-border/60 last:border-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <strong className="text-foreground">{log.actor}</strong>
+                      <span className="text-[10px] font-mono text-muted-foreground">{log.timestamp}</span>
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed">{log.description}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
