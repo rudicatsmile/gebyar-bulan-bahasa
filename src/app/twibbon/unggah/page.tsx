@@ -20,6 +20,10 @@ import {
   Download,
   ChevronRight,
   ChevronLeft,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Move,
 } from "lucide-react";
 import { getActiveTwibbonTemplates, type TwibbonTemplate } from "@/app/actions/twibbon-template";
 import { uploadPublicFile } from "@/lib/supabase/storage";
@@ -27,40 +31,52 @@ import { submitTwibbon } from "@/app/actions/twibbon";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function mergePhotoWithTemplate(
-  photoDataUrl: string,
-  templateUrl: string
-): Promise<string> {
+function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const canvas = document.createElement("canvas");
-    const size = 1000;
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return reject("Canvas tidak didukung.");
-
-    const photo = new Image();
-    photo.crossOrigin = "anonymous";
-    photo.onload = () => {
-      // Draw foto user sebagai background (crop ke kotak)
-      const minDim = Math.min(photo.width, photo.height);
-      const sx = (photo.width - minDim) / 2;
-      const sy = (photo.height - minDim) / 2;
-      ctx.drawImage(photo, sx, sy, minDim, minDim, 0, 0, size, size);
-
-      // Overlay template di atas
-      const template = new Image();
-      template.crossOrigin = "anonymous";
-      template.onload = () => {
-        ctx.drawImage(template, 0, 0, size, size);
-        resolve(canvas.toDataURL("image/jpeg", 0.92));
-      };
-      template.onerror = () => reject("Gagal memuat gambar template.");
-      template.src = templateUrl;
-    };
-    photo.onerror = () => reject("Gagal memuat foto.");
-    photo.src = photoDataUrl;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gagal memuat gambar."));
+    img.src = src;
   });
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(Math.max(v, min), max);
+}
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/**
+ * Gambar komposisi twibbon (foto user + overlay template) ke context canvas.
+ * Offset disimpan sebagai fraksi ukuran box sehingga hasil preview (kanvas
+ * kecil) identik dengan hasil ekspor (kanvas 1000px).
+ */
+function drawComposition(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  photo: HTMLImageElement,
+  template: HTMLImageElement | null,
+  zoom: number,
+  offsetXNorm: number,
+  offsetYNorm: number
+) {
+  ctx.clearRect(0, 0, size, size);
+
+  // Skala "cover": sisi terpendek foto mengisi penuh kotak, lalu dikali zoom.
+  const coverScale = size / Math.min(photo.naturalWidth, photo.naturalHeight);
+  const scale = coverScale * zoom;
+  const drawnW = photo.naturalWidth * scale;
+  const drawnH = photo.naturalHeight * scale;
+  const x = (size - drawnW) / 2 + offsetXNorm * size;
+  const y = (size - drawnH) / 2 + offsetYNorm * size;
+  ctx.drawImage(photo, x, y, drawnW, drawnH);
+
+  if (template) {
+    ctx.drawImage(template, 0, 0, size, size);
+  }
 }
 
 function dataURLtoFile(dataUrl: string, filename: string): File {
@@ -86,8 +102,12 @@ export default function UnggahTwibbonPage() {
   const [loadingTemplates, setLoadingTemplates] = React.useState(true);
   const [selectedTemplate, setSelectedTemplate] = React.useState<TwibbonTemplate | null>(null);
 
-  // Photo
-  const [userPhoto, setUserPhoto] = React.useState<string | null>(null);
+  // Photo — elemen gambar mentah + parameter framing (posisi & zoom)
+  const [photoImg, setPhotoImg] = React.useState<HTMLImageElement | null>(null);
+  const [templateImg, setTemplateImg] = React.useState<HTMLImageElement | null>(null);
+  const [zoom, setZoom] = React.useState(1);
+  const [offsetX, setOffsetX] = React.useState(0);
+  const [offsetY, setOffsetY] = React.useState(0);
   const [mergedPhoto, setMergedPhoto] = React.useState<string | null>(null);
   const [merging, setMerging] = React.useState(false);
   const [mergeError, setMergeError] = React.useState("");
@@ -123,40 +143,184 @@ export default function UnggahTwibbonPage() {
   const handleSelectTemplate = (t: TwibbonTemplate) => {
     setSelectedTemplate(t);
     setMergedPhoto(null);
-    setUserPhoto(null);
+    setPhotoImg(null);
+    setZoom(1);
+    setOffsetX(0);
+    setOffsetY(0);
   };
 
-  // ── Step: Upload Foto ───────────────────────────────────────────────────────
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // ── Step: Upload & Framing Foto ────────────────────────────────────────────
+  const galleryInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const previewCanvasRef = React.useRef<HTMLCanvasElement>(null);
+  const activePointersRef = React.useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStateRef = React.useRef<{ startDist: number; startZoom: number } | null>(null);
+
+  // Muat elemen gambar template saat template dipilih (untuk preview langsung).
+  // setState dipanggil di callback promise, tidak di body effect.
+  React.useEffect(() => {
+    let cancelled = false;
+    const url = selectedTemplate?.image_url;
+    const task = url
+      ? loadImage(url).catch(() => null as HTMLImageElement | null)
+      : Promise.resolve<HTMLImageElement | null>(null);
+    task.then((img) => {
+      if (!cancelled) setTemplateImg(img);
+    });
+    return () => { cancelled = true; };
+  }, [selectedTemplate]);
+
+  // Batasi offset terhadap "slack" hasil zoom agar tidak pernah muncul celah putih
+  const framedOffsets = React.useMemo(() => {
+    const limit = (zoom - 1) / 2;
+    return {
+      x: clamp(offsetX, -limit, limit),
+      y: clamp(offsetY, -limit, limit),
+    };
+  }, [zoom, offsetX, offsetY]);
+
+  // Gambar ulang preview framing setiap parameter berubah
+  React.useEffect(() => {
+    if (step !== "photo") return;
+    const canvas = previewCanvasRef.current;
+    if (!canvas || !photoImg) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    drawComposition(
+      ctx,
+      canvas.width,
+      photoImg,
+      templateImg,
+      zoom,
+      framedOffsets.x,
+      framedOffsets.y
+    );
+  }, [step, photoImg, templateImg, zoom, framedOffsets]);
+
+  // Scroll mouse = zoom di desktop (preventDefault agar halaman tidak ikut scroll)
+  React.useEffect(() => {
+    if (step !== "photo") return;
+    const canvas = previewCanvasRef.current;
+    if (!canvas || !photoImg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setZoom((z) => clamp(z * (e.deltaY > 0 ? 0.94 : 1.06), 1, 4));
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [step, photoImg]);
+
+  // Proses file dari galeri maupun kamera — keduanya masuk ke editor framing
+  const handleFile = (file: File | undefined | null) => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       setMergeError("Ukuran foto melebihi batas 5MB.");
       return;
     }
     setMergeError("");
-
+    setMergedPhoto(null);
     const reader = new FileReader();
-    reader.onloadend = async () => {
-      const photoDataUrl = reader.result as string;
-      setUserPhoto(photoDataUrl);
-
-      if (selectedTemplate) {
-        // Merge langsung saat foto dipilih
-        setMerging(true);
-        try {
-          const merged = await mergePhotoWithTemplate(photoDataUrl, selectedTemplate.image_url);
-          setMergedPhoto(merged);
-        } catch (err) {
-          setMergeError(typeof err === "string" ? err : "Gagal menggabungkan foto dengan template.");
-        } finally {
-          setMerging(false);
-        }
-      } else {
-        setMergedPhoto(photoDataUrl);
-      }
+    reader.onloadend = () => {
+      loadImage(reader.result as string)
+        .then((img) => {
+          setPhotoImg(img);
+          setZoom(1);
+          setOffsetX(0);
+          setOffsetY(0);
+        })
+        .catch(() => setMergeError("Gagal memuat foto. Coba file lain."));
     };
     reader.readAsDataURL(file);
+  };
+
+  const handlePhotoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFile(e.target.files?.[0]);
+    // Reset nilai agar file yang sama bisa dipilih ulang
+    e.target.value = "";
+  };
+
+  // ── Interaksi drag (geser) & pinch (zoom) pada kanvas ──
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas || !photoImg) return;
+    canvas.setPointerCapture(e.pointerId);
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointersRef.current.size === 2) {
+      const pts = [...activePointersRef.current.values()];
+      pinchStateRef.current = { startDist: distance(pts[0], pts[1]), startZoom: zoom };
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const pointers = activePointersRef.current;
+    const prev = pointers.get(e.pointerId);
+    if (!prev) return;
+    const cur = { x: e.clientX, y: e.clientY };
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    if (pointers.size === 1) {
+      // Geser foto (delta dinormalisasi terhadap ukuran tampilan kanvas)
+      const limit = (zoom - 1) / 2;
+      setOffsetX((o) => clamp(o + (cur.x - prev.x) / rect.width, -limit, limit));
+      setOffsetY((o) => clamp(o + (cur.y - prev.y) / rect.height, -limit, limit));
+    } else if (pointers.size === 2 && pinchStateRef.current) {
+      // Pinch two-finger zoom di HP
+      pointers.set(e.pointerId, cur);
+      const pts = [...pointers.values()];
+      const ratio = distance(pts[0], pts[1]) / (pinchStateRef.current.startDist || 1);
+      setZoom(clamp(pinchStateRef.current.startZoom * ratio, 1, 4));
+      return;
+    }
+    pointers.set(e.pointerId, cur);
+  };
+
+  const handlePointerEnd = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) pinchStateRef.current = null;
+  };
+
+  const resetFraming = () => {
+    setZoom(1);
+    setOffsetX(0);
+    setOffsetY(0);
+  };
+
+  // Komposisi final sesuai posisi & zoom terakhir, lalu lanjut ke step form
+  const handleFinishEditor = async () => {
+    if (!photoImg) return;
+    setMerging(true);
+    setMergeError("");
+    try {
+      let tImg = templateImg;
+      if (selectedTemplate && !tImg) {
+        try {
+          tImg = await loadImage(selectedTemplate.image_url);
+        } catch {
+          tImg = null;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = 1000;
+      canvas.height = 1000;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas tidak didukung browser.");
+      drawComposition(ctx, 1000, photoImg, tImg, zoom, framedOffsets.x, framedOffsets.y);
+      setMergedPhoto(canvas.toDataURL("image/jpeg", 0.92));
+      if (selectedTemplate && !tImg) {
+        setMergeError("Template gagal dimuat; foto diproses tanpa bingkai.");
+      }
+      setStep("form");
+    } catch (err) {
+      setMergeError(
+        err instanceof Error
+          ? `Gagal memproses foto: ${err.message}`
+          : "Gagal memproses foto. Silakan coba lagi."
+      );
+    } finally {
+      setMerging(false);
+    }
   };
 
   const handleDownload = () => {
@@ -220,8 +384,11 @@ export default function UnggahTwibbonPage() {
   const handleReset = () => {
     setStep("template");
     setSelectedTemplate(null);
-    setUserPhoto(null);
+    setPhotoImg(null);
     setMergedPhoto(null);
+    setZoom(1);
+    setOffsetX(0);
+    setOffsetY(0);
     setFullName("");
     setInstitution("");
     setRegNumber("");
@@ -438,52 +605,144 @@ export default function UnggahTwibbonPage() {
                   <div className="space-y-5">
                     <div>
                       <h2 className="font-heading text-lg font-bold text-foreground">
-                        Unggah Foto Kamu
+                        Unggah & Atur Posisi Foto
                       </h2>
                       <p className="text-xs text-muted-foreground mt-1">
                         {selectedTemplate
-                          ? `Foto akan digabungkan dengan template "${selectedTemplate.name}" secara otomatis.`
-                          : "Foto akan diunggah tanpa template bingkai."}
+                          ? `Pilih atau ambil foto, lalu geser dan zoom agar wajah pas dengan bingkai "${selectedTemplate.name}".`
+                          : "Pilih atau ambil foto, lalu atur posisi dan zoom sesuai selera Anda."}
                       </p>
                     </div>
 
-                    {/* Upload Zone */}
-                    <div className="border-2 border-dashed border-border hover:border-accent rounded-xl p-6 text-center space-y-3 cursor-pointer transition-colors relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePhotoChange}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                      {merging ? (
-                        <div className="py-8 flex flex-col items-center gap-3 text-muted-foreground">
-                          <Loader2 className="h-8 w-8 animate-spin text-accent" />
-                          <p className="text-xs font-semibold">Menggabungkan foto dengan template...</p>
+                    {/* Input tersembunyi: galeri (tanpa capture) & kamera (selfie) */}
+                    <input
+                      ref={galleryInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoInputChange}
+                      className="hidden"
+                    />
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="user"
+                      onChange={handlePhotoInputChange}
+                      className="hidden"
+                    />
+
+                    {!photoImg ? (
+                      /* Pilih sumber foto */
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => galleryInputRef.current?.click()}
+                            className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border hover:border-accent bg-card p-6 text-center transition-colors active:scale-[0.98]"
+                          >
+                            <Upload className="h-7 w-7 text-accent" />
+                            <span className="text-xs font-semibold text-foreground">Pilih dari Galeri</span>
+                            <span className="text-[10px] text-muted-foreground">Foto yang sudah ada di HP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border hover:border-accent bg-card p-6 text-center transition-colors active:scale-[0.98]"
+                          >
+                            <Camera className="h-7 w-7 text-accent" />
+                            <span className="text-xs font-semibold text-foreground">Ambil Foto</span>
+                            <span className="text-[10px] text-muted-foreground">Kamera depan / selfie</span>
+                          </button>
                         </div>
-                      ) : mergedPhoto ? (
-                        <div className="space-y-2">
-                          <img
-                            src={mergedPhoto}
-                            alt="Preview twibbon"
-                            className="h-48 w-48 object-cover rounded-xl mx-auto border border-border shadow"
+                        <p className="text-[11px] text-muted-foreground text-center">
+                          JPG / PNG / WebP — Maks. 5MB — Rasio 1:1 direkomendasikan
+                        </p>
+                      </div>
+                    ) : (
+                      /* Editor framing: geser & zoom foto di dalam bingkai */
+                      <div className="space-y-4">
+                        <div className="relative w-full max-w-sm mx-auto">
+                          <canvas
+                            ref={previewCanvasRef}
+                            width={600}
+                            height={600}
+                            className="block w-full aspect-square rounded-xl border-2 border-accent/40 bg-black touch-none select-none cursor-grab active:cursor-grabbing"
+                            onPointerDown={handlePointerDown}
+                            onPointerMove={handlePointerMove}
+                            onPointerUp={handlePointerEnd}
+                            onPointerCancel={handlePointerEnd}
                           />
-                          <p className="text-xs text-accent font-semibold">Klik untuk mengganti foto</p>
-                          {mergeError && (
-                            <p className="text-xs text-danger">{mergeError}</p>
+                          {zoom === 1 && (
+                            <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-[10px] font-semibold text-white whitespace-nowrap">
+                              <Move className="h-3 w-3" /> Geser foto agar pas dengan bingkai
+                            </div>
                           )}
                         </div>
-                      ) : (
-                        <div className="space-y-2 py-6">
-                          <Camera className="h-8 w-8 text-muted-foreground mx-auto" />
-                          <p className="text-xs font-semibold text-foreground">
-                            Klik atau seret file foto ke sini
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            JPG / PNG / WebP — Maks. 5MB — Rasio 1:1 direkomendasikan
-                          </p>
+
+                        {/* Kontrol zoom */}
+                        <div className="flex items-center gap-3 max-w-sm mx-auto">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            aria-label="Perkecil foto"
+                            onClick={() => setZoom((z) => clamp(z - 0.15, 1, 4))}
+                          >
+                            <ZoomOut className="h-4 w-4" />
+                          </Button>
+                          <input
+                            type="range"
+                            min={1}
+                            max={4}
+                            step={0.01}
+                            value={zoom}
+                            onChange={(e) => setZoom(parseFloat(e.target.value))}
+                            className="flex-1 cursor-pointer"
+                            aria-label="Zoom foto"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            aria-label="Perbesar foto"
+                            onClick={() => setZoom((z) => clamp(z + 0.15, 1, 4))}
+                          >
+                            <ZoomIn className="h-4 w-4" />
+                          </Button>
                         </div>
-                      )}
-                    </div>
+
+                        <p className="text-[11px] text-muted-foreground text-center">
+                          Seret satu jari untuk memindahkan foto • cubit dua jari / scroll untuk zoom
+                        </p>
+
+                        {/* Aksi cepat */}
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                          <Button type="button" variant="outline" size="sm" className="text-xs" onClick={resetFraming}>
+                            <RotateCcw className="h-3.5 w-3.5 mr-1" /> Pusatkan Ulang
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => galleryInputRef.current?.click()}
+                          >
+                            <Upload className="h-3.5 w-3.5 mr-1" /> Ganti dari Galeri
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => cameraInputRef.current?.click()}
+                          >
+                            <Camera className="h-3.5 w-3.5 mr-1" /> Foto Ulang
+                          </Button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Template info */}
                     {selectedTemplate && (
@@ -508,7 +767,7 @@ export default function UnggahTwibbonPage() {
                       </div>
                     )}
 
-                    {mergeError && !mergedPhoto && (
+                    {mergeError && (
                       <div className="p-3 rounded-lg border border-danger/40 bg-danger/10 text-danger text-xs flex items-center gap-2">
                         <AlertCircle className="h-4 w-4 shrink-0" />
                         <span>{mergeError}</span>
@@ -528,10 +787,18 @@ export default function UnggahTwibbonPage() {
                       <Button
                         size="sm"
                         className="text-xs"
-                        disabled={!mergedPhoto}
-                        onClick={() => setStep("form")}
+                        disabled={!photoImg || merging}
+                        onClick={handleFinishEditor}
                       >
-                        Lanjut <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                        {merging ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Memproses...
+                          </>
+                        ) : (
+                          <>
+                            Lanjut <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>
