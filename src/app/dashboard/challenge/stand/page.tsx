@@ -154,6 +154,7 @@ export default function DashboardKelolaStandPage() {
         location,
         points: parseInt(points) || 10,
         description,
+        qrToken: isEditing && selectedStand ? selectedStand.qrToken : undefined,
         isActive,
       });
 

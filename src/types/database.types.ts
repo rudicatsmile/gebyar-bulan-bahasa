@@ -1383,6 +1383,45 @@ export interface Database {
         };
         Relationships: [];
       };
+      twibbon_templates: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          image_url: string;
+          thumbnail_url: string | null;
+          is_active: boolean;
+          sort_order: number;
+          uploaded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          image_url: string;
+          thumbnail_url?: string | null;
+          is_active?: boolean;
+          sort_order?: number;
+          uploaded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          image_url?: string;
+          thumbnail_url?: string | null;
+          is_active?: boolean;
+          sort_order?: number;
+          uploaded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       current_role: {

@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -119,6 +120,9 @@ export async function getAdminStands(): Promise<{
   }
 }
 
+const isUuid = (str?: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || "");
+
 export async function upsertStand(data: StandInput) {
   const parsed = StandInputSchema.safeParse(data);
   if (!parsed.success) {
@@ -128,8 +132,6 @@ export async function upsertStand(data: StandInput) {
   try {
     const supabase = createAdminClient();
     const cleanCode = parsed.data.code.trim().toUpperCase();
-    const qrToken =
-      parsed.data.qrToken?.trim() || `QR-STAND-${cleanCode}-${Date.now().toString(36)}`;
 
     // Cek duplikasi kode stand
     const query = supabase
@@ -149,25 +151,31 @@ export async function upsertStand(data: StandInput) {
       };
     }
 
-    const payload = {
+    const payload: Record<string, any> = {
       name: parsed.data.name.trim(),
       code: cleanCode,
       booth_location: parsed.data.location.trim(),
       points_per_visit: parsed.data.points,
       description: parsed.data.description?.trim() || null,
-      qr_token: qrToken,
       is_active: parsed.data.isActive,
     };
 
+    // Pastikan qr_token valid UUID sesuai schema database
+    if (parsed.data.qrToken && isUuid(parsed.data.qrToken)) {
+      payload.qr_token = parsed.data.qrToken.trim();
+    } else if (!parsed.data.id) {
+      payload.qr_token = randomUUID();
+    }
+
     if (parsed.data.id) {
-      const { error } = await supabase
-        .from("stands")
+      const { error } = await (supabase
+        .from("stands") as any)
         .update(payload)
         .eq("id", parsed.data.id);
 
       if (error) throw error;
     } else {
-      const { error } = await supabase.from("stands").insert(payload);
+      const { error } = await (supabase.from("stands") as any).insert(payload);
       if (error) throw error;
     }
 
@@ -177,7 +185,10 @@ export async function upsertStand(data: StandInput) {
     revalidatePath("/challenge");
     return { success: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Gagal menyimpan data stand.";
+    console.error("Error in upsertStand:", err);
+    const message =
+      (err as any)?.message ||
+      (err instanceof Error ? err.message : "Gagal menyimpan data stand.");
     return { success: false, error: message };
   }
 }

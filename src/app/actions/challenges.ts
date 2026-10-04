@@ -177,6 +177,7 @@ const SubmitProofSchema = z.object({
 const AdjustPointsSchema = z.object({
   participantId: z.string().uuid("ID Peserta tidak valid"),
   points: z.number().int(),
+  source: z.enum(["input_panitia", "penyesuaian"]).optional().default("input_panitia"),
   note: z.string().min(3, "Catatan penyesuaian poin wajib diisi"),
 });
 
@@ -344,6 +345,118 @@ export async function redeemReward(data: z.infer<typeof RedeemRewardSchema>) {
   }
 }
 
+// =====================================================================
+// Aksi: Pengambilan Peserta & Riwayat Mutasi Poin Manual
+// =====================================================================
+
+export interface ParticipantPointOption {
+  id: string;
+  registrationNumber: string;
+  fullName: string;
+  institution: string;
+  totalPoints: number;
+  email: string | null;
+  status: string;
+}
+
+export interface ManualPointTransactionItem {
+  id: string;
+  participantName: string;
+  participantReg: string;
+  institution: string;
+  points: number;
+  source: string;
+  note: string | null;
+  grantedByName: string | null;
+  createdAt: string;
+}
+
+export async function getParticipantsForPointAdjustment(): Promise<{
+  success: boolean;
+  participants: ParticipantPointOption[];
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("participants")
+      .select("id, registration_number, full_name, institution, total_points, email, status")
+      .order("full_name", { ascending: true });
+
+    if (error) throw error;
+
+    const mapped: ParticipantPointOption[] = (data || []).map((row: any) => ({
+      id: row.id,
+      registrationNumber: row.registration_number,
+      fullName: row.full_name,
+      institution: row.institution || "-",
+      totalPoints: Number(row.total_points) || 0,
+      email: row.email || null,
+      status: row.status,
+    }));
+
+    return { success: true, participants: mapped };
+  } catch (err: unknown) {
+    console.error("Error getParticipantsForPointAdjustment:", err);
+    const message =
+      (err as any)?.message ||
+      (err instanceof Error ? err.message : "Gagal memuat data peserta.");
+    return { success: false, participants: [], error: message };
+  }
+}
+
+export async function getManualPointHistory(): Promise<{
+  success: boolean;
+  transactions: ManualPointTransactionItem[];
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await (supabase
+      .from("point_transactions") as any)
+      .select(`
+        id,
+        points,
+        source,
+        note,
+        created_at,
+        participants (
+          registration_number,
+          full_name,
+          institution
+        )
+      `)
+      .in("source", ["input_panitia", "penyesuaian"])
+      .order("created_at", { ascending: false })
+      .limit(15);
+
+    if (error) throw error;
+
+    const mapped: ManualPointTransactionItem[] = (data || []).map((row: any) => {
+      const pt = Array.isArray(row.participants) ? row.participants[0] : row.participants;
+      return {
+        id: row.id,
+        participantName: pt?.full_name || pt?.registration_number || "Peserta",
+        participantReg: pt?.registration_number || "-",
+        institution: pt?.institution || "-",
+        points: Number(row.points) || 0,
+        source: row.source,
+        note: row.note || null,
+        grantedByName: null,
+        createdAt: row.created_at,
+      };
+    });
+
+    return { success: true, transactions: mapped };
+  } catch (err: unknown) {
+    console.error("Error getManualPointHistory:", err);
+    const message =
+      (err as any)?.message ||
+      (err instanceof Error ? err.message : "Gagal memuat riwayat mutasi poin.");
+    return { success: false, transactions: [], error: message };
+  }
+}
+
 // Aksi: Penyesuaian Poin Manual oleh Panitia
 export async function adjustPointsByCommittee(data: z.infer<typeof AdjustPointsSchema>) {
   const parsed = AdjustPointsSchema.safeParse(data);
@@ -360,8 +473,8 @@ export async function adjustPointsByCommittee(data: z.infer<typeof AdjustPointsS
     const { error } = await supabase.from("point_transactions").insert({
       participant_id: parsed.data.participantId,
       points: parsed.data.points,
-      source: "penyesuaian",
-      note: `Penyesuaian panitia: ${parsed.data.note}`,
+      source: parsed.data.source || "input_panitia",
+      note: parsed.data.note,
       granted_by: user?.id || null,
     });
 
@@ -369,10 +482,260 @@ export async function adjustPointsByCommittee(data: z.infer<typeof AdjustPointsS
 
     revalidatePath("/dashboard/challenge/poin");
     revalidatePath("/dashboard/peserta");
+    revalidatePath("/peserta/riwayat-poin");
+    revalidatePath("/peserta");
     revalidatePath("/leaderboard");
+    revalidatePath("/monitor");
+    revalidatePath("/monitor/leaderboard");
     return { success: true };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Gagal melakukan penyesuaian poin.";
+    const message =
+      (err as any)?.message ||
+      (err instanceof Error ? err.message : "Gagal melakukan penyesuaian poin.");
     return { success: false, error: message };
   }
 }
+
+// =====================================================================
+// Aksi: Moderasi & Verifikasi Bukti Challenge Peserta
+// =====================================================================
+
+export interface ChallengeSubmissionItem {
+  id: string;
+  challengeId: string;
+  challengeTitle: string;
+  challengePoints: number;
+  participantId: string;
+  participantName: string;
+  institution: string;
+  proofType: "foto" | "video" | "tautan" | "teks";
+  proofUrl: string | null;
+  description: string | null;
+  status: "menunggu" | "disetujui" | "ditolak";
+  pointsAwarded: number;
+  verifiedByName: string | null;
+  verifiedAt: string | null;
+  note: string | null;
+  submittedAt: string;
+}
+
+export async function getChallengeSubmissions(filterStatus?: "menunggu" | "disetujui" | "ditolak" | "semua"): Promise<{
+  success: boolean;
+  submissions: ChallengeSubmissionItem[];
+  stats: {
+    menunggu: number;
+    disetujui: number;
+    ditolak: number;
+    total: number;
+  };
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+
+    let query = supabase
+      .from("challenge_submissions")
+      .select(`
+        id,
+        challenge_id,
+        participant_id,
+        proof_url,
+        proof_type,
+        description,
+        status,
+        points_awarded,
+        verified_by,
+        verified_at,
+        note,
+        created_at,
+        challenges (
+          id,
+          title,
+          point_reward,
+          type
+        ),
+        participants (
+          id,
+          registration_number,
+          full_name,
+          institution,
+          email
+        ),
+        verifier:profiles!challenge_submissions_verified_by_fkey (
+          full_name
+        )
+      `)
+      .order("created_at", { ascending: false });
+
+    if (filterStatus && filterStatus !== "semua") {
+      query = query.eq("status", filterStatus);
+    }
+
+    const { data, error } = await (query as any);
+
+    if (error) {
+      console.error("Error getChallengeSubmissions query:", error);
+      throw error;
+    }
+
+    // Hitung statistik seluruh status
+    const { data: allStatuses } = await supabase
+      .from("challenge_submissions")
+      .select("status");
+
+    const stats = {
+      menunggu: 0,
+      disetujui: 0,
+      ditolak: 0,
+      total: allStatuses?.length || 0,
+    };
+
+    allStatuses?.forEach((item: { status: string }) => {
+      if (item.status === "menunggu") stats.menunggu++;
+      else if (item.status === "disetujui") stats.disetujui++;
+      else if (item.status === "ditolak") stats.ditolak++;
+    });
+
+    const mapped: ChallengeSubmissionItem[] = (data || []).map((row: any) => {
+      const ch = Array.isArray(row.challenges) ? row.challenges[0] : row.challenges;
+      const pt = Array.isArray(row.participants) ? row.participants[0] : row.participants;
+      const vf = row.verifier ? (Array.isArray(row.verifier) ? row.verifier[0] : row.verifier) : null;
+
+      return {
+        id: row.id,
+        challengeId: row.challenge_id,
+        challengeTitle: ch?.title || "Challenge Tidak Diketahui",
+        challengePoints: Number(ch?.point_reward) || Number(row.points_awarded) || 0,
+        participantId: row.participant_id,
+        participantName: pt?.full_name || pt?.registration_number || "Peserta",
+        institution: pt?.institution || "-",
+        proofType: (row.proof_type as any) || "foto",
+        proofUrl: row.proof_url || null,
+        description: row.description || null,
+        status: row.status as "menunggu" | "disetujui" | "ditolak",
+        pointsAwarded: Number(row.points_awarded) || 0,
+        verifiedByName: vf?.full_name || null,
+        verifiedAt: row.verified_at || null,
+        note: row.note || null,
+        submittedAt: row.created_at,
+      };
+    });
+
+    return {
+      success: true,
+      submissions: mapped,
+      stats,
+    };
+  } catch (err: unknown) {
+    console.error("Error in getChallengeSubmissions:", err);
+    const message =
+      (err as any)?.message ||
+      (err instanceof Error ? err.message : "Gagal memuat kiriman bukti challenge.");
+    return {
+      success: false,
+      submissions: [],
+      stats: { menunggu: 0, disetujui: 0, ditolak: 0, total: 0 },
+      error: message,
+    };
+  }
+}
+
+export async function verifyChallengeSubmissionAction(data: {
+  submissionId: string;
+  status: "disetujui" | "ditolak";
+  note?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createAdminClient();
+    const client = await createClient();
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+
+    // 1. Ambil data submission
+    const { data: submission, error: sErr } = await (supabase
+      .from("challenge_submissions") as any)
+      .select(`
+        id,
+        status,
+        participant_id,
+        challenge_id,
+        challenges (
+          id,
+          title,
+          point_reward
+        )
+      `)
+      .eq("id", data.submissionId)
+      .single();
+
+    if (sErr || !submission) {
+      return { success: false, error: "Bukti submission tidak ditemukan." };
+    }
+
+    const ch = Array.isArray(submission.challenges)
+      ? submission.challenges[0]
+      : submission.challenges;
+    const pointReward = Number(ch?.point_reward) || 0;
+
+    if (data.status === "disetujui") {
+      // 2a. Setujui submission
+      const { error: uErr } = await (supabase
+        .from("challenge_submissions") as any)
+        .update({
+          status: "disetujui",
+          points_awarded: pointReward,
+          note: data.note || "Bukti terverifikasi valid oleh panitia.",
+          verified_by: user?.id || null,
+          verified_at: new Date().toISOString(),
+        })
+        .eq("id", data.submissionId);
+
+      if (uErr) throw uErr;
+
+      // 3a. Berikan poin ke peserta via point_transactions
+      const { error: pErr } = await supabase.from("point_transactions").insert({
+        participant_id: submission.participant_id,
+        challenge_id: submission.challenge_id,
+        points: pointReward,
+        source: "verifikasi_bukti",
+        note: `Verifikasi Bukti: ${ch?.title || "Challenge"}`,
+        granted_by: user?.id || null,
+      });
+
+      if (pErr) {
+        console.warn("Notice: Gagal mencatat point_transactions verifikasi:", pErr);
+      }
+    } else {
+      // 2b. Tolak submission
+      const { error: uErr } = await (supabase
+        .from("challenge_submissions") as any)
+        .update({
+          status: "ditolak",
+          points_awarded: 0,
+          note: data.note || "Bukti belum memenuhi kriteria.",
+          verified_by: user?.id || null,
+          verified_at: new Date().toISOString(),
+        })
+        .eq("id", data.submissionId);
+
+      if (uErr) throw uErr;
+    }
+
+    revalidatePath("/dashboard/challenge/verifikasi");
+    revalidatePath("/dashboard/challenge");
+    revalidatePath("/dashboard/peserta");
+    revalidatePath("/peserta/challenge");
+    revalidatePath("/peserta/riwayat-poin");
+    revalidatePath("/peserta");
+    revalidatePath("/leaderboard");
+    revalidatePath("/monitor");
+    revalidatePath("/monitor/leaderboard");
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memproses verifikasi submission.";
+    return { success: false, error: message };
+  }
+}
+

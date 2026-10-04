@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { TwibbonItem } from "@/lib/dummy-data";
 import { getAllTwibbons } from "@/lib/supabase/queries";
 import { moderateTwibbon } from "@/app/actions/twibbon";
-import { Camera, CheckCircle2, XCircle, Sparkles, Tv, Loader2 } from "lucide-react";
+import { Camera, CheckCircle2, XCircle, Sparkles, Tv, Loader2, LayoutTemplate } from "lucide-react";
 
 export default function DashboardModerasiTwibbonPage() {
   const [twibbons, setTwibbons] = React.useState<TwibbonItem[]>([]);
@@ -97,9 +97,17 @@ export default function DashboardModerasiTwibbonPage() {
             </p>
           </div>
 
-          <Badge variant={pendingCount > 0 ? "warning" : "success"} className="text-xs">
-            {pendingCount} Foto Menunggu Moderasi
-          </Badge>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href="/dashboard/twibbon/template">
+              <Button variant="outline" size="sm" className="text-xs">
+                <LayoutTemplate className="h-3.5 w-3.5 mr-1.5" />
+                Kelola Template
+              </Button>
+            </Link>
+            <Badge variant={pendingCount > 0 ? "warning" : "success"} className="text-xs">
+              {pendingCount} Foto Menunggu Moderasi
+            </Badge>
+          </div>
         </div>
 
         {loading ? (

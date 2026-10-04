@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   Layers,
   LayoutDashboard,
+  LayoutTemplate,
   Trophy,
   Users,
   FileCheck,
@@ -79,11 +80,12 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "CHALLENGE & STAND", href: "#", icon: Sparkles, isHeader: true },
   { title: "Daftar Challenge", href: "/dashboard/challenge", icon: Sparkles },
   { title: "Kelola 8 Stand", href: "/dashboard/challenge/stand", icon: Store },
-  { title: "Verifikasi Bukti", href: "/dashboard/challenge/verifikasi", icon: CheckCircle2, badge: "3" },
+  { title: "Verifikasi Bukti", href: "/dashboard/challenge/verifikasi", icon: CheckCircle2 },
   { title: "Penyesuaian Poin", href: "/dashboard/challenge/poin", icon: Coins },
   { title: "Katalog Reward", href: "/dashboard/challenge/reward", icon: Gift },
   { title: "SISTEM", href: "#", icon: Settings, isHeader: true },
-  { title: "Moderasi Twibbon", href: "/dashboard/twibbon", icon: Camera, badge: "1" },
+  { title: "Moderasi Twibbon", href: "/dashboard/twibbon", icon: Camera },
+  { title: "Template Twibbon", href: "/dashboard/twibbon/template", icon: LayoutTemplate },
   { title: "Kelola Pengguna", href: "/dashboard/pengguna", icon: Users },
   { title: "Pengaturan Acara", href: "/dashboard/pengaturan", icon: Settings },
 ];
@@ -98,7 +100,7 @@ const MEDIA_NAV: NavItem[] = [
   { title: "Ringkasan Media", href: "/media", icon: LayoutDashboard },
   { title: "Konten Acara", href: "/media/konten", icon: PlaySquare },
   { title: "Pengumuman", href: "/media/pengumuman", icon: Megaphone },
-  { title: "Moderasi Twibbon", href: "/media/twibbon", icon: Camera, badge: "1" },
+  { title: "Moderasi Twibbon", href: "/media/twibbon", icon: Camera },
   { title: "Kendali Monitor", href: "/media/monitor", icon: Tv },
   { title: "Playlist Monitor", href: "/media/konten-monitor", icon: Sliders },
   { title: "Galeri Foto/Video", href: "/media/galeri", icon: Image },
@@ -132,45 +134,89 @@ export function DashboardLayout({
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [internalPoints, setInternalPoints] = React.useState<number | null>(null);
   const [pendingVerificationCount, setPendingVerificationCount] = React.useState<number | null>(null);
+  const [pendingChallengeProofCount, setPendingChallengeProofCount] = React.useState<number | null>(null);
+  const [pendingTwibbonCount, setPendingTwibbonCount] = React.useState<number | null>(null);
 
-  // ---------- Realtime badge count for "Verifikasi Berkas" ----------
-  const fetchPendingCount = React.useCallback(() => {
-    if (role !== "seksi_acara") return;
-
+  // ---------- Realtime badge counts from Supabase database ----------
+  const fetchBadgeCounts = React.useCallback(() => {
     const supabase = createClient();
-    supabase
-      .from("participants")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "menunggu_verifikasi")
-      .then(({ count }) => {
-        if (count !== null && count !== undefined) {
-          setPendingVerificationCount(count);
-        }
-      });
+
+    if (role === "seksi_acara") {
+      // 1. Verifikasi Berkas Peserta (participants: status = 'menunggu_verifikasi')
+      supabase
+        .from("participants")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "menunggu_verifikasi")
+        .then(({ count }) => {
+          if (count !== null && count !== undefined) {
+            setPendingVerificationCount(count);
+          }
+        });
+
+      // 2. Verifikasi Bukti Challenge (challenge_submissions: status = 'menunggu')
+      supabase
+        .from("challenge_submissions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "menunggu")
+        .then(({ count }) => {
+          if (count !== null && count !== undefined) {
+            setPendingChallengeProofCount(count);
+          }
+        });
+
+      // 3. Moderasi Twibbon (twibbons: status = 'menunggu')
+      supabase
+        .from("twibbons")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "menunggu")
+        .then(({ count }) => {
+          if (count !== null && count !== undefined) {
+            setPendingTwibbonCount(count);
+          }
+        });
+    } else if (role === "media_center") {
+      // Moderasi Twibbon untuk Media Center
+      supabase
+        .from("twibbons")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "menunggu")
+        .then(({ count }) => {
+          if (count !== null && count !== undefined) {
+            setPendingTwibbonCount(count);
+          }
+        });
+    }
   }, [role]);
 
   React.useEffect(() => {
-    if (role !== "seksi_acara") return;
+    if (role !== "seksi_acara" && role !== "media_center") return;
 
     // Initial fetch
-    fetchPendingCount();
+    fetchBadgeCounts();
 
-    // Subscribe to realtime changes on participants table
+    // Subscribe to realtime changes on relevant tables
     const supabase = createClient();
     const channel = supabase
-      .channel("sidebar-verifikasi-badge")
+      .channel("sidebar-badges-realtime")
       .on(
         "postgres_changes" as any,
         { event: "*", schema: "public", table: "participants" },
-        () => {
-          // Re-count on any participant change (INSERT / UPDATE status / DELETE)
-          fetchPendingCount();
-        }
+        () => fetchBadgeCounts()
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "challenge_submissions" },
+        () => fetchBadgeCounts()
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "twibbons" },
+        () => fetchBadgeCounts()
       )
       .subscribe((status: string) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           // Fallback: poll every 15 seconds if realtime fails
-          const pollId = setInterval(fetchPendingCount, 15_000);
+          const pollId = setInterval(fetchBadgeCounts, 15_000);
           return () => clearInterval(pollId);
         }
       });
@@ -178,7 +224,7 @@ export function DashboardLayout({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [role, fetchPendingCount]);
+  }, [role, fetchBadgeCounts]);
 
   React.useEffect(() => {
     if (role === "peserta" && participantPoints === undefined) {
@@ -217,7 +263,7 @@ export function DashboardLayout({
   };
 
   const navItems = React.useMemo(() => {
-    let baseItems =
+    const rawItems =
       role === "seksi_acara"
         ? SEKSI_ACARA_NAV
         : role === "juri"
@@ -226,20 +272,40 @@ export function DashboardLayout({
         ? MEDIA_NAV
         : PESERTA_NAV;
 
-    if (role === "seksi_acara" && pendingVerificationCount !== null) {
-      baseItems = baseItems.map((item) => {
-        if (item.href === "/dashboard/peserta/verifikasi") {
-          return {
-            ...item,
-            badge: pendingVerificationCount > 0 ? String(pendingVerificationCount) : undefined,
-          };
-        }
-        return item;
-      });
-    }
-
-    return baseItems;
-  }, [role, pendingVerificationCount]);
+    return rawItems.map((item) => {
+      // 1. Verifikasi Berkas Peserta (/dashboard/peserta/verifikasi)
+      if (item.href === "/dashboard/peserta/verifikasi") {
+        return {
+          ...item,
+          badge:
+            pendingVerificationCount !== null && pendingVerificationCount > 0
+              ? String(pendingVerificationCount)
+              : undefined,
+        };
+      }
+      // 2. Verifikasi Bukti Challenge (/dashboard/challenge/verifikasi)
+      if (item.href === "/dashboard/challenge/verifikasi") {
+        return {
+          ...item,
+          badge:
+            pendingChallengeProofCount !== null && pendingChallengeProofCount > 0
+              ? String(pendingChallengeProofCount)
+              : undefined,
+        };
+      }
+      // 3. Moderasi Twibbon (/dashboard/twibbon atau /media/twibbon)
+      if (item.href === "/dashboard/twibbon" || item.href === "/media/twibbon") {
+        return {
+          ...item,
+          badge:
+            pendingTwibbonCount !== null && pendingTwibbonCount > 0
+              ? String(pendingTwibbonCount)
+              : undefined,
+        };
+      }
+      return item;
+    });
+  }, [role, pendingVerificationCount, pendingChallengeProofCount, pendingTwibbonCount]);
 
   const roleLabel =
     role === "seksi_acara"

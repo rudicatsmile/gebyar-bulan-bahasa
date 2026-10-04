@@ -23,7 +23,7 @@ interface JadwalClientProps {
 }
 
 export function JadwalClient({ initialSchedules, competitions }: JadwalClientProps) {
-  const [selectedDay, setSelectedDay] = React.useState<number>(2); // Default Hari 2 (Hari Ini)
+  const [selectedDay, setSelectedDay] = React.useState<number>(1);
 
   const daySchedules = initialSchedules.filter((s) => s.day === selectedDay);
 
@@ -50,7 +50,7 @@ export function JadwalClient({ initialSchedules, competitions }: JadwalClientPro
           <div className="grid grid-cols-2 gap-2 p-1.5 rounded-xl border border-border bg-card">
             {[
               { day: 1, date: "10 Nov 2026", label: "Hari 1: Pembukaan & Lomba Budaya" },
-              { day: 2, date: "11 Nov 2026", label: "Hari 2: Lomba Lanjutan & Malam Penganugerahan", isToday: true },
+              { day: 2, date: "11 Nov 2026", label: "Hari 2: Lomba Lanjutan & Malam Penganugerahan" },
             ].map((d) => (
               <button
                 key={d.day}
@@ -65,11 +65,6 @@ export function JadwalClient({ initialSchedules, competitions }: JadwalClientPro
                   <span className="font-mono text-xs font-bold uppercase">
                     Hari ke-{d.day}
                   </span>
-                  {d.isToday && (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent text-accent-foreground">
-                      HARI INI
-                    </span>
-                  )}
                 </div>
                 <div className="font-heading text-xs sm:text-sm font-semibold truncate">
                   {d.date}
