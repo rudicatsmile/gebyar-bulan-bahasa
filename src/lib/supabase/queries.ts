@@ -650,6 +650,15 @@ export async function getApprovedTwibbons(): Promise<TwibbonItem[]> {
   }
 }
 
+/**
+ * ⚠️ JANGAN pakai fungsi ini untuk halaman internal (dashboard/media/monitor).
+ *
+ * publicClient memakai anon key tanpa JWT sesi, sehingga RLS hanya
+ * mengizinkan baris berstatus `disetujui` — kiriman `menunggu`/`ditolak`
+ * tidak akan pernah kembali dan UI tampak "Tidak ada twibbon ditemukan".
+ * Untuk halaman moderasi pakai Server Action `getTwibbonsForModeration()`
+ * di src/app/actions/twibbon.ts.
+ */
 export async function getAllTwibbons(): Promise<TwibbonItem[]> {
   try {
     const { data, error } = await publicClient

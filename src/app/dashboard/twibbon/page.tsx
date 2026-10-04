@@ -7,42 +7,52 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TwibbonItem } from "@/lib/dummy-data";
-import { getAllTwibbons } from "@/lib/supabase/queries";
-import { moderateTwibbon } from "@/app/actions/twibbon";
-import { Camera, CheckCircle2, XCircle, Sparkles, Tv, Loader2, LayoutTemplate } from "lucide-react";
+import { moderateTwibbon, getTwibbonsForModeration } from "@/app/actions/twibbon";
+import { Camera, CheckCircle2, XCircle, Sparkles, Tv, Loader2, LayoutTemplate, AlertCircle } from "lucide-react";
 
 export default function DashboardModerasiTwibbonPage() {
   const [twibbons, setTwibbons] = React.useState<TwibbonItem[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [actionError, setActionError] = React.useState("");
+
+  // Baca lewat Server Action (mengecek role staff di server) — bukan publicClient
+  // (anon) yang membuat kiriman berstatus `menunggu` tersembunyi oleh RLS.
+  const refresh = React.useCallback(async () => {
+    try {
+      const data = await getTwibbonsForModeration();
+      setTwibbons(data);
+    } catch (err) {
+      console.error("Gagal memuat twibbon:", err);
+    } finally {
+      // `loading` sudah true pada render awal; tidak perlu setState sinkron di sini.
+      setLoading(false);
+    }
+  }, []);
 
   React.useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const data = await getAllTwibbons();
-        setTwibbons(data);
-      } catch (err) {
-        console.error("Gagal memuat twibbon:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+    refresh();
+  }, [refresh]);
 
   const handleApprove = async (id: string) => {
     const item = twibbons.find((t) => t.id === id);
     setTwibbons((prev) =>
       prev.map((t) => (t.id === id ? { ...t, status: "disetujui" } : t))
     );
+    setActionError("");
     try {
-      await moderateTwibbon({
+      const result = await moderateTwibbon({
         twibbonId: id,
         status: "disetujui",
         isFeatured: item?.isFeatured || false,
       });
+      if (!result.success) {
+        setActionError(result.error || "Gagal menyetujui twibbon.");
+        await refresh();
+      }
     } catch (e) {
       console.error("Gagal approve twibbon:", e);
+      setActionError("Gagal menyetujui twibbon. Silakan coba lagi.");
+      await refresh();
     }
   };
 
@@ -51,14 +61,21 @@ export default function DashboardModerasiTwibbonPage() {
     setTwibbons((prev) =>
       prev.map((t) => (t.id === id ? { ...t, status: "ditolak" } : t))
     );
+    setActionError("");
     try {
-      await moderateTwibbon({
+      const result = await moderateTwibbon({
         twibbonId: id,
         status: "ditolak",
         isFeatured: item?.isFeatured || false,
       });
+      if (!result.success) {
+        setActionError(result.error || "Gagal menolak twibbon.");
+        await refresh();
+      }
     } catch (e) {
       console.error("Gagal reject twibbon:", e);
+      setActionError("Gagal menolak twibbon. Silakan coba lagi.");
+      await refresh();
     }
   };
 
@@ -68,15 +85,22 @@ export default function DashboardModerasiTwibbonPage() {
     setTwibbons((prev) =>
       prev.map((t) => (t.id === id ? { ...t, isFeatured: newFeatured } : t))
     );
+    setActionError("");
     if (item && item.status !== "menunggu") {
       try {
-        await moderateTwibbon({
+        const result = await moderateTwibbon({
           twibbonId: id,
           status: item.status as "disetujui" | "ditolak",
           isFeatured: newFeatured,
         });
+        if (!result.success) {
+          setActionError(result.error || "Gagal memperbarui twibbon unggulan.");
+          await refresh();
+        }
       } catch (e) {
         console.error("Gagal update featured twibbon:", e);
+        setActionError("Gagal memperbarui twibbon unggulan.");
+        await refresh();
       }
     }
   };
@@ -109,6 +133,13 @@ export default function DashboardModerasiTwibbonPage() {
             </Badge>
           </div>
         </div>
+
+        {actionError && (
+          <div className="p-3.5 rounded-lg border border-danger/40 bg-danger/10 text-danger text-xs flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{actionError}</span>
+          </div>
+        )}
 
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground">

@@ -26,8 +26,7 @@ import {
   Move,
 } from "lucide-react";
 import { getActiveTwibbonTemplates, type TwibbonTemplate } from "@/app/actions/twibbon-template";
-import { uploadPublicFile } from "@/lib/supabase/storage";
-import { submitTwibbon } from "@/app/actions/twibbon";
+import { submitTwibbon, uploadTwibbonImage } from "@/app/actions/twibbon";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,16 +76,6 @@ function drawComposition(
   if (template) {
     ctx.drawImage(template, 0, 0, size, size);
   }
-}
-
-function dataURLtoFile(dataUrl: string, filename: string): File {
-  const arr = dataUrl.split(",");
-  const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) u8arr[n] = bstr.charCodeAt(n);
-  return new File([u8arr], filename, { type: mime });
 }
 
 // ─── Step types ───────────────────────────────────────────────────────────────
@@ -347,10 +336,20 @@ export default function UnggahTwibbonPage() {
     setError("");
 
     try {
-      // Upload merged photo
-      const file = dataURLtoFile(mergedPhoto, `twibbon-${Date.now()}.jpg`);
-      const path = `uploads/${Date.now()}-${fullName.replace(/\s+/g, "-").toLowerCase()}.jpg`;
-      const { url, error: uploadErr } = await uploadPublicFile("twibbon", path, file);
+      // Unggah hasil komposisi lewat Server Action (service role).
+      // Upload langsung dari browser dengan anon key ditolak RLS storage.objects.
+      const slug =
+        fullName
+          .replace(/[^A-Za-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .toLowerCase()
+          .slice(0, 40) || "pengunjung";
+      const filePath = `uploads/${Date.now()}-${slug}.jpg`;
+      const { url, error: uploadErr } = await uploadTwibbonImage({
+        filePath,
+        fileBase64: mergedPhoto, // data URL, prefix Strip di server
+        mimeType: "image/jpeg",
+      });
 
       if (uploadErr || !url) {
         setError(uploadErr || "Gagal mengunggah foto.");

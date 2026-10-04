@@ -6,7 +6,7 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getAllTwibbons } from "@/lib/supabase/queries";
+import { getTwibbonsForModeration } from "@/app/actions/twibbon";
 import { Tv, Camera, PlaySquare, Megaphone, Sliders, ArrowRight, Radio } from "lucide-react";
 
 export default function DashboardMediaCenterPage() {
@@ -15,7 +15,9 @@ export default function DashboardMediaCenterPage() {
   React.useEffect(() => {
     async function fetchCount() {
       try {
-        const all = await getAllTwibbons();
+        // Server Action: staff melihat semua status (anon key hanya melihat yang
+        // sudah disetujui, sehingga penghitung ini dulu selalu 0).
+        const all = await getTwibbonsForModeration();
         setPendingTwibbonCount(all.filter((t) => t.status === "menunggu").length);
       } catch (err) {
         console.error("Gagal memuat jumlah twibbon:", err);
