@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { TwibbonItem } from "@/lib/dummy-data";
@@ -94,6 +95,8 @@ function toTwibbonItem(t: {
   is_featured: boolean;
   likes_count: number | null;
   created_at: string;
+  reject_reason?: string | null;
+  participant_number?: string | null;
 }): TwibbonItem {
   return {
     id: t.id,
@@ -104,6 +107,8 @@ function toTwibbonItem(t: {
     status: (t.status || "menunggu") as "disetujui" | "menunggu" | "ditolak",
     isFeatured: t.is_featured,
     likesCount: t.likes_count || 0,
+    rejectReason: t.reject_reason || undefined,
+    participantNumber: t.participant_number || undefined,
     uploadedAt: new Date(t.created_at).toLocaleDateString("id-ID", {
       day: "numeric",
       month: "short",
@@ -112,6 +117,41 @@ function toTwibbonItem(t: {
       minute: "2-digit",
     }),
   };
+}
+
+/**
+ * Ambil baris twibbons memakai service role (bypass RLS) dengan pembatasan
+ * hak akses yang SELALU dihitung di server, bukan dari input klien.
+ */
+async function fetchTwibbonsAs(
+  opts: { all?: boolean; userId?: string; approvedOnly?: boolean }
+): Promise<TwibbonItem[]> {
+  const admin = createAdminClient();
+
+  let query = admin.from("twibbons").select("*").order("created_at", { ascending: false });
+  if (opts.userId) query = query.eq("user_id", opts.userId);
+  else if (opts.approvedOnly) query = query.eq("status", "disetujui");
+
+  const { data, error } = await query;
+  if (error || !data) {
+    if (error) console.error("Gagal memuat data twibbon:", error.message);
+    return [];
+  }
+
+  return data.map((t) =>
+    toTwibbonItem({
+      id: t.id,
+      uploader_name: t.uploader_name,
+      uploader_institution: t.uploader_institution,
+      caption: t.caption,
+      image_url: t.image_url,
+      status: t.status,
+      is_featured: t.is_featured,
+      likes_count: t.likes_count,
+      created_at: t.created_at,
+      reject_reason: t.reject_reason,
+    })
+  );
 }
 
 /**
@@ -146,31 +186,141 @@ export async function getTwibbonsForModeration(): Promise<TwibbonItem[]> {
   }
   const isStaff = role !== null && STAFF_ROLES.includes(role);
 
-  let query = admin.from("twibbons").select("*").order("created_at", { ascending: false });
-  if (!isStaff) {
-    if (user) {
-      query = query.eq("user_id", user.id);
-    } else {
-      query = query.eq("status", "disetujui");
-    }
+  if (isStaff) return fetchTwibbonsAs({ all: true });
+  if (user) return fetchTwibbonsAs({ userId: user.id });
+  return fetchTwibbonsAs({ approvedOnly: true });
+}
+
+/**
+ * Kiriman twibbon milik user yang sedang login — SEMUA status
+ * (menunggu / disetujui / ditolak), terbaru lebih dulu.
+ *
+ * Kenapa action ini (bukan query langsung dari klien):
+ *  - halaman /peserta/twibbon sebelumnya tidak membaca database sama sekali,
+ *    melainkan menempel `TWIBBONS[0]` dari dummy-data, sehingga hasil unggah
+ *    asli tidak pernah tampil;
+ *  - user_id diambil dari sesi server, bukan dari argumen klien, sehingga
+ *    kiriman milik user lain tidak mungkin ikut terbaca.
+ */
+export async function getMyTwibbons(): Promise<TwibbonItem[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Tanpa sesi tidak ada pemiliknya: jangan kembalikan apa pun.
+  if (!user) return [];
+
+  return fetchTwibbonsAs({ userId: user.id });
+}
+
+// ─── Pembatasan frekuensi unggah (kuota harian) ──────────────────────────────
+
+const TWIBBON_DAILY_LIMIT = Number(process.env.NEXT_PUBLIC_TWIBBON_DAILY_LIMIT || 3);
+// GMT+7 (WIB): kuota dihitung per hari lokal peserta, reset 00.00 WIB.
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+export interface TwibbonUploadQuota {
+  limit: number;
+  used: number;
+  remaining: number;
+  allowed: boolean;
+  /** true bila identitas pembatasnya alamat IP (pengunjung tanpa login) */
+  byIp: boolean;
+  /** milidetik menuju reset berikutnya (tengah malam WIB) */
+  resetInMs: number;
+}
+
+/** Batas awal hari berjalan dalam WIB, dihitung dari epoch UTC. */
+function wibDayWindow(now = new Date()): { startUtcMs: number; resetInMs: number } {
+  const shifted = now.getTime() + WIB_OFFSET_MS;
+  const dayFloor = Math.floor(shifted / 86400000) * 86400000;
+  const startUtcMs = dayFloor - WIB_OFFSET_MS;
+  const resetInMs = startUtcMs + 86400000 - now.getTime();
+  return { startUtcMs, resetInMs };
+}
+
+/** IP pengunjung dari header proxy (x-forwarded-for / x-real-ip), ternormalisasi. */
+async function resolveClientIp(): Promise<string | null> {
+  try {
+    const h = await headers();
+    const raw = (h.get("x-forwarded-for")?.split(",")[0] || h.get("x-real-ip") || "").trim();
+    if (!raw) return null;
+    const isV4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(raw);
+    const isV6 = raw.includes(":") && /^[0-9a-fA-F:.]+$/.test(raw);
+    return isV4 || isV6 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Inti perhitungan kuota harian. Identitas pembatas:
+ *  - user login  → user_id
+ *  - tanpa login → alamat IP (uploader_ip)
+ *  - IP tak terbaca → anggap boleh (tak ada identitas yang bisa dikunci)
+ */
+async function computeQuota(
+  admin: ReturnType<typeof createAdminClient>,
+  user: { id: string } | null,
+  ip: string | null
+): Promise<TwibbonUploadQuota> {
+  const { startUtcMs, resetInMs } = wibDayWindow();
+
+  if (!user && !ip) {
+    return {
+      limit: TWIBBON_DAILY_LIMIT,
+      used: 0,
+      remaining: TWIBBON_DAILY_LIMIT,
+      allowed: true,
+      byIp: false,
+      resetInMs,
+    };
   }
 
-  const { data, error } = await query;
-  if (error || !data) return [];
+  let query = admin
+    .from("twibbons")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", new Date(startUtcMs).toISOString());
 
-  return data.map((t) =>
-    toTwibbonItem({
-      id: t.id,
-      uploader_name: t.uploader_name,
-      uploader_institution: t.uploader_institution,
-      caption: t.caption,
-      image_url: t.image_url,
-      status: t.status,
-      is_featured: t.is_featured,
-      likes_count: t.likes_count,
-      created_at: t.created_at,
-    })
-  );
+  if (user) query = query.eq("user_id", user.id);
+  else if (ip) query = query.eq("uploader_ip", ip);
+
+  const { count, error } = await query;
+  const used = error ? 0 : (count ?? 0);
+
+  return {
+    limit: TWIBBON_DAILY_LIMIT,
+    used,
+    remaining: Math.max(0, TWIBBON_DAILY_LIMIT - used),
+    allowed: used < TWIBBON_DAILY_LIMIT,
+    byIp: !user,
+    resetInMs,
+  };
+}
+
+/** Pesan human-readable saat kuota harian habis. */
+function buildQuotaMessage(q: TwibbonUploadQuota): string {
+  const totalMin = Math.max(0, Math.ceil(q.resetInMs / 60000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const when = h > 0 ? `${h} jam ${m} menit lagi` : `${m} menit lagi`;
+  const scope = q.byIp ? "dari jaringan ini" : "untuk akun ini";
+  return `Batas unggah twibbon tercapai: sudah ${q.used} dari ${q.limit} unggahan ${scope} hari ini. Anda bisa mengunggah lagi ${when} (kuota reset tiap 00.00 WIB).`;
+}
+
+/**
+ * Kuota unggah harian untuk pengunggah saat ini (dipakai UI /twibbon/unggah).
+ * Angka dihitung ulang di server memakai service role agar tidak bisa
+ * dimanipulasi dari klien.
+ */
+export async function getTwibbonUploadQuota(): Promise<TwibbonUploadQuota> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const ip = user ? null : await resolveClientIp();
+  return computeQuota(createAdminClient(), user, ip);
 }
 
 /**
@@ -208,11 +358,19 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
       data: { user },
     } = await supabase.auth.getUser();
 
+    const adminClient = createAdminClient();
+    const clientIp = await resolveClientIp();
+
+    // ── Kuota harian: cek ulang di server agar tidak bisa dilewati dari UI ──
+    const quota = await computeQuota(adminClient, user, clientIp);
+    if (!quota.allowed) {
+      return { success: false, error: buildQuotaMessage(quota), quota };
+    }
+
     // Tulis memakai admin client (service role).
     // Penyebab error awal: policy INSERT pada public.twibbons tidak mengizinkan
     // peran `anon`, sehingga insert dari halaman publik ditolak RLS (42501).
     // user_id dipaksa sesuai sesi agar tidak bisa memalsukan milik user lain.
-    const adminClient = createAdminClient();
     const { data: twibbon, error } = await adminClient
       .from("twibbons")
       .insert({
@@ -221,6 +379,7 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
         caption: parsed.data.caption || null,
         image_url: parsed.data.imageUrl,
         user_id: user?.id || null,
+        uploader_ip: clientIp,
         status: "menunggu",
         is_featured: false,
       })
@@ -232,7 +391,11 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
     revalidatePath("/galeri/twibbon");
     revalidatePath("/dashboard/twibbon");
     revalidatePath("/media/twibbon");
-    return { success: true, data: twibbon };
+    // Halaman "Twibbon Saya" milik peserta yang mengirim
+    revalidatePath("/peserta/twibbon");
+    revalidatePath("/peserta");
+    // Sisa kuota setelah kiriman ini tersimpan (untuk memperbarui UI tanpa fetch lagi).
+    return { success: true, data: twibbon, remaining: Math.max(0, quota.remaining - 1) };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal mengunggah twibbon.";
     return { success: false, error: message };

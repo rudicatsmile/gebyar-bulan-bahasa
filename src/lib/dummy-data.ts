@@ -137,6 +137,8 @@ export interface TwibbonItem {
   caption: string;
   imageUrl: string;
   status: "disetujui" | "menunggu" | "ditolak";
+  /** Alasan penolakan dari Media Center (kolom reject_reason) */
+  rejectReason?: string;
   isFeatured: boolean;
   likesCount: number;
   uploadedAt: string;

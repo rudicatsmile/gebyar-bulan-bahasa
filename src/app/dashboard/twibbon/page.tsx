@@ -10,10 +10,20 @@ import { TwibbonItem } from "@/lib/dummy-data";
 import { moderateTwibbon, getTwibbonsForModeration } from "@/app/actions/twibbon";
 import { Camera, CheckCircle2, XCircle, Sparkles, Tv, Loader2, LayoutTemplate, AlertCircle } from "lucide-react";
 
+type StatusFilter = "semua" | "menunggu" | "disetujui" | "ditolak";
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "semua", label: "Semua" },
+  { value: "menunggu", label: "Menunggu" },
+  { value: "disetujui", label: "Disetujui" },
+  { value: "ditolak", label: "Ditolak" },
+];
+
 export default function DashboardModerasiTwibbonPage() {
   const [twibbons, setTwibbons] = React.useState<TwibbonItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [actionError, setActionError] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("semua");
 
   // Baca lewat Server Action (mengecek role staff di server) — bukan publicClient
   // (anon) yang membuat kiriman berstatus `menunggu` tersembunyi oleh RLS.
@@ -105,7 +115,17 @@ export default function DashboardModerasiTwibbonPage() {
     }
   };
 
-  const pendingCount = twibbons.filter((t) => t.status === "menunggu").length;
+  const countByStatus = (status: string) =>
+    twibbons.filter((t) => t.status === status).length;
+
+  const pendingCount = countByStatus("menunggu");
+
+  const filteredTwibbons =
+    statusFilter === "semua"
+      ? twibbons
+      : twibbons.filter((t) => t.status === statusFilter);
+
+  const statusLabel = STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ?? "Semua";
 
   return (
     <DashboardLayout role="seksi_acara">
@@ -141,6 +161,31 @@ export default function DashboardModerasiTwibbonPage() {
           </div>
         )}
 
+        {!loading && twibbons.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl border border-border bg-card">
+            <span className="text-xs text-muted-foreground font-semibold">Filter:</span>
+            {STATUS_FILTERS.map((f) => {
+              const count = f.value === "semua" ? twibbons.length : countByStatus(f.value);
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setStatusFilter(f.value)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
+                    statusFilter === f.value
+                      ? "bg-primary text-primary-foreground font-bold"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {f.label} ({count})
+                </button>
+              );
+            })}
+            <span className="text-[11px] text-muted-foreground ml-auto">
+              Menampilkan {filteredTwibbons.length} dari {twibbons.length} foto
+            </span>
+          </div>
+        )}
+
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin text-accent" />
@@ -156,9 +201,20 @@ export default function DashboardModerasiTwibbonPage() {
               Foto twibbon yang diunggah oleh peserta akan muncul di sini untuk proses moderasi dan persetujuan penayangan.
             </p>
           </Card>
+        ) : filteredTwibbons.length === 0 ? (
+          <Card className="p-12 text-center space-y-3 border-dashed border-2">
+            <AlertCircle className="h-10 w-10 text-muted-foreground/60 mx-auto" />
+            <h3 className="font-heading text-base font-bold text-foreground">
+              Tidak Ada Foto berstatus &ldquo;{statusLabel}&rdquo;
+            </h3>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Semua unggahan sudah ditangani. Pilih status lain untuk melihat riwayat moderasi, atau
+              tunggu kiriman peserta berikutnya.
+            </p>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {twibbons.map((item) => (
+            {filteredTwibbons.map((item) => (
               <Card key={item.id} className="overflow-hidden flex flex-col justify-between">
                 <div className="relative aspect-square w-full bg-muted overflow-hidden">
                   <img

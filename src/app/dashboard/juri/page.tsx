@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { JUDGES, Judge, COMPETITIONS } from "@/lib/dummy-data";
+import { Judge } from "@/lib/dummy-data";
 import { UserCheck, UserPlus, ShieldCheck, Mail, Sliders, Loader2, Pencil, Upload, X, ImageIcon, Camera } from "lucide-react";
 import { getJudgeAssignmentData, createJudgeAccount, updateJudgeAccount } from "@/app/actions/competitions";
 import { uploadJudgePhotoAction } from "@/app/actions/settings";
@@ -166,7 +166,10 @@ function JudgePhotoUpload({
 
 export default function DashboardJuriPage() {
   const [loading, setLoading] = React.useState(true);
-  const [judges, setJudges] = React.useState<Judge[]>(JUDGES);
+  const [judges, setJudges] = React.useState<Judge[]>([]);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  // Juri yang baru saja dibuat — dipakai untuk menampilkan ajakan menugaskan lomba.
+  const [justAdded, setJustAdded] = React.useState<{ id: string; fullName: string } | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -191,9 +194,10 @@ export default function DashboardJuriPage() {
     try {
       setLoading(true);
       const res = await getJudgeAssignmentData();
-      if (res.success && res.judges.length > 0) {
-        const mapped: Judge[] = res.judges.map((j, idx) => {
-          const dummy = JUDGES.find((dj) => dj.email === j.email || dj.fullName === j.fullName);
+      if (res.success) {
+        // Sumber data tunggal: tabel profiles (role='juri') + competition_judges.
+        // Tidak ada penambalan data dummy — kalau DB kosong, tampilkan empty state.
+        const mapped: Judge[] = res.judges.map((j) => {
           const assignedIds = res.assignments
             .filter((a) => a.judgeId === j.id)
             .map((a) => a.competitionId);
@@ -202,21 +206,24 @@ export default function DashboardJuriPage() {
           return {
             id: j.id,
             fullName: j.fullName,
-            title: j.title || dummy?.title || "Dewan Juri Ahli",
+            title: j.title || "Dewan Juri Ahli",
             email: j.email,
-            expertise: j.expertise || dummy?.expertise || "Sastra & Puisi",
-            avatarUrl:
-              j.avatarUrl ||
-              dummy?.avatarUrl ||
-              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face",
-            assignedCompetitionIds: assignedIds.length > 0 ? assignedIds : dummy?.assignedCompetitionIds || [],
+            expertise: j.expertise || "Belum ditetapkan",
+            avatarUrl: j.avatarUrl || "",
+            assignedCompetitionIds: assignedIds,
             isChiefJudge: isChief,
           };
         });
         setJudges(mapped);
+        setLoadError(null);
+      } else {
+        setJudges([]);
+        setLoadError(res.error || "Daftar juri gagal dimuat.");
       }
     } catch (err) {
       console.error("Gagal memuat juri:", err);
+      setJudges([]);
+      setLoadError("Daftar juri gagal dimuat. Periksa koneksi lalu coba lagi.");
     } finally {
       setLoading(false);
     }
@@ -240,6 +247,7 @@ export default function DashboardJuriPage() {
 
       if (res.success) {
         await loadJudges();
+        setJustAdded({ id: res.userId || "", fullName });
         setDialogOpen(false);
         setFullName("");
         setTitle("");
@@ -321,6 +329,32 @@ export default function DashboardJuriPage() {
           </div>
         </div>
 
+        {justAdded && (
+          <div className="p-3 rounded-xl border border-accent/30 bg-accent/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <p className="text-xs text-foreground">
+              Akun juri <strong>{justAdded.fullName}</strong> berhasil dibuat. Langkah berikutnya:
+              tugaskan cabang lomba agar juri dapat mulai menilai peserta.
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link href="/dashboard/juri/penugasan">
+                <Button size="sm" className="text-xs h-8 gap-1.5 cursor-pointer">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>Tugaskan Lomba</span>
+                </Button>
+              </Link>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs h-8 cursor-pointer"
+                onClick={() => setJustAdded(null)}
+              >
+                <X className="h-3.5 w-3.5 mr-0.5" />
+                <span>Tutup</span>
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <Table>
             <TableHeader>
@@ -334,7 +368,36 @@ export default function DashboardJuriPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {judges.map((j) => {
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center">
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Memuat daftar juri...
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center">
+                    <p className="text-sm text-danger">{loadError}</p>
+                  </TableCell>
+                </TableRow>
+              ) : judges.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <UserCheck className="h-8 w-8 opacity-60" />
+                      <p className="text-sm font-semibold text-foreground">Belum ada dewan juri</p>
+                      <p className="text-xs max-w-sm">
+                        Klik &quot;Tambah Juri Baru&quot; untuk membuat akun juri. Akun juri dibuat dari modul
+                        pengguna dan otomatis tampil di halaman Pengguna.
+                      </p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                judges.map((j) => {
                 const assignedCount = j.assignedCompetitionIds.length;
                 return (
                   <TableRow key={j.id}>
@@ -373,8 +436,17 @@ export default function DashboardJuriPage() {
                         {j.isChiefJudge ? "JURI UTAMA" : "ANGGOTA JURI"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-center font-mono text-xs font-bold text-accent">
-                      {assignedCount} Cabang Lomba
+                    <TableCell className="text-center text-xs">
+                      {assignedCount > 0 ? (
+                        <span className="font-mono font-bold text-accent">{assignedCount} Cabang Lomba</span>
+                      ) : (
+                        <Link
+                          href="/dashboard/juri/penugasan"
+                          className="inline-flex items-center text-muted-foreground hover:text-accent underline decoration-dotted underline-offset-2"
+                        >
+                          Belum ditugaskan
+                        </Link>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -396,7 +468,8 @@ export default function DashboardJuriPage() {
                     </TableCell>
                   </TableRow>
                 );
-              })}
+                })
+              )}
             </TableBody>
           </Table>
         </div>

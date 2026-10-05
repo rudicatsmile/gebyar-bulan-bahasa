@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { PublicNavbar } from "@/components/layouts/PublicNavbar";
 import { PublicFooter } from "@/components/layouts/PublicFooter";
+import { DashboardLayout } from "@/components/layouts/DashboardLayout";
+import { useDashboardRole } from "@/lib/hooks/useDashboardRole";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,9 +26,15 @@ import {
   ZoomOut,
   RotateCcw,
   Move,
+  Info,
 } from "lucide-react";
 import { getActiveTwibbonTemplates, type TwibbonTemplate } from "@/app/actions/twibbon-template";
-import { submitTwibbon, uploadTwibbonImage } from "@/app/actions/twibbon";
+import {
+  submitTwibbon,
+  uploadTwibbonImage,
+  getTwibbonUploadQuota,
+  type TwibbonUploadQuota,
+} from "@/app/actions/twibbon";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -110,6 +118,20 @@ export default function UnggahTwibbonPage() {
   // Submit
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
+
+  // Kuota unggah harian (dibatasi server: maks N per user/IP per hari)
+  const [quota, setQuota] = React.useState<TwibbonUploadQuota | null>(null);
+  const [quotaLoading, setQuotaLoading] = React.useState(true);
+
+  // Muat kuota. Semua setState berada di dalam callback promise (bukan di body
+  // effect) agar tidak memicu cascading render.
+  const loadQuota = React.useCallback(
+    () => getTwibbonUploadQuota().then(setQuota),
+    []
+  );
+  React.useEffect(() => {
+    loadQuota().finally(() => setQuotaLoading(false));
+  }, [loadQuota]);
 
   // Load event name & templates
   React.useEffect(() => {
@@ -331,6 +353,13 @@ export default function UnggahTwibbonPage() {
       setError("Foto twibbon diperlukan.");
       return;
     }
+    // Gerbang kuota di klien (server tetap memverifikasi ulang).
+    if (quota && !quota.allowed) {
+      setError(
+        `Batas unggah twibbon hari ini tercapai (${quota.used}/${quota.limit}). Silakan coba lagi setelah kuota reset.`
+      );
+      return;
+    }
 
     setSubmitting(true);
     setError("");
@@ -369,9 +398,25 @@ export default function UnggahTwibbonPage() {
       if (!result.success) {
         setError(result.error || "Gagal mengirim twibbon.");
         setSubmitting(false);
+        // Sinkronkan angka kuota bila server menolak karena batas harian.
+        void loadQuota();
         return;
       }
 
+      const newRemaining =
+        typeof result.remaining === "number"
+          ? result.remaining
+          : Math.max(0, (quota?.remaining ?? 1) - 1);
+      setQuota((q) =>
+        q
+          ? {
+              ...q,
+              remaining: newRemaining,
+              used: q.limit - newRemaining,
+              allowed: newRemaining > 0,
+            }
+          : q
+      );
       setStep("done");
     } catch {
       setError("Terjadi kesalahan. Silakan coba lagi.");
@@ -396,6 +441,16 @@ export default function UnggahTwibbonPage() {
     setMergeError("");
   };
 
+  const { role, loading: roleLoading } = useDashboardRole();
+  const isDashboard = !roleLoading && role !== null;
+
+  const quotaExhausted = quota ? !quota.allowed : false;
+  const resetLabel = quota
+    ? quota.resetInMs > 3_600_000
+      ? `± ${Math.round(quota.resetInMs / 3_600_000)} jam lagi (00.00 WIB)`
+      : `± ${Math.max(1, Math.round(quota.resetInMs / 60_000))} menit lagi (00.00 WIB)`
+    : "";
+
   // ── Step labels ─────────────────────────────────────────────────────────────
   const stepLabels: { key: Step; label: string }[] = [
     { key: "template", label: "Pilih Template" },
@@ -406,20 +461,29 @@ export default function UnggahTwibbonPage() {
   const stepKeys: Step[] = ["template", "photo", "form", "preview"];
   const currentStepIdx = stepKeys.indexOf(step);
 
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <PublicNavbar />
-
-      <main className="flex-1 py-12 sm:py-16">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          {/* Back link */}
+  /* ── Alur unggah (dipakai bersama oleh layout publik maupun dashboard) ──── */
+  const panelContent = (
+    <div className="space-y-8">
+      {/* Back link */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link
+          href="/galeri/twibbon"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Kembali ke Galeri Twibbon</span>
+        </Link>
+        {/* Pintasan balik lewat sidebar untuk user yang sudah login */}
+        {isDashboard && role === "peserta" && (
           <Link
-            href="/galeri/twibbon"
+            href="/peserta/twibbon"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Kembali ke Galeri Twibbon</span>
+            <span>Twibbon Saya</span>
           </Link>
+        )}
+      </div>
 
           {/* Page title */}
           <div className="space-y-3">
@@ -433,6 +497,48 @@ export default function UnggahTwibbonPage() {
               Kirimkan foto diri terbaikmu dengan bingkai resmi {eventName}. Foto akan melalui verifikasi tim Media Center sebelum tampil di galeri publik.
             </p>
           </div>
+
+          {/* Banner kuota unggah harian */}
+          {!quotaLoading && quota && (
+            <div
+              className={`flex items-start gap-3 rounded-xl border p-4 text-xs ${
+                quotaExhausted
+                  ? "border-danger/40 bg-danger/5"
+                  : "border-border bg-card"
+              }`}
+            >
+              {quotaExhausted ? (
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-danger" />
+              ) : (
+                <Info className="h-4 w-4 shrink-0 mt-0.5 text-accent" />
+              )}
+              <div className="space-y-1">
+                <p
+                  className={`font-semibold ${
+                    quotaExhausted ? "text-danger" : "text-foreground"
+                  }`}
+                >
+                  {quotaExhausted
+                    ? "Batas unggah harian tercapai"
+                    : `Sisa kuota unggah hari ini: ${quota.remaining} dari ${quota.limit}`}
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  {quotaExhausted
+                    ? `Anda sudah mengirim ${quota.used} dari ${quota.limit} unggahan. Kuota kembali ${resetLabel}.`
+                    : `Maksimal ${quota.limit} unggahan per hari. Batas akan direset ${resetLabel}.`}
+                </p>
+                {quota.byIp && (
+                  <p className="text-muted-foreground">
+                    Batas dihitung per jaringan karena Anda belum login.
+                    <Link href="/masuk" className="ml-1 font-semibold text-accent hover:underline">
+                      Masuk
+                    </Link>{" "}
+                    untuk kuota berbasis akun.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Done State */}
           {step === "done" ? (
@@ -452,8 +558,8 @@ export default function UnggahTwibbonPage() {
                     Lihat Galeri Twibbon
                   </Button>
                 </Link>
-                <Button size="sm" className="text-xs" onClick={handleReset}>
-                  Unggah Foto Lain
+                <Button size="sm" className="text-xs" onClick={handleReset} disabled={quotaExhausted}>
+                  {quotaExhausted ? "Kuota Harian Habis" : "Unggah Foto Lain"}
                 </Button>
               </div>
             </Card>
@@ -945,7 +1051,7 @@ export default function UnggahTwibbonPage() {
                           type="submit"
                           size="sm"
                           className="text-xs font-semibold"
-                          disabled={submitting}
+                          disabled={submitting || quotaExhausted}
                         >
                           {submitting ? (
                             <>
@@ -966,6 +1072,22 @@ export default function UnggahTwibbonPage() {
               </Card>
             </>
           )}
+    </div>
+  );
+
+  /* User login: bungkus dengan DashboardLayout agar sidebar tetap tampil */
+  if (isDashboard && role) {
+    return <DashboardLayout role={role}>{panelContent}</DashboardLayout>;
+  }
+
+  /* Pengunjung publik: navbar + footer seperti semula */
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <PublicNavbar />
+
+      <main className="flex-1 py-12 sm:py-16">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          {panelContent}
         </div>
       </main>
 

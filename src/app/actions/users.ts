@@ -90,7 +90,23 @@ export async function updateUserRole(userId: string, newRole: UserRole): Promise
       console.warn("Notice: Gagal update auth metadata role:", e);
     }
 
+    // 3. Jika peran juri dicabut, bersihkan penugasan di competition_judges agar
+    // tidak meninggalkan juri "bayangan" pada matriks penugasan & penilaian lomba.
+    if (newRole !== "juri") {
+      const { error: cleanupError } = await supabase
+        .from("competition_judges")
+        .delete()
+        .eq("judge_id", userId);
+      if (cleanupError) {
+        console.warn("Peran juri dicabut namun gagal membersihkan competition_judges:", cleanupError);
+      }
+    }
+
     revalidatePath("/dashboard/pengguna");
+    if (newRole !== "juri") {
+      revalidatePath("/dashboard/juri");
+      revalidatePath("/dashboard/juri/penugasan");
+    }
     return { success: true };
   } catch (err: unknown) {
     console.error("Error updateUserRole:", err);

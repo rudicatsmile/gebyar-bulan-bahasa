@@ -373,6 +373,23 @@ export async function createJudgeAccount(data: {
       return { success: false, error: "ID pengguna juri tidak ditemukan." };
     }
 
+    // Guard: jangan diam-diam mengubah akun non-juri (mis. peserta/panitia) menjadi
+    // juri. Kalau email sudah dipakai peran lain, arahkan lewat halaman Pengguna.
+    if (existingUser) {
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id, role")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (existingProfile?.role && existingProfile.role !== "juri") {
+        return {
+          success: false,
+          error: `Email ${data.email} sudah dipakai akun dengan peran "${existingProfile.role}". Untuk menjadikannya juri, ubah peran lewat halaman Pengguna (Ubah Peran \u2192 Juri), bukan dari halaman ini.`,
+        };
+      }
+    }
+
     // 2. Simpan/sinkronkan ke public.profiles
     const { error: profileError } = await supabase.from("profiles").upsert({
       id: userId,
