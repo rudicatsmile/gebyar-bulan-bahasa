@@ -295,7 +295,19 @@ export async function saveJudgeAssignmentMatrix(assignments: MatrixAssignmentIte
       }
     }
 
-    // 2. Kosongkan penugasan aktif lama
+    // 2. Guard: jangan pernah menjalankan delete-all saat tidak ada penugasan valid.
+    // Mencegah penghapusan massal competition_judges akibat payload kosong
+    // (mis. data gagal dimuat, atau seluruh id tidak valid / terfilter habis).
+    if (cleanAssignments.length === 0) {
+      return {
+        success: false,
+        count: 0,
+        error:
+          "Tidak ada penugasan valid untuk disimpan. Perubahan dibatalkan agar data penugasan yang ada tidak terhapus. Pastikan daftar juri & lomba termuat dengan benar, lalu coba lagi.",
+      };
+    }
+
+    // 3. Kosongkan penugasan aktif lama
     const { error: delError } = await supabase
       .from("competition_judges")
       .delete()
@@ -306,7 +318,7 @@ export async function saveJudgeAssignmentMatrix(assignments: MatrixAssignmentIte
       return { success: false, error: delError.message };
     }
 
-    // 3. Masukkan batch penugasan baru
+    // 4. Masukkan batch penugasan baru
     if (cleanAssignments.length > 0) {
       const { error: insError } = await supabase
         .from("competition_judges")

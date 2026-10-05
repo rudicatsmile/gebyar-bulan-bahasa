@@ -78,7 +78,7 @@ Enum role (`src/types/database.types.ts`): `super_admin | seksi_acara | juri | m
 
 Jangan tertukar saat menulis query/manual.
 
-## 5. Perubahan Terakhir (perbaikan #1–#3)
+## 5. Perubahan Terakhir (perbaikan #1–#5)
 
 1. **#1** `/dashboard/juri` tidak lagi menambal/meng-ini-iasi dengan `JUDGES` dummy. Kini
    sumber tunggal = `profiles` + `competition_judges`, plus state: loading, error, dan
@@ -87,13 +87,23 @@ Jangan tertukar saat menulis query/manual.
    **"Belum ditugaskan"** (tautan ke matriks) alih-alih `0 Cabang Lomba` yang menyesatkan.
 3. **#3** Guard `createJudgeAccount` (email non-juri) + pembersihan `competition_judges` saat
    role juri dicabut di `updateUserRole`.
+4. **#4** `/dashboard/juri/penugasan` dibersihkan dari seed dummy: initial state `[]`, `loadData`
+   selalu memetakan data nyata dari DB, cabang `defaultChiefMap` + `DUMMY_TO_*` dihapus, ditambah
+   skeleton/empty state, banner `loadError`, dan **guard `handleSave`** (tolak simpan saat load
+   gagal / belum ada juri / belum ada lomba) untuk mencegah `saveJudgeAssignmentMatrix` yang
+   bersifat delete-all menghapus penugasan asli secara tak sengaja.
+5. **#5** Guard di level action `saveJudgeAssignmentMatrix`: bila `cleanAssignments.length === 0`
+   (payload kosong / semua id tidak valid) operasi **ditolak sebelum delete-all** dijalankan.
+   Ini pengaman terakhir terhadap penghapusan massal, termasuk bila pemanggil bukan halaman
+   penugasan. Konsekuensi: tidak bisa "mengosongkan seluruh penugasan" lewat matriks dalam satu
+   kali simpan — hapus per-juri, atau lakukan penghapusan eksplisit terpisah.
 
 ## 6. Known Issues / Hutang Teknis
 
-- **`/dashboard/juri/penugasan` masih men-seed dummy.** Initial state `judges`/`competitions`
-  dari `JUDGES`/`COMPETITIONS`, dan bila `competition_judges` kosong ia memakai pemetaan
-  `DUMMY_TO_JUDGE_ID` / `DUMMY_TO_COMP_ID` + `defaultChiefMap`. Berisiko menulis penugasan
-  berbasis id dummy. Perlu disamakan pola #1 (baca nyata + empty state) sebelum dipakai produksi.
+- ✅ **`/dashboard/juri/penugasan` sudah bersih dari dummy (perbaikan #4)** dan
+  `saveJudgeAssignmentMatrix` kini punya **guard anti delete-all saat payload kosong (perbaikan #5)**
+  — baik di sisi klien (`handleSave`) maupun di aksi. Catatan: konsekuensi #5, pengosongan
+  total semua penugasan tidak bisa dilakukan lewat satu kali simpan matriks.
 - **Kolom `avatar_url` fallback**: tanpa foto, UI menampilkan default `title` "Dewan Juri Ahli"
   dan ikon inisial (bukan data fiktif).
 - **Race check-then-insert** pada guard create: dua request paralel secara teori bisa lolos cek peran.

@@ -13,16 +13,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { JUDGES, COMPETITIONS } from "@/lib/dummy-data";
 import {
   getJudgeAssignmentData,
   saveJudgeAssignmentMatrix,
 } from "@/app/actions/competitions";
-import {
-  DUMMY_TO_COMP_ID,
-  DUMMY_TO_JUDGE_ID,
-  type MatrixAssignmentItem,
-} from "@/lib/constants";
+import { type MatrixAssignmentItem } from "@/lib/constants";
 import { ArrowLeft, ShieldCheck, Check, Save, Loader2, AlertCircle } from "lucide-react";
 
 interface DisplayJudge {
@@ -45,28 +40,16 @@ export default function DashboardPenugasanJuriPage() {
   const [isSaving, setIsSaving] = React.useState(false);
   const [savedNotice, setSavedNotice] = React.useState(false);
   const [errorNotice, setErrorNotice] = React.useState<string | null>(null);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const [judges, setJudges] = React.useState<DisplayJudge[]>(() =>
-    JUDGES.map((j) => ({
-      id: DUMMY_TO_JUDGE_ID[j.id] || j.id,
-      fullName: j.fullName,
-      expertise: j.expertise,
-    }))
-  );
-
-  const [competitions, setCompetitions] = React.useState<DisplayCompetition[]>(() =>
-    COMPETITIONS.map((c) => ({
-      id: DUMMY_TO_COMP_ID[c.id] || c.id,
-      shortName: c.shortName,
-      name: c.name,
-      category: c.category,
-      slug: c.slug,
-    }))
-  );
+  // Sumber data tunggal: DB (profiles role='juri', competitions, competition_judges).
+  // Tidak ada seed dummy — kalau DB kosong, tampilkan empty state.
+  const [judges, setJudges] = React.useState<DisplayJudge[]>([]);
+  const [competitions, setCompetitions] = React.useState<DisplayCompetition[]>([]);
 
   // Matriks penugasan: Record<judgeId, string[] (competitionIds)>
   const [assignments, setAssignments] = React.useState<Record<string, string[]>>({});
@@ -81,76 +64,56 @@ export default function DashboardPenugasanJuriPage() {
       const res = await getJudgeAssignmentData();
 
       if (res.success) {
-        if (res.judges.length > 0) {
-          setJudges(
-            res.judges.map((j) => ({
-              id: j.id,
-              fullName: j.fullName,
-              expertise: j.expertise || "Dewan Juri Ahli",
-            }))
-          );
-        }
+        // Sumber data: DB. Kalau kosong, biarkan kosong (empty state).
+        setJudges(
+          res.judges.map((j) => ({
+            id: j.id,
+            fullName: j.fullName,
+            expertise: j.expertise || "Dewan Juri Ahli",
+          }))
+        );
+        setCompetitions(
+          res.competitions.map((c) => ({
+            id: c.id,
+            shortName: c.shortName,
+            name: c.name,
+            category: c.category,
+            slug: c.slug,
+          }))
+        );
 
-        if (res.competitions.length > 0) {
-          setCompetitions(
-            res.competitions.map((c) => ({
-              id: c.id,
-              shortName: c.shortName,
-              name: c.name,
-              category: c.category,
-              slug: c.slug,
-            }))
-          );
-        }
-
-        // Susun matriks assignments & chiefJudges
+        // Susun matriks assignments & chiefJudges dari data nyata.
         const newAssignments: Record<string, string[]> = {};
         const newChiefs: Record<string, string> = {};
-
-        if (res.assignments.length > 0) {
-          res.assignments.forEach((a) => {
-            if (!newAssignments[a.judgeId]) {
-              newAssignments[a.judgeId] = [];
-            }
-            if (!newAssignments[a.judgeId].includes(a.competitionId)) {
-              newAssignments[a.judgeId].push(a.competitionId);
-            }
-            if (a.isChiefJudge) {
-              newChiefs[a.competitionId] = a.judgeId;
-            }
-          });
-        } else {
-          // Default mapping awal jika tabel competition_judges masih kosong di DB
-          JUDGES.forEach((j) => {
-            const resolvedJId = DUMMY_TO_JUDGE_ID[j.id] || j.id;
-            const resolvedCompIds = j.assignedCompetitionIds.map(
-              (cid) => DUMMY_TO_COMP_ID[cid] || cid
-            );
-            newAssignments[resolvedJId] = resolvedCompIds;
-          });
-
-          const defaultChiefMap: Record<string, string> = {
-            "comp-1": "judge-1",
-            "comp-2": "judge-2",
-            "comp-3": "judge-3",
-            "comp-4": "judge-4",
-            "comp-5": "judge-5",
-            "comp-6": "judge-3",
-            "comp-7": "judge-6",
-            "comp-8": "judge-7",
-          };
-          Object.entries(defaultChiefMap).forEach(([cid, jid]) => {
-            const resolvedC = DUMMY_TO_COMP_ID[cid] || cid;
-            const resolvedJ = DUMMY_TO_JUDGE_ID[jid] || jid;
-            newChiefs[resolvedC] = resolvedJ;
-          });
-        }
+        res.assignments.forEach((a) => {
+          if (!newAssignments[a.judgeId]) {
+            newAssignments[a.judgeId] = [];
+          }
+          if (!newAssignments[a.judgeId].includes(a.competitionId)) {
+            newAssignments[a.judgeId].push(a.competitionId);
+          }
+          if (a.isChiefJudge) {
+            newChiefs[a.competitionId] = a.judgeId;
+          }
+        });
 
         setAssignments(newAssignments);
         setChiefJudges(newChiefs);
+        setLoadError(null);
+      } else {
+        setJudges([]);
+        setCompetitions([]);
+        setAssignments({});
+        setChiefJudges({});
+        setLoadError(res.error || "Data penugasan gagal dimuat.");
       }
     } catch (err) {
       console.error("Gagal memuat matriks penugasan:", err);
+      setJudges([]);
+      setCompetitions([]);
+      setAssignments({});
+      setChiefJudges({});
+      setLoadError("Data penugasan gagal dimuat. Periksa koneksi lalu coba lagi.");
     } finally {
       setLoading(false);
     }
@@ -184,6 +147,20 @@ export default function DashboardPenugasanJuriPage() {
   };
 
   const handleSave = async () => {
+    // Guard: cegah penghapusan massal tak sengaja (saveJudgeAssignmentMatrix bersifat
+    // delete-all) saat data gagal dimuat atau belum ada juri/lomba untuk ditugaskan.
+    if (loadError) {
+      setErrorNotice(
+        "Data gagal dimuat. Muat ulang halaman sebelum menyimpan agar penugasan lama tidak terhapus."
+      );
+      return;
+    }
+    if (judges.length === 0 || competitions.length === 0) {
+      setErrorNotice(
+        "Belum ada juri atau lomba untuk ditugaskan. Tambahkan datanya terlebih dahulu."
+      );
+      return;
+    }
     try {
       setIsSaving(true);
       setErrorNotice(null);
@@ -241,7 +218,11 @@ export default function DashboardPenugasanJuriPage() {
 
             <Button
               onClick={handleSave}
-              disabled={isMounted ? (isSaving || loading) : false}
+              disabled={
+                isMounted
+                  ? isSaving || loading || !!loadError || judges.length === 0 || competitions.length === 0
+                  : false
+              }
               suppressHydrationWarning
               size="sm"
               className="text-xs gap-1.5 cursor-pointer min-w-44"
@@ -280,6 +261,13 @@ export default function DashboardPenugasanJuriPage() {
           </div>
         )}
 
+        {loadError && (
+          <div className="p-3 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive text-xs flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{loadError}</span>
+          </div>
+        )}
+
         <div className="rounded-xl border border-border bg-card overflow-x-auto">
           <Table>
             <TableHeader>
@@ -298,7 +286,37 @@ export default function DashboardPenugasanJuriPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {judges.map((j) => {
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={competitions.length + 1} className="py-10 text-center">
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Memuat data penugasan...
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={competitions.length + 1} className="py-10 text-center">
+                    <p className="text-sm text-destructive">{loadError}</p>
+                  </TableCell>
+                </TableRow>
+              ) : judges.length === 0 || competitions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={competitions.length + 1} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <ShieldCheck className="h-8 w-8 opacity-60" />
+                      <p className="text-sm font-semibold text-foreground">Belum ada yang bisa ditugaskan</p>
+                      <p className="text-xs max-w-md">
+                        {judges.length === 0
+                          ? "Tambahkan dewan juri di halaman Manajemen Juri terlebih dahulu."
+                          : "Tambahkan lomba di modul Lomba terlebih dahulu."}
+                      </p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                judges.map((j) => {
                 const assignedList = assignments[j.id] || [];
                 return (
                   <TableRow key={j.id}>
@@ -353,7 +371,8 @@ export default function DashboardPenugasanJuriPage() {
                     })}
                   </TableRow>
                 );
-              })}
+                })
+              )}
             </TableBody>
           </Table>
         </div>
