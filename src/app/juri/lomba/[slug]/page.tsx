@@ -117,7 +117,8 @@ export default function JuriLombaPesertaPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        {/* Desktop Table View */}
+        <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -204,6 +205,77 @@ export default function JuriLombaPesertaPage() {
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* Mobile Card List View */}
+        <div className="block md:hidden space-y-3">
+          {loading ? (
+            <div className="p-8 text-center text-xs text-muted-foreground border rounded-xl bg-card">
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                <span>Memuat daftar peserta...</span>
+              </div>
+            </div>
+          ) : participants.length === 0 ? (
+            <div className="p-8 text-center text-xs text-muted-foreground border rounded-xl bg-card">
+              Belum ada peserta yang terdaftar pada cabang lomba ini.
+            </div>
+          ) : (
+            participants.map((p) => {
+              const isSent = p.status === "terkirim" || p.status === "final";
+              const isDraft = p.status === "draft";
+
+              return (
+                <div key={p.registrationId} className="p-4 rounded-xl border border-border bg-card space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold text-accent">
+                      {p.registrationNumber}
+                    </span>
+                    {isSent ? (
+                      <Badge variant="success" className="text-[10px]">
+                        ✓ TERKIRIM {p.weightedScore !== null ? `(${p.weightedScore.toFixed(2)})` : ""}
+                      </Badge>
+                    ) : isDraft ? (
+                      <Badge variant="warning" className="text-[10px]">
+                        DRAFT {p.weightedScore !== null ? `(${p.weightedScore.toFixed(2)})` : ""}
+                      </Badge>
+                    ) : (
+                      <Badge variant="default" className="text-[10px]">
+                        BELUM DINILAI
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="font-heading text-sm font-bold text-foreground">
+                      {p.fullName}
+                    </h3>
+                    {p.teamName && (
+                      <p className="text-xs text-accent">{p.teamName}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-0.5">{p.institution}</p>
+                  </div>
+
+                  <Link href={`/juri/penilaian/${p.registrationId}`} className="block">
+                    <Button
+                      size="sm"
+                      variant={isSent ? "outline" : "default"}
+                      className="w-full text-xs h-10 gap-1.5"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      <span>
+                        {isSent
+                          ? "Lihat / Ubah Nilai"
+                          : isDraft
+                          ? "Lanjutkan Menilai"
+                          : "Buka Form Nilai"}
+                      </span>
+                    </Button>
+                  </Link>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </DashboardLayout>

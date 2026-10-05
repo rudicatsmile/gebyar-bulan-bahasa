@@ -10,7 +10,7 @@ import {
   type ParticipantChallengeItem,
 } from "@/app/actions/challenges";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
-import { Sparkles, QrCode, ArrowLeft, Puzzle, AlertCircle } from "lucide-react";
+import { Sparkles, QrCode, ArrowLeft, Puzzle, AlertCircle, Camera } from "lucide-react";
 
 // Tombol aksi disesuaikan dengan tipe challenge dan alur yang tersedia bagi peserta.
 function getChallengeAction(ch: ParticipantChallengeItem): { href: string; label: string } | null {
@@ -145,6 +145,20 @@ export default function PesertaChallengeListPage() {
           ) : (
             <>
               <ChallengeItem
+                title="Scan QR Kode Stand"
+                meta="+10 poin per kunjungan stand"
+                href="/peserta/scan"
+                actionLabel="Scan QR Kode Stand"
+                icon={QrCode}
+              />
+              <ChallengeItem
+                title="Tantangan Twibbon GebyarBulanBahasa"
+                meta="+20 poin per unggahan foto"
+                href="/twibbon/unggah"
+                actionLabel="Kirim Bukti Twibbon"
+                icon={Camera}
+              />
+              <ChallengeItem
                 title="Challenge Puzzle: Cocokkan Baju Daerah"
                 meta="+10 poin tiap jawaban benar"
                 href="/peserta/challenge/puzzle"
@@ -160,6 +174,12 @@ export default function PesertaChallengeListPage() {
               />
 
               {challenges.map((ch) => {
+                // Jangan tampilkan duplikat jika tantangan Twibbon atau Scan QR sudah ada sebagai menu utama
+                const isDuplicate =
+                  ch.title.toLowerCase().includes("twibbon") ||
+                  ch.title.toLowerCase().includes("scan qr");
+                if (isDuplicate) return null;
+
                 const action = getChallengeAction(ch);
                 return (
                   <ChallengeItem

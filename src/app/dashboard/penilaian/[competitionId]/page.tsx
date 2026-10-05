@@ -271,81 +271,150 @@ export default function DashboardPenilaianDetailPage() {
             <p className="text-xs">Memuat rekapitulasi penilaian...</p>
           </div>
         ) : recaps.length > 0 ? (
-          <div className="rounded-xl border border-border bg-card overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16 text-center">Rank</TableHead>
-                  <TableHead>Peserta & Instansi</TableHead>
-                  {judges.map((j) => (
-                    <TableHead key={j.id} className="text-center min-w-28">
-                      <span className="block font-bold">
-                        {j.fullName.split(",")[0].split(" ")[0]}
-                      </span>
-                      <span className="block text-[10px] font-mono text-muted-foreground">
-                        {j.isChiefJudge ? "★ Juri Utama" : "Dewan Juri"}
-                      </span>
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-center">Selisih Skor</TableHead>
-                  <TableHead className="text-right">Skor Akhir (Agregat)</TableHead>
-                  <TableHead className="text-center">Status Audit</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recaps.map((item) => {
-                  return (
-                    <TableRow key={item.registrationId}>
-                      <TableCell className="text-center font-mono font-bold text-xs">
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block rounded-xl border border-border bg-card overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16 text-center">Rank</TableHead>
+                    <TableHead>Peserta & Instansi</TableHead>
+                    {judges.map((j) => (
+                      <TableHead key={j.id} className="text-center min-w-28">
+                        <span className="block font-bold">
+                          {j.fullName.split(",")[0].split(" ")[0]}
+                        </span>
+                        <span className="block text-[10px] font-mono text-muted-foreground">
+                          {j.isChiefJudge ? "★ Juri Utama" : "Dewan Juri"}
+                        </span>
+                      </TableHead>
+                    ))}
+                    <TableHead className="text-center">Selisih Skor</TableHead>
+                    <TableHead className="text-right">Skor Akhir (Agregat)</TableHead>
+                    <TableHead className="text-center">Status Audit</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recaps.map((item) => {
+                    return (
+                      <TableRow key={item.registrationId}>
+                        <TableCell className="text-center font-mono font-bold text-xs">
+                          #{item.rank}
+                        </TableCell>
+                        <TableCell>
+                          <strong className="text-foreground text-xs sm:text-sm block">
+                            {item.participantName}
+                          </strong>
+                          <span className="text-[11px] text-muted-foreground">{item.institution}</span>
+                        </TableCell>
+                        {judges.map((j) => {
+                          const jScore = item.scoresPerJudge.find((s) => s.judgeId === j.id);
+                          return (
+                            <TableCell key={j.id} className="text-center font-mono text-xs">
+                              {jScore !== undefined ? (
+                                <span className="font-semibold text-foreground">
+                                  {jScore.weightedTotal.toFixed(2)}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground italic">Belum Dinilai</span>
+                              )}
+                            </TableCell>
+                          );
+                        })}
+                        <TableCell className="text-center font-mono text-xs">
+                          {item.scoresPerJudge.length >= 2 ? `${item.scoreGap.toFixed(2)} Pts` : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
+                          {item.finalScore > 0 ? item.finalScore.toFixed(2) : "—"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.status === "audit" ? (
+                            <Badge variant="danger" className="text-[10px]">
+                              PERLU PENINJAUAN
+                            </Badge>
+                          ) : item.status === "selesai" ? (
+                            <Badge variant="success" className="text-[10px]">
+                              VALID
+                            </Badge>
+                          ) : (
+                            <Badge variant="default" className="text-[10px]">
+                              MENUNGGU JURI
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Card List View */}
+            <div className="block md:hidden space-y-3">
+              {recaps.map((item) => (
+                <div key={item.registrationId} className="p-4 rounded-xl border border-border bg-card space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center justify-center h-6 px-2 rounded bg-accent/15 text-accent font-mono text-xs font-bold">
                         #{item.rank}
-                      </TableCell>
-                      <TableCell>
-                        <strong className="text-foreground text-xs sm:text-sm block">
-                          {item.participantName}
-                        </strong>
-                        <span className="text-[11px] text-muted-foreground">{item.institution}</span>
-                      </TableCell>
+                      </span>
+                      {item.status === "audit" ? (
+                        <Badge variant="danger" className="text-[10px]">
+                          PERLU PENINJAUAN
+                        </Badge>
+                      ) : item.status === "selesai" ? (
+                        <Badge variant="success" className="text-[10px]">
+                          VALID
+                        </Badge>
+                      ) : (
+                        <Badge variant="default" className="text-[10px]">
+                          MENUNGGU JURI
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-muted-foreground block font-mono">Skor Agregat</span>
+                      <span className="font-mono font-bold text-accent text-sm sm:text-base">
+                        {item.finalScore > 0 ? item.finalScore.toFixed(2) : "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-heading text-sm font-bold text-foreground">
+                      {item.participantName}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{item.institution}</p>
+                  </div>
+
+                  {/* Rincian Skor per Juri & Selisih */}
+                  <div className="p-2.5 rounded-lg bg-muted/40 border border-border/50 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground uppercase font-mono">
+                      <span>Rincian Juri:</span>
+                      {item.scoresPerJudge.length >= 2 && (
+                        <span>Gap: {item.scoreGap.toFixed(2)} Pts</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
                       {judges.map((j) => {
                         const jScore = item.scoresPerJudge.find((s) => s.judgeId === j.id);
                         return (
-                          <TableCell key={j.id} className="text-center font-mono text-xs">
-                            {jScore !== undefined ? (
-                              <span className="font-semibold text-foreground">
-                                {jScore.weightedTotal.toFixed(2)}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground italic">Belum Dinilai</span>
-                            )}
-                          </TableCell>
+                          <div key={j.id} className="flex items-center justify-between text-[11px]">
+                            <span className="text-muted-foreground truncate">
+                              {j.fullName.split(",")[0].split(" ")[0]}:
+                            </span>
+                            <span className="font-mono font-semibold text-foreground ml-1">
+                              {jScore !== undefined ? jScore.weightedTotal.toFixed(2) : "Draft/—"}
+                            </span>
+                          </div>
                         );
                       })}
-                      <TableCell className="text-center font-mono text-xs">
-                        {item.scoresPerJudge.length >= 2 ? `${item.scoreGap.toFixed(2)} Pts` : "—"}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
-                        {item.finalScore > 0 ? item.finalScore.toFixed(2) : "—"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {item.status === "audit" ? (
-                          <Badge variant="danger" className="text-[10px]">
-                            PERLU PENINJAUAN
-                          </Badge>
-                        ) : item.status === "selesai" ? (
-                          <Badge variant="success" className="text-[10px]">
-                            VALID
-                          </Badge>
-                        ) : (
-                          <Badge variant="default" className="text-[10px]">
-                            MENUNGGU JURI
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-2">
             <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">

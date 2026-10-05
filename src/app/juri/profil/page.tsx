@@ -237,7 +237,8 @@ export default function JuriProfilPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-border overflow-hidden">
+              {/* Desktop Table View */}
+              <div className="hidden md:block rounded-lg border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -305,6 +306,59 @@ export default function JuriProfilPage() {
                     )}
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* Mobile Card List View */}
+              <div className="block md:hidden space-y-3">
+                {assignedCompetitions.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted-foreground border rounded-lg p-4">
+                    Belum ada cabang lomba yang ditugaskan kepada Anda dalam sistem.
+                  </div>
+                ) : (
+                  assignedCompetitions.map((comp) => (
+                    <div key={comp.id} className="p-4 rounded-xl border border-border bg-card/60 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="font-heading text-sm font-bold text-foreground">
+                            {comp.name}
+                          </h3>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <Badge variant="info" className="text-[10px] uppercase font-mono">
+                              {comp.category}
+                            </Badge>
+                            {comp.isChiefJudge ? (
+                              <Badge variant="gold" className="text-[10px]">
+                                ★ Ketua Dewan Juri
+                              </Badge>
+                            ) : (
+                              <Badge variant="default" className="text-[10px]">
+                                Anggota Juri
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <Badge
+                          variant={comp.status === "aktif" ? "success" : "default"}
+                          className="text-[10px] shrink-0"
+                        >
+                          {comp.status === "aktif" ? "Aktif" : comp.status}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 text-accent shrink-0" />
+                        <span>{comp.stageName || "Panggung Utama"}</span>
+                      </div>
+
+                      <Link href={`/juri/lomba/${comp.slug}`} className="block">
+                        <Button size="sm" variant="outline" className="w-full text-xs h-10 gap-1.5">
+                          <span>Roster Peserta & Penilaian</span>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                    </div>
+                  ))
+                )}
               </div>
             </Card>
 

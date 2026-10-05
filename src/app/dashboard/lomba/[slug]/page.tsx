@@ -303,74 +303,143 @@ export default function DashboardLombaDetailPage() {
               </p>
             </Card>
           ) : (
-            <div className="rounded-xl border border-border bg-card overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-28">No. Registrasi</TableHead>
-                    <TableHead>Nama Peserta / Tim</TableHead>
-                    <TableHead>Sekolah / Kampus</TableHead>
-                    {judges.map((j) => (
-                      <TableHead key={j.id} className="text-center min-w-32">
-                        <span className="block font-bold">
-                          {j.fullName.split(",")[0].split(" ")[0]}
-                        </span>
-                        <span className="block text-[10px] font-mono text-muted-foreground">
-                          {j.isChiefJudge ? "★ Juri Utama" : "Dewan Juri"}
-                        </span>
-                      </TableHead>
-                    ))}
-                    <TableHead className="text-right">Rata-Rata Sementara</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {participants.map((p) => {
-                    const judgeScores: number[] = [];
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block rounded-xl border border-border bg-card overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-28">No. Registrasi</TableHead>
+                      <TableHead>Nama Peserta / Tim</TableHead>
+                      <TableHead>Sekolah / Kampus</TableHead>
+                      {judges.map((j) => (
+                        <TableHead key={j.id} className="text-center min-w-32">
+                          <span className="block font-bold">
+                            {j.fullName.split(",")[0].split(" ")[0]}
+                          </span>
+                          <span className="block text-[10px] font-mono text-muted-foreground">
+                            {j.isChiefJudge ? "★ Juri Utama" : "Dewan Juri"}
+                          </span>
+                        </TableHead>
+                      ))}
+                      <TableHead className="text-right">Rata-Rata Sementara</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {participants.map((p) => {
+                      const judgeScores: number[] = [];
 
-                    return (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-mono text-xs font-bold text-accent">
+                      return (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-mono text-xs font-bold text-accent">
+                            {p.registrationNumber}
+                          </TableCell>
+                          <TableCell className="font-semibold text-foreground text-xs sm:text-sm">
+                            {p.fullName}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {p.institution}
+                          </TableCell>
+
+                          {judges.map((j) => {
+                            const score = scores[p.id]?.[j.id] ?? null;
+                            if (score !== null && !isNaN(score)) {
+                              judgeScores.push(score);
+                            }
+
+                            return (
+                              <TableCell key={j.id} className="text-center font-mono text-xs">
+                                {score !== null ? (
+                                  <span className="font-semibold text-foreground transition-all duration-300">
+                                    {score.toFixed(2)}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground italic">Draft / Belum</span>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+
+                          <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
+                            {judgeScores.length > 0
+                              ? (judgeScores.reduce((a, b) => a + b, 0) / judgeScores.length).toFixed(
+                                  2
+                                )
+                              : "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card List View */}
+              <div className="block md:hidden space-y-3">
+                {participants.map((p) => {
+                  const judgeScores: number[] = [];
+
+                  return (
+                    <div key={p.id} className="p-4 rounded-xl border border-border bg-card space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-accent">
                           {p.registrationNumber}
-                        </TableCell>
-                        <TableCell className="font-semibold text-foreground text-xs sm:text-sm">
-                          {p.fullName}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {p.institution}
-                        </TableCell>
+                        </span>
+                        {/* Calculate Rata-rata */}
+                        {(() => {
+                          judges.forEach((j) => {
+                            const sc = scores[p.id]?.[j.id] ?? null;
+                            if (sc !== null && !isNaN(sc)) judgeScores.push(sc);
+                          });
+                          const avg = judgeScores.length > 0
+                            ? (judgeScores.reduce((a, b) => a + b, 0) / judgeScores.length).toFixed(2)
+                            : null;
 
-                        {judges.map((j) => {
-                          const score = scores[p.id]?.[j.id] ?? null;
-                          if (score !== null && !isNaN(score)) {
-                            judgeScores.push(score);
-                          }
-
-                          return (
-                            <TableCell key={j.id} className="text-center font-mono text-xs">
-                              {score !== null ? (
-                                <span className="font-semibold text-foreground transition-all duration-300">
-                                  {score.toFixed(2)}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground italic">Draft / Belum</span>
-                              )}
-                            </TableCell>
+                          return avg ? (
+                            <Badge variant="gold" className="font-mono text-[11px]">
+                              Rata-Rata: {avg}
+                            </Badge>
+                          ) : (
+                            <Badge variant="default" className="text-[10px]">
+                              Belum Ada Nilai
+                            </Badge>
                           );
-                        })}
+                        })()}
+                      </div>
 
-                        <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
-                          {judgeScores.length > 0
-                            ? (judgeScores.reduce((a, b) => a + b, 0) / judgeScores.length).toFixed(
-                                2
-                              )
-                            : "—"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                      <div>
+                        <h3 className="font-heading text-sm font-bold text-foreground">
+                          {p.fullName}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{p.institution}</p>
+                      </div>
+
+                      {/* Skor per Juri Grid */}
+                      <div className="p-2.5 rounded-lg bg-muted/40 border border-border/50 text-xs space-y-1.5">
+                        <span className="text-[10px] font-semibold text-muted-foreground block uppercase font-mono">
+                          Rincian Nilai Juri:
+                        </span>
+                        <div className="grid grid-cols-2 gap-2">
+                          {judges.map((j) => {
+                            const sc = scores[p.id]?.[j.id] ?? null;
+                            return (
+                              <div key={j.id} className="flex items-center justify-between text-[11px]">
+                                <span className="text-muted-foreground truncate">
+                                  {j.fullName.split(",")[0].split(" ")[0]}:
+                                </span>
+                                <span className="font-mono font-semibold text-foreground ml-1">
+                                  {sc !== null ? sc.toFixed(2) : "Draft/—"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>
