@@ -435,7 +435,61 @@ export default function DashboardChallengePage() {
             </span>
           </div>
 
-          <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
+          {/* Daftar mobile (card list) */}
+          <div className="md:hidden space-y-3">
+            {loading ? (
+              <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-accent" />
+                <span className="text-xs">Memuat data challenge dari database...</span>
+              </div>
+            ) : challenges.length === 0 ? (
+              <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+                <Sparkles className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+                <span className="text-sm font-semibold block text-foreground">Belum Ada Challenge Terdaftar di Database</span>
+                <span className="text-xs block mt-1">Klik tombol &ldquo;Tambah Challenge&rdquo; di atas untuk membuat misi challenge baru.</span>
+              </div>
+            ) : (
+              challenges.map((ch) => (
+                <div key={ch.id} className="rounded-xl border border-border bg-card p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <strong className="text-foreground text-sm block">{ch.title}</strong>
+                      <span className="text-[11px] text-muted-foreground line-clamp-2">{ch.description}</span>
+                    </div>
+                    <button onClick={() => handleToggleStatus(ch)} className="cursor-pointer shrink-0" title="Klik untuk ubah status">
+                      <Badge variant={ch.isActive ? "success" : "default"} className="text-[10px] hover:opacity-80">{ch.isActive ? "AKTIF" : "NONAKTIF"}</Badge>
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <Badge variant="default" className="text-[10px]">{ch.type.replace(/_/g, " ").toUpperCase()}</Badge>
+                    <span className="font-mono font-bold text-accent">+{ch.pointReward} Pts</span>
+                    <Badge variant="gold" className="text-[10px]">{ch.badge}</Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1">
+                    {ch.slug === "keliling-8-stand" && (
+                      <Link href="/dashboard/challenge/stand">
+                        <Button size="sm" variant="ghost" className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"><Store className="h-3.5 w-3.5" /><span>Stand</span></Button>
+                      </Link>
+                    )}
+                    {ch.type === "unggah_bukti" && (
+                      <Link href="/dashboard/challenge/verifikasi">
+                        <Button size="sm" variant="ghost" className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"><CheckCircle className="h-3.5 w-3.5" /><span>Verifikasi</span></Button>
+                      </Link>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => handleOpenEdit(ch)} className="h-8 px-2.5 text-xs gap-1 border-accent/40 text-accent hover:bg-accent/10 font-semibold cursor-pointer" title="Edit Challenge">
+                      <Pencil className="h-3.5 w-3.5" /><span>Edit</span>
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleOpenDelete(ch)} className="h-8 px-2.5 text-xs gap-1 font-semibold cursor-pointer" title="Hapus Challenge">
+                      <Trash2 className="h-3.5 w-3.5" /><span>Hapus</span>
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Daftar challenge (desktop) */}
+          <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden shadow-xs">
             <Table>
               <TableHeader>
                 <TableRow>

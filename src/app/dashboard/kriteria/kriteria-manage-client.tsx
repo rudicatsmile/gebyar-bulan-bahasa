@@ -281,8 +281,38 @@ export function KriteriaManageClient({ initialCompetitions }: KriteriaManageClie
         </div>
       </div>
 
-      {/* Tabel Kriteria */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      {/* Daftar mobile (card list) */}
+      <div className="md:hidden space-y-3">
+        {(currentComp.criteria || []).length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">
+            Belum ada kriteria penilaian untuk cabang lomba ini.
+          </div>
+        ) : (
+          (currentComp.criteria || []).map((crit, idx) => (
+            <div key={crit.id} className="rounded-xl border border-border bg-card p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold text-foreground text-sm">{idx + 1}. {crit.name}</p>
+                <span className="font-mono font-bold text-accent text-base shrink-0">{crit.weight}%</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{crit.description}</p>
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] font-mono text-muted-foreground">Skor maks: {crit.maxScore}</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => handleOpenEditDialog(crit)} className="p-2 rounded-lg text-muted-foreground hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors" title="Edit Kriteria">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => handleDeleteCriterion(crit.id)} className="p-2 rounded-lg text-muted-foreground hover:text-danger hover:bg-danger/10 cursor-pointer transition-colors" title="Hapus Kriteria">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tabel Kriteria (desktop) */}
+      <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>

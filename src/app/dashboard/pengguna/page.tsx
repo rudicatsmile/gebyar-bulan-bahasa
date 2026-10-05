@@ -238,8 +238,64 @@ export default function DashboardKelolaPenggunaPage() {
           </select>
         </div>
 
-        {/* Table */}
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        {/* Daftar mobile (card list) */}
+        <div className="md:hidden space-y-3">
+          {isLoading ? (
+            <div className="rounded-xl border border-border bg-card py-14 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin text-accent" />
+              <p className="text-xs">Memuat daftar pengguna dari database...</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground space-y-1">
+              <Users className="h-8 w-8 mx-auto opacity-50" />
+              <p className="text-sm font-semibold">Tidak ada pengguna yang cocok</p>
+              <p className="text-xs">Coba sesuaikan kata kunci pencarian atau filter peran.</p>
+            </div>
+          ) : (
+            filteredUsers.map((u) => {
+              const isRowUpdating = updatingId === u.id;
+              return (
+                <div key={u.id} className={`rounded-xl border border-border bg-card p-4 space-y-3 ${isRowUpdating ? "opacity-60" : ""}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground text-sm truncate">{u.fullName}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground break-all">{u.email}</p>
+                    </div>
+                    <Badge variant={u.isActive ? "success" : "danger"} className="text-[10px] shrink-0">{u.isActive ? "AKTIF" : "NONAKTIF"}</Badge>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground space-y-0.5">
+                    <p>{u.institution}</p>
+                    <p>{u.createdAt}{u.phone ? ` • ${u.phone}` : ""}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase">Peran (Role)</label>
+                    <select value={u.role} disabled={isRowUpdating} onChange={(e) => handleChangeRole(u.id, e.target.value as UserRole)}
+                      className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs font-semibold focus:outline-none focus:border-accent cursor-pointer disabled:opacity-50">
+                      {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <Button size="sm" variant={u.isActive ? "outline" : "default"} disabled={isRowUpdating} onClick={() => handleToggleActive(u.id, u.isActive)}
+                      className="text-xs h-8 px-2.5 cursor-pointer" title={u.isActive ? "Nonaktifkan akun" : "Aktifkan akun"}>
+                      {isRowUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : u.isActive ? "Nonaktifkan" : "Aktifkan"}
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={isRowUpdating} onClick={() => openEdit(u)}
+                      className="text-xs h-8 px-2.5 gap-1 cursor-pointer text-muted-foreground hover:text-foreground" title="Edit profil">
+                      <Pencil className="h-3.5 w-3.5" /><span>Edit</span>
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={isRowUpdating} onClick={() => setDeleteTarget(u)}
+                      className="text-xs h-8 px-2.5 gap-1 cursor-pointer text-muted-foreground hover:text-danger hover:border-danger/50" title="Hapus akun">
+                      <Trash2 className="h-3.5 w-3.5" /><span>Hapus</span>
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Table (desktop) */}
+        <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
           {isLoading ? (
             <div className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin text-accent" />

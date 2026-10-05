@@ -288,8 +288,62 @@ export default function DashboardKelolaStandPage() {
           </div>
         )}
 
-        {/* Tabel Stand Pameran */}
-        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
+        {/* Daftar mobile (card list) */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-accent" />
+              <span className="text-xs">Memuat data stand dari database...</span>
+            </div>
+          ) : stands.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+              <Store className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+              <span className="text-sm font-semibold block text-foreground">Belum Ada Stand Pameran Terdaftar</span>
+              <span className="text-xs block mt-1">Klik tombol &ldquo;Tambah Stand Baru&rdquo; untuk mendaftarkan stand budaya.</span>
+            </div>
+          ) : (
+            stands.map((s) => (
+              <div key={s.id} className="rounded-xl border border-border bg-card p-4 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <strong className="text-foreground text-sm block">{s.name}</strong>
+                    <span className="text-[11px] text-muted-foreground line-clamp-1">{s.description || "Stand edukasi pameran kebudayaan."}</span>
+                  </div>
+                  <button onClick={() => handleToggleStatus(s)} className="cursor-pointer shrink-0" title="Klik untuk ubah status">
+                    <Badge variant={s.isActive ? "success" : "default"} className="text-[10px] hover:opacity-80">{s.isActive ? "AKTIF" : "NONAKTIF"}</Badge>
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="px-2.5 py-1 rounded bg-primary text-accent font-mono font-bold tracking-wider">{s.code}</span>
+                  <span className="font-mono font-bold text-foreground">+{s.points} Pts</span>
+                  <span className="text-muted-foreground">{s.visitCount} Kunjungan</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5 text-accent shrink-0" />
+                  <span>{s.location}</span>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1">
+                  <Button size="sm" variant="outline" onClick={() => handleCopy(s.code)} className="text-xs h-8 px-2 gap-1 cursor-pointer" title="Salin Kode Stand">
+                    {copiedCode === s.code ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                    <span>{copiedCode === s.code ? "Disalin" : "Salin"}</span>
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setPreviewStand(s)} className="text-xs h-8 px-2 gap-1 border-accent/30 text-accent hover:bg-accent/10 cursor-pointer" title="Lihat & Cetak QR Code">
+                    <QrCode className="h-3.5 w-3.5" /><span>QR</span>
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleOpenEdit(s)} className="text-xs h-8 px-2 gap-1 border-primary/30 text-primary hover:bg-primary/10 font-semibold cursor-pointer" title="Edit Stand">
+                    <Pencil className="h-3.5 w-3.5" /><span>Edit</span>
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleOpenDelete(s)} className="text-xs h-8 px-2 gap-1 font-semibold cursor-pointer" title="Hapus Stand">
+                    <Trash2 className="h-3.5 w-3.5" /><span>Hapus</span>
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Tabel Stand Pameran (desktop) */}
+        <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden shadow-xs">
           <Table>
             <TableHeader>
               <TableRow>

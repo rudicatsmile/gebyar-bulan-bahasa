@@ -152,8 +152,60 @@ export default function DashboardPesertaPage() {
           </div>
         </div>
 
-        {/* Tabel Peserta */}
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        {/* Daftar mobile (card list) */}
+        <div className="md:hidden space-y-3">
+          {isLoading && participants.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-accent" />
+              <p className="text-xs">Memuat daftar peserta...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+              <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-semibold">Tidak ada data peserta</p>
+              <p className="text-xs">Tidak ditemukan peserta dengan kriteria pencarian & filter yang dipilih.</p>
+            </div>
+          ) : (
+            filtered.map((p) => {
+              const statusVariant =
+                p.status === "terverifikasi"
+                  ? "success"
+                  : p.status === "menunggu_verifikasi"
+                  ? "warning"
+                  : "danger";
+              return (
+                <div key={p.id} className="rounded-xl border border-border bg-card p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground text-sm truncate">{p.fullName}</p>
+                      <p className="font-mono text-[11px] font-bold text-accent">{p.registrationNumber}</p>
+                    </div>
+                    <Badge variant={statusVariant} className="text-[10px] shrink-0">
+                      {p.status.replace(/_/g, " ").toUpperCase()}
+                    </Badge>
+                  </div>
+                  {p.teamName && (
+                    <p className="text-[11px] text-muted-foreground">Tim: {p.teamName}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">{p.institution}</p>
+                  <p className="text-xs text-foreground font-medium">{p.competitionName || "Belum Memilih Lomba"}</p>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="font-mono text-xs font-bold text-accent">{p.totalPoints} Pts</span>
+                    <Link href={`/dashboard/peserta/${p.id}`}>
+                      <Button variant="outline" size="sm" className="text-xs h-8 gap-1">
+                        <Eye className="h-3 w-3" />
+                        <span>Detail</span>
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Tabel Peserta (desktop) */}
+        <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>

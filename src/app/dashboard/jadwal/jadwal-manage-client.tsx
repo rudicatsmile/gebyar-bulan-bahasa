@@ -245,7 +245,70 @@ export function JadwalManageClient({
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        {/* Daftar mobile (card list) */}
+        <div className="md:hidden space-y-3">
+          {schedules.map((sch) => {
+            const isLive = sch.status === "berlangsung";
+            const matchedComp = competitions.find(
+              (c) =>
+                c.id === sch.competitionId ||
+                (sch.competitionId && c.slug === sch.competitionId) ||
+                sch.title.toLowerCase().includes(c.shortName.toLowerCase())
+            );
+            return (
+              <div key={sch.id} className={`rounded-xl border border-border bg-card p-4 space-y-2 ${isLive ? "bg-danger/5" : ""}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[11px] font-bold text-foreground">Hari ke-{sch.day} · {sch.time}</p>
+                    <p className="font-semibold text-foreground text-sm">{sch.title}</p>
+                  </div>
+                  <Badge
+                    variant={
+                      sch.status === "berlangsung"
+                        ? "live"
+                        : sch.status === "selesai"
+                        ? "success"
+                        : "default"
+                    }
+                    className="text-[10px] shrink-0"
+                  >
+                    {sch.status.toUpperCase()}
+                  </Badge>
+                </div>
+                {matchedComp ? (
+                  <Link href={`/dashboard/lomba/${matchedComp.slug}`} className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline font-mono">
+                    <Trophy className="h-3 w-3" />
+                    <span>{matchedComp.name} ({matchedComp.category === "kelompok" ? "Kelompok" : "Individu"})</span>
+                  </Link>
+                ) : (
+                  <span className="inline-block text-[10px] text-muted-foreground font-mono">Acara Umum (Non-Lomba)</span>
+                )}
+                <div className="text-xs text-muted-foreground space-y-0.5">
+                  <p><strong className="text-foreground">{sch.venue}</strong>{sch.stage ? <span> · {sch.stage}</span> : null}</p>
+                  <p>Pemandu: {sch.host || "—"}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <Button variant="outline" size="sm" onClick={() => handleOpenEdit(sch)} className="text-[11px] h-7 gap-1 px-2 cursor-pointer" title="Ubah Jadwal & Relasi Lomba">
+                    <Pencil className="h-3 w-3" /><span>Ubah</span>
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDeleteConfirmSchedule(sch)} className="text-[11px] h-7 gap-1 px-2 text-danger hover:bg-danger/10 hover:text-danger hover:border-danger/40 cursor-pointer" title="Hapus Agenda">
+                    <Trash2 className="h-3 w-3" /><span>Hapus</span>
+                  </Button>
+                  {!isLive ? (
+                    <Button variant="accent" size="sm" onClick={() => handleSetLive(sch.id)} className="text-[11px] h-7 gap-1 cursor-pointer">
+                      <Radio className="h-3 w-3" /><span>Jadikan Live</span>
+                    </Button>
+                  ) : (
+                    <span className="text-[11px] font-mono font-bold text-danger animate-pulse">● SEDANG TAYANG</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Tabel desktop */}
+        <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>

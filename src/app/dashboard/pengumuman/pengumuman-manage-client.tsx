@@ -222,8 +222,49 @@ export function PengumumanManageClient({
         </div>
       )}
 
-      {/* Tabel Pengumuman */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      {/* Daftar mobile (card list) */}
+      <div className="md:hidden space-y-3">
+        {announcements.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">
+            Belum ada pengumuman resmi yang diterbitkan.
+          </div>
+        ) : (
+          announcements.map((ann) => (
+            <div key={ann.id} className="rounded-xl border border-border bg-card p-4 space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <strong className="text-foreground text-sm block">{ann.title}</strong>
+                  <span className="text-[11px] text-muted-foreground line-clamp-2">{ann.body}</span>
+                </div>
+                <Badge variant={ann.category === "penting" ? "danger" : "default"} className="text-[10px] shrink-0">
+                  {ann.category.toUpperCase()}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground font-mono">
+                <span>{ann.publishedAt}</span>
+                {ann.isPinned && <span className="inline-flex items-center gap-1 text-accent"><Pin className="h-3 w-3" />Pin</span>}
+                {ann.showOnMonitor && <Badge variant="success" className="text-[9px]">TAYANG</Badge>}
+              </div>
+              <div className="flex items-center justify-end gap-1 pt-1">
+                <Link href={`/pengumuman/${ann.slug}`} target="_blank">
+                  <Button variant="ghost" size="sm" className="h-8 px-2.5 text-xs gap-1 text-muted-foreground hover:text-foreground cursor-pointer" title="Lihat Tampilan Publik">
+                    <Eye className="h-3.5 w-3.5" /><span>Lihat</span>
+                  </Button>
+                </Link>
+                <Button variant="ghost" size="sm" onClick={() => openEdit(ann)} disabled={isPending} className="h-8 px-2.5 text-xs gap-1 text-muted-foreground hover:text-accent cursor-pointer" title="Edit Pengumuman">
+                  <Pencil className="h-3.5 w-3.5" /><span>Edit</span>
+                </Button>
+                <button onClick={() => handleDelete(ann.id, ann.title)} disabled={isPending} className="h-8 px-2.5 rounded-md inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-danger hover:bg-muted cursor-pointer transition-colors disabled:opacity-50" title="Hapus Pengumuman">
+                  <Trash2 className="h-3.5 w-3.5" /><span>Hapus</span>
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tabel Pengumuman (desktop) */}
+      <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>

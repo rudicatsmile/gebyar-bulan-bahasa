@@ -684,7 +684,79 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-card">
+        {/* Daftar mobile (card list) */}
+        <div className="md:hidden space-y-3">
+          {competitions.map((comp, index) => {
+            const statusVariant =
+              comp.status === "berlangsung"
+                ? "live"
+                : comp.status === "selesai"
+                ? "success"
+                : comp.status === "pendaftaran"
+                ? "warning"
+                : comp.status === "dibatalkan"
+                ? "danger"
+                : "default";
+            return (
+              <div key={comp.id} className="rounded-xl border border-border bg-card p-4 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground text-sm">{comp.name}</p>
+                    <span className="text-[11px] text-muted-foreground">Agregasi: {comp.aggregation.replace(/_/g, " ")}</span>
+                  </div>
+                  <Badge variant={statusVariant} className="text-[10px] shrink-0">
+                    {comp.status === "berlangsung"
+                      ? "LIVE"
+                      : comp.status === "selesai"
+                      ? "SELESAI"
+                      : comp.status === "pendaftaran"
+                      ? "DIBUKA"
+                      : comp.status === "dibatalkan"
+                      ? "DIBATALKAN"
+                      : "DRAFT"}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                  <Badge variant={comp.category === "kelompok" ? "warning" : "default"} className="text-[10px] uppercase font-mono font-bold">
+                    {comp.category}
+                  </Badge>
+                  <span className="text-muted-foreground font-mono">{comp.criteria.length} kriteria</span>
+                  {comp.category === "kelompok" && (
+                    <span className="text-muted-foreground">{comp.minMembers}-{comp.maxMembers} org</span>
+                  )}
+                  <span className="text-muted-foreground">· {comp.venue}</span>
+                </div>
+                {((comp.manuscripts && comp.manuscripts.length > 0) || (comp.eventFormats && comp.eventFormats.length > 0)) && (
+                  <div className="flex flex-wrap gap-3 text-[10px]">
+                    {comp.manuscripts && comp.manuscripts.length > 0 && (
+                      <span className="inline-flex items-center gap-1 text-accent"><BookOpen className="h-3 w-3" />{comp.manuscripts.length} Naskah</span>
+                    )}
+                    {comp.eventFormats && comp.eventFormats.length > 0 && (
+                      <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400"><Mic className="h-3 w-3" />{comp.eventFormats.length} Format Acara</span>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center justify-end pt-1">
+                  <CompetitionActionMenu
+                    comp={comp}
+                    index={index}
+                    total={competitions.length}
+                    isUpdating={isUpdating === comp.id}
+                    onToggleStatus={() => toggleStatus(comp.id, comp.status, comp.name)}
+                    onEdit={() => openEdit(comp)}
+                    onDelete={() => {
+                      setDeleteTarget(comp);
+                      setDeleteOpen(true);
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Tabel desktop */}
+        <div className="hidden md:block rounded-xl border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

@@ -355,7 +355,75 @@ export default function DashboardJuriPage() {
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
+        {/* Daftar mobile (card list) */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <div className="rounded-xl border border-border bg-card p-8 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Memuat daftar juri...
+            </div>
+          ) : loadError ? (
+            <div className="rounded-xl border border-border bg-card p-6 text-sm text-danger">{loadError}</div>
+          ) : judges.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+              <UserCheck className="h-8 w-8 mx-auto mb-2 opacity-60" />
+              <p className="text-sm font-semibold text-foreground">Belum ada dewan juri</p>
+              <p className="text-xs">Klik &quot;Tambah Juri Baru&quot; untuk membuat akun juri.</p>
+            </div>
+          ) : (
+            judges.map((j) => {
+              const assignedCount = j.assignedCompetitionIds.length;
+              return (
+                <div key={j.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {j.avatarUrl ? (
+                        <img src={j.avatarUrl} alt={j.fullName} className="h-10 w-10 rounded-full object-cover border border-border shrink-0" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-accent/15 border border-accent/20 flex items-center justify-center shrink-0">
+                          <UserCheck className="h-5 w-5 text-accent" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <strong className="text-foreground text-sm block truncate">{j.fullName}</strong>
+                        <span className="text-[11px] text-muted-foreground block truncate">{j.title}</span>
+                      </div>
+                    </div>
+                    <Badge variant={j.isChiefJudge ? "gold" : "default"} className="text-[10px] shrink-0">
+                      {j.isChiefJudge ? "JURI UTAMA" : "ANGGOTA JURI"}
+                    </Badge>
+                  </div>
+                  <div className="space-y-0.5 text-xs">
+                    <p className="text-foreground font-medium">{j.expertise}</p>
+                    <p className="text-muted-foreground font-mono break-all">{j.email}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                    <span className="text-xs">
+                      {assignedCount > 0 ? (
+                        <span className="font-mono font-bold text-accent">{assignedCount} Cabang Lomba</span>
+                      ) : (
+                        <Link href="/dashboard/juri/penugasan" className="text-muted-foreground hover:text-accent underline decoration-dotted underline-offset-2">
+                          Belum ditugaskan
+                        </Link>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5 cursor-pointer" onClick={() => handleOpenEditDialog(j)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        <span>Edit</span>
+                      </Button>
+                      <Link href="/dashboard/juri/penugasan">
+                        <Button variant="outline" size="sm" className="text-xs h-8">Atur Tugas</Button>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Tabel desktop */}
+        <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
