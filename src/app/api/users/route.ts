@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureParticipantForUser } from "@/lib/supabase/participant-sync";
 import { UserRole } from "@/types/database.types";
 import { revalidatePath } from "next/cache";
 
@@ -94,6 +95,17 @@ export async function POST(request: Request) {
       is_active: true,
     });
 
+    // Akun berperan peserta harus langsung tampil sebagai data peserta lomba,
+    // bukan hanya sebagai akun login. Idempoten & gagal-aman (tidak membatalkan create).
+    if (((role as UserRole) || "peserta") === "peserta") {
+      try {
+        await ensureParticipantForUser(supabase, userId);
+        revalidatePath("/dashboard/peserta");
+      } catch (e) {
+        console.warn("Akun peserta dibuat, namun berkas peserta gagal disiapkan:", e);
+      }
+    }
+
     try { revalidatePath("/dashboard/pengguna"); } catch { /* safe */ }
 
     return NextResponse.json({
@@ -169,6 +181,17 @@ export async function PATCH(request: Request) {
     }
 
     try { revalidatePath("/dashboard/pengguna"); } catch { /* safe */ }
+
+    // Perpindahan peran ke peserta: siapkan berkas pesertanya agar langsung
+    // muncul di /dashboard/peserta. Peran lain tidak boleh muncul di sana.
+    if (role === "peserta") {
+      try {
+        await ensureParticipantForUser(supabase, userId);
+        revalidatePath("/dashboard/peserta");
+      } catch (e) {
+        console.warn("Peran diubah menjadi peserta, namun berkas peserta gagal disiapkan:", e);
+      }
+    }
 
     return NextResponse.json({ success: true, message: "Data pengguna berhasil diperbarui." });
   } catch (err: unknown) {

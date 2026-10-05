@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { ChallengeType } from "@/types/database.types";
 
 export interface AdminChallengeItem {
   id: string;
@@ -62,6 +63,56 @@ export async function getAdminChallenges(): Promise<{
     return { success: true, challenges: mapped };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal memuat daftar challenge.";
+    return { success: false, challenges: [], error: message };
+  }
+}
+
+export interface ParticipantChallengeItem {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  type: ChallengeType;
+  pointReward: number;
+  badge: string;
+}
+
+/**
+ * Daftar tantangan untuk halaman peserta.
+ * Sumber datanya sama dengan /dashboard/challenge (tabel `challenges`),
+ * dibatasi hanya challenge yang sedang aktif (is_active = true) karena
+ * challenge non-aktif tidak relevan untuk peserta. Pembacaan memakai
+ * klien sesi peserta sehingga mengikuti aturan RLS.
+ */
+export async function getParticipantChallenges(): Promise<{
+  success: boolean;
+  challenges: ParticipantChallengeItem[];
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("challenges")
+      .select("id, slug, title, description, type, point_reward, badge_icon")
+      .eq("is_active", true)
+      .order("point_reward", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const mapped: ParticipantChallengeItem[] = (data || []).map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      description: row.description,
+      type: row.type,
+      pointReward: Number(row.point_reward) || 0,
+      badge: row.badge_icon || "Peserta Aktif",
+    }));
+
+    return { success: true, challenges: mapped };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memuat daftar tantangan.";
     return { success: false, challenges: [], error: message };
   }
 }

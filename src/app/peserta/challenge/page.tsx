@@ -6,12 +6,65 @@ import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { CHALLENGES } from "@/lib/dummy-data";
+import {
+  getParticipantChallenges,
+  type ParticipantChallengeItem,
+} from "@/app/actions/challenges";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
-import { Sparkles, QrCode, ArrowLeft, ArrowRight, CheckCircle2, Puzzle } from "lucide-react";
+import { Sparkles, QrCode, ArrowLeft, ArrowRight, Puzzle, AlertCircle, CalendarX } from "lucide-react";
+
+// Tombol aksi disesuaikan dengan tipe challenge dan alur yang tersedia bagi peserta.
+function getChallengeAction(ch: ParticipantChallengeItem): { href: string; label: string } | null {
+  switch (ch.type) {
+    case "scan_qr":
+      return { href: "/peserta/scan", label: "Scan Sekarang" };
+    case "kode_unik":
+      return { href: "/peserta/scan", label: "Masukkan Kode" };
+    case "unggah_bukti":
+      return { href: "/twibbon/unggah", label: "Kirim Bukti" };
+    default:
+      return null; // input_panitia: poin diisi manual oleh panitia, tidak ada aksi mandiri
+  }
+}
 
 export default function PesertaChallengeListPage() {
   const { participant } = useCurrentParticipant();
+
+  const [challenges, setChallenges] = React.useState<ParticipantChallengeItem[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // challenge yang tampil di sini bersumber dari tabel `challenges` yang sama
+  // dengan halaman admin /dashboard/challenge
+  const loadChallenges = React.useCallback(() => {
+    return getParticipantChallenges()
+      .then((res) => {
+        if (res.success) {
+          setChallenges(res.challenges);
+          setError(null);
+        } else {
+          setChallenges([]);
+          setError(res.error || "Gagal memuat daftar tantangan.");
+        }
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : "Terjadi kesalahan saat memuat data";
+        setChallenges([]);
+        setError(message);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  const handleRetry = () => {
+    setLoading(true);
+    void loadChallenges();
+  };
+
+  React.useEffect(() => {
+    loadChallenges();
+  }, [loadChallenges]);
 
   return (
     <DashboardLayout role="peserta" participantPoints={participant?.totalPoints}>
@@ -108,7 +161,57 @@ export default function PesertaChallengeListPage() {
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {CHALLENGES.map((ch) => (
+          {loading ? (
+            Array.from({ length: 2 }).map((_, i) => (
+              <Card key={i} className="p-6 space-y-3 animate-pulse">
+                <div className="flex items-center justify-between">
+                  <div className="h-5 w-28 bg-muted rounded-md" />
+                  <div className="h-4 w-20 bg-muted rounded-md" />
+                </div>
+                <div className="h-5 w-3/4 bg-muted rounded-md" />
+                <div className="h-4 w-full bg-muted rounded-md" />
+                <div className="h-4 w-2/3 bg-muted rounded-md" />
+                <div className="pt-3 border-t border-border">
+                  <div className="h-8 w-full bg-muted rounded-md" />
+                </div>
+              </Card>
+            ))
+          ) : error ? (
+            <Card className="p-6 md:col-span-2 flex flex-col items-center gap-3 text-center border-destructive/40">
+              <AlertCircle className="h-6 w-6 text-destructive" />
+              <div className="space-y-1">
+                <h3 className="font-heading text-base font-bold text-foreground">
+                  Daftar tantangan gagal dimuat
+                </h3>
+                <p className="text-xs text-muted-foreground">{error}</p>
+              </div>
+              <Button size="sm" variant="outline" className="text-xs" onClick={handleRetry}>
+                <span>Coba Muat Ulang</span>
+              </Button>
+            </Card>
+          ) : challenges.length === 0 ? (
+            <Card className="p-6 md:col-span-2 flex flex-col items-center gap-3 text-center">
+              <CalendarX className="h-6 w-6 text-muted-foreground" />
+              <div className="space-y-1">
+                <h3 className="font-heading text-base font-bold text-foreground">
+                  Belum ada tantangan aktif
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Tantangan akan muncul di sini setelah panitia mengaktifkannya. Sementara ini,
+                  silakan ikuti misi game spesial di atas atau kunjungi stand lewat pemindai QR.
+                </p>
+              </div>
+              <Link href="/peserta/scan">
+                <Button size="sm" variant="accent" className="text-xs gap-1.5">
+                  <QrCode className="h-3.5 w-3.5" />
+                  <span>Scan Stand</span>
+                </Button>
+              </Link>
+            </Card>
+          ) : (
+            challenges.map((ch) => {
+              const action = getChallengeAction(ch);
+              return (
             <Card key={ch.id} className="p-6 flex flex-col justify-between space-y-4 hover:border-accent transition-colors">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -128,23 +231,31 @@ export default function PesertaChallengeListPage() {
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Lencana:</span>
-                  <Badge variant="default" className="text-[10px]">
+              <div className="pt-3 border-t border-border flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs text-muted-foreground shrink-0">Lencana:</span>
+                  <Badge variant="default" className="text-[10px] truncate">
                     {ch.badge}
                   </Badge>
                 </div>
 
-                <Link href={ch.type === "scan_qr" ? "/peserta/scan" : "/twibbon/unggah"}>
-                  <Button size="sm" className="text-xs gap-1">
-                    <span>{ch.type === "scan_qr" ? "Scan Sekarang" : "Kirim Bukti"}</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Button>
-                </Link>
+                {action ? (
+                  <Link href={action.href} className="shrink-0">
+                    <Button size="sm" className="text-xs gap-1">
+                      <span>{action.label}</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground text-right shrink-0">
+                    Poin diisi panitia
+                  </span>
+                )}
               </div>
             </Card>
-          ))}
+              );
+            })
+          )}
         </div>
       </div>
     </DashboardLayout>

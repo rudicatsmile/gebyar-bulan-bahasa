@@ -8,9 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import {
-  CHALLENGES,
   REWARDS,
 } from "@/lib/dummy-data";
+import {
+  getParticipantChallenges,
+  type ParticipantChallengeItem,
+} from "@/app/actions/challenges";
 import {
   Coins,
   QrCode,
@@ -25,12 +28,33 @@ import {
 export default function DashboardPesertaPage() {
   const { participant, loading } = useCurrentParticipant();
 
+  const [challenges, setChallenges] = React.useState<ParticipantChallengeItem[]>([]);
+  const [challengesLoading, setChallengesLoading] = React.useState(true);
+
+  // 3 tantangan aktif teratas, dari tabel `challenges` yang sama dengan admin
+  React.useEffect(() => {
+    let active = true;
+    getParticipantChallenges()
+      .then((res) => {
+        if (active && res.success) setChallenges(res.challenges);
+      })
+      .catch(() => {
+        if (active) setChallenges([]);
+      })
+      .finally(() => {
+        if (active) setChallengesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const nextReward = REWARDS && REWARDS.length > 0 ? (REWARDS[1] || REWARDS[0]) : null;
   const currentPoints = participant?.totalPoints ?? 0;
   const remainingForNextReward = nextReward
     ? Math.max(0, nextReward.pointsRequired - currentPoints)
     : 0;
-  const activeChallenges = (CHALLENGES || []).slice(0, 3);
+  const activeChallenges = challenges.slice(0, 3);
 
   return (
     <DashboardLayout role="peserta" participantPoints={currentPoints}>
@@ -134,7 +158,26 @@ export default function DashboardPesertaPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {activeChallenges.map((ch) => (
+            {challengesLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="p-5 space-y-2 animate-pulse">
+                  <div className="h-5 w-24 bg-muted rounded-md" />
+                  <div className="h-4 w-full bg-muted rounded-md" />
+                  <div className="h-4 w-2/3 bg-muted rounded-md" />
+                  <div className="h-8 w-full bg-muted rounded-md" />
+                </Card>
+              ))
+            ) : activeChallenges.length === 0 ? (
+              <Card className="p-5 md:col-span-3 text-center space-y-1">
+                <h3 className="font-heading text-sm font-bold text-foreground">
+                  Belum ada tantangan aktif
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Misi challenge akan muncul di sini begitu panitia mengaktifkannya.
+                </p>
+              </Card>
+            ) : (
+              activeChallenges.map((ch) => (
               <Card key={ch.id} className="p-5 flex flex-col justify-between space-y-3">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
@@ -160,7 +203,8 @@ export default function DashboardPesertaPage() {
                   </Button>
                 </Link>
               </Card>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

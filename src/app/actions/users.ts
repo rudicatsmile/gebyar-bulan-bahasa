@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureParticipantForUser } from "@/lib/supabase/participant-sync";
 import { UserRole } from "@/types/database.types";
 
 export interface AppUser {
@@ -102,10 +103,24 @@ export async function updateUserRole(userId: string, newRole: UserRole): Promise
       }
     }
 
+    // 4. Jika peran baru adalah peserta, pastikan berkas pesertanya ada sehingga
+    // akun tersebut langsung muncul di /dashboard/peserta (bukan hanya di /pengguna).
+    if (newRole === "peserta") {
+      try {
+        await ensureParticipantForUser(supabase, userId);
+      } catch (e) {
+        console.warn("Peran menjadi peserta tersimpan, namun berkas peserta gagal disiapkan:", e);
+      }
+    }
+
     revalidatePath("/dashboard/pengguna");
     if (newRole !== "juri") {
       revalidatePath("/dashboard/juri");
       revalidatePath("/dashboard/juri/penugasan");
+    }
+    if (newRole === "peserta") {
+      revalidatePath("/dashboard/peserta");
+      revalidatePath("/dashboard/peserta/verifikasi");
     }
     return { success: true };
   } catch (err: unknown) {
