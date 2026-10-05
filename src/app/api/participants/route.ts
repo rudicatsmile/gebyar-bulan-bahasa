@@ -20,6 +20,9 @@ export async function GET() {
         total_points,
         rejection_reason,
         created_at,
+        profiles:user_id (
+          role
+        ),
         registrations (
           id,
           team_name,
@@ -56,8 +59,16 @@ export async function GET() {
       );
     }
 
+    // Filter hanya user dengan role 'peserta' (atau berkas peserta tanpa akun profiles)
+    const filteredDbParticipants = (dbParticipants || []).filter((row: any) => {
+      if (row.profiles && row.profiles.role) {
+        return row.profiles.role === "peserta";
+      }
+      return true;
+    });
+
     // Map database participants to Participant model
-    const mappedDbParticipants: Participant[] = (dbParticipants || []).map((row: any) => {
+    const mappedDbParticipants: Participant[] = filteredDbParticipants.map((row: any) => {
       // Cabang lomba pertama jika ada pendaftaran
       const firstReg = row.registrations && row.registrations.length > 0 ? row.registrations[0] : null;
       const compName = firstReg?.competitions?.name || "Belum Memilih Lomba";

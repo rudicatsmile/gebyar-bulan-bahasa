@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Building2,
   Layers,
   LayoutDashboard,
   LayoutTemplate,
@@ -82,6 +83,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Penyesuaian Poin", href: "/dashboard/challenge/poin", icon: Coins },
   { title: "Katalog Reward", href: "/dashboard/challenge/reward", icon: Gift },
   { title: "SISTEM", href: "#", icon: Settings, isHeader: true },
+  { title: "Master Sekolah/Instansi", href: "/dashboard/instansi", icon: Building2 },
   { title: "Moderasi Twibbon", href: "/dashboard/twibbon", icon: Camera },
   { title: "Template Twibbon", href: "/dashboard/twibbon/template", icon: LayoutTemplate },
   { title: "Kelola Pengguna", href: "/dashboard/pengguna", icon: Users },

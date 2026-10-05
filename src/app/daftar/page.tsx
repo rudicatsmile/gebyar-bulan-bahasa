@@ -6,9 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { registerUser } from "@/app/actions/auth";
+import { getActiveInstitutions, type InstitutionItem } from "@/app/actions/institutions";
 
 function DaftarForm() {
   const router = useRouter();
@@ -23,6 +25,18 @@ function DaftarForm() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
+
+  const [institutions, setInstitutions] = React.useState<InstitutionItem[]>([]);
+  const [loadingInstitutions, setLoadingInstitutions] = React.useState(true);
+
+  React.useEffect(() => {
+    getActiveInstitutions().then((res) => {
+      if (res.success && res.institutions.length > 0) {
+        setInstitutions(res.institutions);
+      }
+      setLoadingInstitutions(false);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,13 +120,24 @@ function DaftarForm() {
           required
         />
 
-        <Input
+        <Select
           label="Asal Sekolah / Kampus / Instansi *"
-          placeholder="Contoh: SMK Dinamika Pembangunan 2 jakarta"
           value={institution}
           onChange={(e) => setInstitution(e.target.value)}
           required
-        />
+          helperText="Pilih nama sekolah, kampus, atau instansi Anda dari daftar resmi."
+        >
+          <option value="">
+            {loadingInstitutions
+              ? "-- Memuat daftar instansi... --"
+              : "-- Pilih Asal Sekolah / Kampus / Instansi --"}
+          </option>
+          {institutions.map((inst) => (
+            <option key={inst.id} value={inst.name}>
+              {inst.name}
+            </option>
+          ))}
+        </Select>
 
         <Input
           label="Nomor WhatsApp / HP (Disarankan)"
