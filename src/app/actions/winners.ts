@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCompetitionScoringRecap } from "@/app/actions/assessments";
 
 const WinnerItemSchema = z.object({
   registrationId: z.string().uuid(),
@@ -157,6 +158,118 @@ export async function publishAllWinners(): Promise<{
 }> {
   try {
     const supabase = createAdminClient();
+    const serverSupabase = await createClient();
+    const {
+      data: { user },
+    } = await serverSupabase.auth.getUser();
+
+    // 1. Cek apakah sudah ada data di tabel winners
+    const { data: existingWinners, error: fetchErr } = await supabase
+      .from("winners")
+      .select("id");
+
+    if (fetchErr) throw fetchErr;
+
+    // 2. Jika belum ada pemenang di tabel winners, hasilkan secara otomatis dari rekapitulasi nilai juri seluruh lomba
+    if (!existingWinners || existingWinners.length === 0) {
+      const { data: competitions, error: cErr } = await supabase
+        .from("competitions")
+        .select("id, name, slug");
+
+      if (cErr) throw cErr;
+
+      const toInsert: any[] = [];
+      const updatedCompIds: string[] = [];
+
+      for (const comp of competitions || []) {
+        const recapRes = await getCompetitionScoringRecap(comp.id);
+        if (recapRes.success && recapRes.recaps && recapRes.recaps.length > 0) {
+          // Filter peserta yang sudah memiliki skor akhir > 0
+          const validRecaps = recapRes.recaps.filter((r) => r.finalScore > 0);
+          if (validRecaps.length > 0) {
+            updatedCompIds.push(comp.id);
+            // Ambil hingga 4 besar (Juara 1, 2, 3, Harapan 1)
+            const topFour = validRecaps.slice(0, 4);
+            topFour.forEach((item, idx) => {
+              const rank = idx + 1;
+              const title =
+                rank === 1
+                  ? "Juara 1"
+                  : rank === 2
+                  ? "Juara 2"
+                  : rank === 3
+                  ? "Juara 3"
+                  : "Juara Harapan 1";
+
+              const prize =
+                rank === 1
+                  ? "Uang Pembinaan + Trophy + Sertifikat Juara 1"
+                  : rank === 2
+                  ? "Uang Pembinaan + Trophy + Sertifikat Juara 2"
+                  : rank === 3
+                  ? "Uang Pembinaan + Trophy + Sertifikat Juara 3"
+                  : "Trophy + Sertifikat Harapan 1";
+
+              toInsert.push({
+                category: "lomba",
+                competition_id: comp.id,
+                registration_id: item.registrationId,
+                winner_name: item.participantName,
+                institution: item.institution,
+                rank,
+                title,
+                final_score: item.finalScore,
+                prize,
+                is_published: true,
+                announced_at: new Date().toISOString(),
+                created_by: user?.id || null,
+              });
+            });
+          }
+        }
+      }
+
+      if (toInsert.length === 0) {
+        return {
+          success: false,
+          error:
+            "Belum ada formulir penilaian juri yang masuk di database. Mohon pastikan dewan juri telah menginput penilaian di menu Rekapitulasi Penilaian.",
+        };
+      }
+
+      // Hapus pemenang lama jika ada lalu insert pemenang baru
+      const { error: insErr } = await supabase.from("winners").insert(toInsert);
+      if (insErr) throw insErr;
+
+      // Update status kompetisi menjadi 'selesai'
+      if (updatedCompIds.length > 0) {
+        await supabase
+          .from("competitions")
+          .update({ status: "selesai" })
+          .in("id", updatedCompIds);
+      }
+
+      // Buat pengumuman publikasi pemenang
+      const slug = `pengumuman-juara-resmi-${Date.now()}`;
+      await supabase.from("announcements").insert({
+        slug,
+        title: "Pengumuman Resmi Juara Gebyar Bulan Bahasa",
+        category: "pemenang",
+        body: "Dewan juri telah secara resmi menetapkan para pemenang seluruh cabang lomba Gebyar Bulan Bahasa. Selamat kepada seluruh pemenang!",
+        is_published: true,
+        is_pinned: true,
+        show_on_monitor: true,
+        author_id: user?.id || null,
+      });
+
+      revalidatePath("/dashboard/pemenang");
+      revalidatePath("/pemenang");
+      revalidatePath("/monitor");
+      revalidatePath("/monitor/pemenang");
+      return { success: true, count: toInsert.length };
+    }
+
+    // 3. Jika sudah ada data di tabel winners (draft), set is_published = true
     const { data, error } = await supabase
       .from("winners")
       .update({ is_published: true, announced_at: new Date().toISOString() })
@@ -164,9 +277,24 @@ export async function publishAllWinners(): Promise<{
 
     if (error) throw error;
 
+    const compIds: string[] = Array.from(
+      new Set(
+        (data || [])
+          .map((w: any) => w.competition_id)
+          .filter((id: any): id is string => typeof id === "string" && id.length > 0)
+      )
+    );
+    if (compIds.length > 0) {
+      await supabase
+        .from("competitions")
+        .update({ status: "selesai" })
+        .in("id", compIds);
+    }
+
     revalidatePath("/dashboard/pemenang");
     revalidatePath("/pemenang");
     revalidatePath("/monitor");
+    revalidatePath("/monitor/pemenang");
     return { success: true, count: data?.length || 0 };
   } catch (err: unknown) {
     return {

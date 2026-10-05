@@ -118,7 +118,7 @@ export default function DashboardPemenangPage() {
             </Button>
             <Button
               onClick={handlePublish}
-              disabled={isMounted ? (isPublishing || winners.length === 0) : false}
+              disabled={isMounted ? isPublishing : false}
               suppressHydrationWarning
               size="sm"
               variant="accent"
@@ -129,7 +129,11 @@ export default function DashboardPemenangPage() {
               ) : (
                 <Megaphone className="h-3.5 w-3.5" />
               )}
-              <span>Publikasikan Seluruh Pemenang</span>
+              <span>
+                {winners.length > 0
+                  ? "Publikasikan Seluruh Pemenang"
+                  : "Tetapkan & Publikasikan Pemenang"}
+              </span>
             </Button>
           </div>
         </div>
@@ -201,12 +205,26 @@ export default function DashboardPemenangPage() {
             </Table>
           </div>
         ) : (
-          <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-2">
+          <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-3">
             <Trophy className="h-10 w-10 text-muted-foreground mx-auto" />
             <p className="text-sm font-semibold text-foreground">Belum Ada Juara Ditetapkan</p>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              Belum ada data pemenang lomba yang tersimpan di database. Anda dapat menetapkan pemenang melalui halaman Rekapitulasi Penilaian.
+              Belum ada data pemenang yang tersimpan. Klik tombol di bawah ini untuk menetapkan dan mempublikasikan pemenang secara otomatis berdasarkan skor akhir juri.
             </p>
+            <Button
+              size="sm"
+              variant="accent"
+              onClick={handlePublish}
+              disabled={isMounted ? isPublishing : false}
+              className="text-xs gap-1.5 cursor-pointer shadow-xs"
+            >
+              {isPublishing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Megaphone className="h-3.5 w-3.5" />
+              )}
+              <span>Tetapkan &amp; Publikasikan Pemenang dari Nilai Juri</span>
+            </Button>
           </div>
         )}
 
