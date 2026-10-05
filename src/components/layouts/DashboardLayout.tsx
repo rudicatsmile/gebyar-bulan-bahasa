@@ -34,7 +34,6 @@ import {
   ChevronRight,
   Tv,
   Award,
-  QrCode,
   History,
   User,
   Sliders,
@@ -42,7 +41,6 @@ import {
   Image,
   Bell,
   Search,
-  Puzzle,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -110,9 +108,6 @@ const PESERTA_NAV: NavItem[] = [
   { title: "Beranda Peserta", href: "/peserta", icon: LayoutDashboard },
   { title: "Pendaftaran Lomba", href: "/peserta/pendaftaran", icon: Trophy },
   { title: "Daftar Challenge", href: "/peserta/challenge", icon: Sparkles },
-  { title: "Puzzle Baju Daerah", href: "/peserta/challenge/puzzle", icon: Puzzle },
-  { title: "Challenge QR Huruf", href: "/peserta/challenge/qr-huruf", icon: QrCode },
-  { title: "Scan QR & Kode Stand", href: "/peserta/scan", icon: QrCode },
   { title: "Riwayat Poin", href: "/peserta/riwayat-poin", icon: Coins },
   { title: "Katalog Reward", href: "/peserta/reward", icon: Gift },
   { title: "Twibbon Saya", href: "/peserta/twibbon", icon: Camera },
@@ -500,26 +495,28 @@ export function DashboardLayout({
       >
         {/* Top Header */}
         <header className="h-16 border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="p-2 md:hidden text-foreground rounded-lg hover:bg-muted focus:outline-none"
+              className="p-2 md:hidden text-foreground rounded-lg hover:bg-muted focus:outline-none shrink-0"
             >
               <Menu className="h-5 w-5" />
             </button>
 
-            <div className="flex items-center gap-2 text-xs">
-              <Link href="/" className="text-muted-foreground hover:text-foreground font-heading font-bold">
+            <div className="flex items-center gap-2 text-xs min-w-0 overflow-hidden">
+              <Link href="/" className="text-muted-foreground hover:text-foreground font-heading font-bold truncate">
                 {renderBrandText(settings.eventShortName)}
               </Link>
-              <span className="text-muted-foreground">/</span>
-              <Badge variant={roleBadgeVariant} className="text-[10px]">
-                {roleLabel}
-              </Badge>
+              <div className="hidden sm:flex items-center gap-2 shrink-0">
+                <span className="text-muted-foreground">/</span>
+                <Badge variant={roleBadgeVariant} className="text-[10px]">
+                  {roleLabel}
+                </Badge>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 shrink-0">
             {role === "peserta" && (
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/15 border border-accent/30 text-accent-foreground text-xs font-bold font-mono">
                 <Coins className="h-3.5 w-3.5 text-accent" />
@@ -527,8 +524,8 @@ export function DashboardLayout({
               </div>
             )}
 
-            <Link href="/monitor" target="_blank">
-              <Button variant="outline" size="sm" className="hidden sm:flex text-xs gap-1.5">
+            <Link href="/monitor" target="_blank" className="hidden sm:block">
+              <Button variant="outline" size="sm" className="text-xs gap-1.5">
                 <Tv className="h-3.5 w-3.5 text-accent" />
                 <span>Monitor TV</span>
               </Button>
