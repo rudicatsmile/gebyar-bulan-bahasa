@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import {
   Dialog,
   DialogHeader,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { useCurrentParticipant, Enrollment } from "@/lib/hooks/useCurrentParticipant";
 import { enrollCompetition } from "@/app/actions/participants";
+import { getActiveInstitutions, type InstitutionItem } from "@/app/actions/institutions";
 import { createClient } from "@/lib/supabase/client";
 import { COMPETITIONS, PARTICIPANTS } from "@/lib/dummy-data";
 import { BerkasUploadSection } from "@/components/peserta/BerkasUploadSection";
@@ -90,6 +92,18 @@ export function PesertaPendaftaranClient() {
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
 
+  const [institutions, setInstitutions] = React.useState<InstitutionItem[]>([]);
+  const [loadingInstitutions, setLoadingInstitutions] = React.useState(true);
+
+  React.useEffect(() => {
+    getActiveInstitutions().then((res) => {
+      if (res.success && res.institutions.length > 0) {
+        setInstitutions(res.institutions);
+      }
+      setLoadingInstitutions(false);
+    });
+  }, []);
+
   const enrollments: Enrollment[] = participant?.enrollments ?? [];
   const isEnrolledIn = (competitionId: string) =>
     enrollments.some((e) => e.competitionId === competitionId);
@@ -152,10 +166,10 @@ export function PesertaPendaftaranClient() {
 
   const resetForm = React.useCallback(() => {
     setTeamName("");
-    setMembers([emptyMember("ketua")]);
+    setMembers([{ name: "", role: "ketua", studentId: "", institution: participant?.institution || "" }]);
     setErrorMsg(null);
     setIsSubmitting(false);
-  }, []);
+  }, [participant?.institution]);
 
   const handleOpenForm = () => {
     resetForm();
@@ -668,12 +682,22 @@ export function PesertaPendaftaranClient() {
                         value={member.studentId}
                         onChange={(e) => updateMember(idx, { studentId: e.target.value })}
                       />
-                      <Input
+                      <Select
                         label="Asal Instansi (Opsional)"
-                        placeholder="SMA / Universitas"
                         value={member.institution}
                         onChange={(e) => updateMember(idx, { institution: e.target.value })}
-                      />
+                      >
+                        <option value="">
+                          {loadingInstitutions
+                            ? "-- Memuat daftar instansi... --"
+                            : "-- Pilih Asal Sekolah / Kampus / Instansi --"}
+                        </option>
+                        {institutions.map((inst) => (
+                          <option key={inst.id} value={inst.name}>
+                            {inst.name}
+                          </option>
+                        ))}
+                      </Select>
                     </div>
                   </div>
                 ))}
