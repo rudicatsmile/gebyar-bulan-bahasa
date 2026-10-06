@@ -140,11 +140,79 @@ export default function PesertaQrHurufPage() {
     loadData();
   }, [loadData]);
 
+  // Stop Live Camera
+  const stopCamera = React.useCallback(() => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraStatus("idle");
+  }, []);
+
+  // Start Live Camera
+  const startCamera = React.useCallback(async () => {
+    stopCamera();
+    if (typeof window === "undefined" || !navigator?.mediaDevices?.getUserMedia) {
+      setCameraStatus("error");
+      setCameraErrorMsg("Browser tidak mendukung kamera.");
+      return;
+    }
+
+    setCameraStatus("requesting");
+    setCameraErrorMsg("");
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraStatus("active");
+    } catch (err: any) {
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        setCameraStatus("denied");
+        setCameraErrorMsg("Izin kamera ditolak. Silakan izinkan akses kamera di browser Anda.");
+      } else {
+        setCameraStatus("error");
+        setCameraErrorMsg(err.message || "Gagal mengakses kamera.");
+      }
+    }
+  }, [facingMode, stopCamera]);
+
+  const openCameraModal = () => {
+    setCameraModalOpen(true);
+    startCamera();
+  };
+
+  const closeCameraModal = () => {
+    stopCamera();
+    setCameraModalOpen(false);
+  };
+
   // Handle Scan / Manual Token Input
   const handleScanSubmit = async (tokenToScan?: string) => {
-    const rawToken = tokenToScan || inputToken;
-    const cleanToken = rawToken.trim().toUpperCase();
+    let cleanToken = (tokenToScan || inputToken).trim().toUpperCase();
     if (!cleanToken) return;
+
+    // Extract token if text is a URL
+    if (cleanToken.includes("HTTP://") || cleanToken.includes("HTTPS://")) {
+      try {
+        const parsedUrl = new URL(cleanToken);
+        const codeParam = parsedUrl.searchParams.get("code") || parsedUrl.searchParams.get("token") || parsedUrl.searchParams.get("letter");
+        if (codeParam) cleanToken = codeParam.toUpperCase();
+      } catch {}
+    }
 
     setScanning(true);
     setScanFeedback(null);
@@ -169,6 +237,7 @@ export default function PesertaQrHurufPage() {
           if (!timerRunning) setTimerRunning(true);
         }
         setInputToken("");
+        closeCameraModal();
         await loadData();
       } else {
         setScanFeedback({
@@ -180,6 +249,49 @@ export default function PesertaQrHurufPage() {
       setScanning(false);
     }
   };
+
+  // Continuous BarcodeDetector Scanner loop when modal is active
+  React.useEffect(() => {
+    if (!cameraModalOpen || cameraStatus !== "active") return;
+
+    let isScanning = true;
+
+    const detectFrame = async () => {
+      if (!isScanning || !videoRef.current) return;
+
+      if ("BarcodeDetector" in window) {
+        try {
+          const videoEl = videoRef.current;
+          if (videoEl.readyState >= 2) {
+            const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+            const barcodes = await detector.detect(videoEl);
+
+            if (barcodes && barcodes.length > 0) {
+              const detectedValue = barcodes[0].rawValue;
+              if (detectedValue) {
+                isScanning = false;
+                handleScanSubmit(detectedValue);
+                return;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (isScanning) {
+        animFrameRef.current = requestAnimationFrame(detectFrame);
+      }
+    };
+
+    animFrameRef.current = requestAnimationFrame(detectFrame);
+
+    return () => {
+      isScanning = false;
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
+  }, [cameraModalOpen, cameraStatus]);
 
   // Letters available in inventory (not yet placed into sentence)
   const placedScanIds = new Set(placedTokens.map((p) => p.scanId));
@@ -328,16 +440,21 @@ export default function PesertaQrHurufPage() {
 
         {/* SECTION 1: SCANNER & INPUT QR TOKEN */}
         <Card className="p-5 border-primary/30 bg-gradient-to-br from-card via-card to-primary/5 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/40 pb-3">
             <div className="flex items-center gap-2">
               <Camera className="h-5 w-5 text-primary" />
               <h2 className="font-heading text-base font-bold text-foreground">
-                Klaim QR Huruf dari Lokasi
+                Klaim QR Huruf dari Lokasi Pameran
               </h2>
             </div>
-            <span className="text-[11px] text-muted-foreground">
-              Masukkan token pada stiker QR atau scan langsung
-            </span>
+            <Button
+              type="button"
+              onClick={openCameraModal}
+              className="text-xs h-9 px-4 gap-2 font-bold bg-amber-500 hover:bg-amber-600 text-white cursor-pointer shadow-sm shrink-0"
+            >
+              <Camera className="h-4 w-4" />
+              <span>Buka Kamera Pemindai HP</span>
+            </Button>
           </div>
 
           <form
@@ -351,7 +468,7 @@ export default function PesertaQrHurufPage() {
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Contoh kode stiker: QR-HURUF-B-01"
+                placeholder="Atau ketik manual token stiker (contoh: GBB-LET-A1)"
                 value={inputToken}
                 onChange={(e) => setInputToken(e.target.value)}
                 className="w-full h-11 pl-9 pr-3 rounded-lg border border-border bg-background text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/40 uppercase"
@@ -396,6 +513,97 @@ export default function PesertaQrHurufPage() {
             </div>
           )}
         </Card>
+
+        {/* MODAL POPUP KAMERA PEMINDAI LANGSUNG */}
+        {cameraModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-card border border-border rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl animate-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <Camera className="h-5 w-5 text-amber-500" />
+                  <h3 className="font-heading text-sm font-bold text-foreground">
+                    Memindai QR Stiker Huruf
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCameraModal}
+                  className="text-xs text-muted-foreground hover:text-foreground font-bold px-2 py-1"
+                >
+                  ✕ Tutup
+                </button>
+              </div>
+
+              {/* Viewfinder Box */}
+              <div className="relative aspect-square rounded-xl bg-black overflow-hidden flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  playsInline
+                  autoPlay
+                  muted
+                  className={`w-full h-full object-cover ${cameraStatus === "active" ? "block" : "hidden"}`}
+                />
+
+                {cameraStatus === "active" && (
+                  <div className="absolute inset-6 border-2 border-amber-400 rounded-lg pointer-events-none flex flex-col justify-between p-2">
+                    <div className="flex justify-between">
+                      <span className="h-4 w-4 border-t-2 border-l-2 border-amber-400" />
+                      <span className="h-4 w-4 border-t-2 border-r-2 border-amber-400" />
+                    </div>
+                    <div className="w-full h-0.5 bg-amber-400 animate-pulse" />
+                    <div className="flex justify-between">
+                      <span className="h-4 w-4 border-b-2 border-l-2 border-amber-400" />
+                      <span className="h-4 w-4 border-b-2 border-r-2 border-amber-400" />
+                    </div>
+                  </div>
+                )}
+
+                {cameraStatus === "requesting" && (
+                  <div className="p-6 text-center space-y-2 text-white">
+                    <Loader2 className="h-7 w-7 animate-spin text-amber-400 mx-auto" />
+                    <p className="text-xs">Meminta izin kamera HP...</p>
+                  </div>
+                )}
+
+                {(cameraStatus === "denied" || cameraStatus === "error") && (
+                  <div className="p-6 text-center space-y-2 text-white bg-black/90">
+                    <XCircle className="h-8 w-8 text-rose-500 mx-auto" />
+                    <p className="text-xs font-semibold">Kamera Tidak Dapat Dibuka</p>
+                    <p className="text-[10px] text-white/70">{cameraErrorMsg}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={startCamera}
+                      className="text-xs gap-1 border-white/30 text-white"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      <span>Coba Lagi</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-center space-y-1">
+                <p className="text-xs font-semibold text-foreground">
+                  {cameraStatus === "active"
+                    ? "Arahkan ke QR Stiker di Lokasi Pameran"
+                    : "Kamera HP"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Huruf yang terdeteksi akan otomatis bertambah ke inventaris Anda.
+                </p>
+              </div>
+
+              <Button
+                variant="outline"
+                onClick={closeCameraModal}
+                className="w-full text-xs"
+              >
+                Gunakan Input Kode Manual
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* SECTION 2: LETTER INVENTORY (HURUF YANG TERKUMPUL) */}
         <Card className="p-5 space-y-3">
