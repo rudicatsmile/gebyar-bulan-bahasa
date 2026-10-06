@@ -24,7 +24,7 @@ import { claimStandVisit } from "@/app/actions/challenges";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 
-export default function PesertaScanStandPage() {
+function PesertaScanContent() {
   const isDev = process.env.NODE_ENV === "development";
   const searchParams = useSearchParams();
   const urlCode = searchParams?.get("code") || searchParams?.get("stand") || "";
@@ -512,6 +512,22 @@ export default function PesertaScanStandPage() {
         </Card>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function PesertaScanStandPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <DashboardLayout role="peserta">
+          <div className="flex items-center justify-center py-20 text-foreground">
+            <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto" />
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <PesertaScanContent />
+    </React.Suspense>
   );
 }
 
