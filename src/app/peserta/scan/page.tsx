@@ -23,6 +23,7 @@ import {
 import { claimStandVisit } from "@/app/actions/challenges";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
+import jsQR from "jsqr";
 
 function PesertaScanContent() {
   const isDev = process.env.NODE_ENV === "development";
@@ -229,7 +230,9 @@ function PesertaScanContent() {
     }
   }, [urlCode]);
 
-  // Continuous BarcodeDetector Scanner Loop
+  // Continuous Dual-Engine Scanner Loop (Native BarcodeDetector + jsQR fallback for iOS Safari)
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+
   React.useEffect(() => {
     if (cameraStatus !== "active" || successStand) return;
 
@@ -237,11 +240,12 @@ function PesertaScanContent() {
 
     const detectFrame = async () => {
       if (!isScanning || !videoRef.current) return;
+      const videoEl = videoRef.current;
 
-      if ("BarcodeDetector" in window) {
-        try {
-          const videoEl = videoRef.current;
-          if (videoEl.readyState >= 2) {
+      if (videoEl.readyState >= 2) {
+        // Engine 1: Native BarcodeDetector (Chrome / Chromium Android)
+        if ("BarcodeDetector" in window) {
+          try {
             const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
             const barcodes = await detector.detect(videoEl);
 
@@ -254,10 +258,35 @@ function PesertaScanContent() {
                 return;
               }
             }
+          } catch {
+            // ignore detector frame error
           }
-        } catch {
-          // ignore detector frame error
         }
+
+        // Engine 2: Pure JS jsQR Fallback (iOS Safari / Chrome iOS / Firefox)
+        try {
+          if (!canvasRef.current) {
+            canvasRef.current = document.createElement("canvas");
+          }
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          if (ctx && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+            canvas.width = videoEl.videoWidth;
+            canvas.height = videoEl.videoHeight;
+            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert",
+            });
+
+            if (code && code.data && code.data !== lastScannedCode) {
+              setLastScannedCode(code.data);
+              handleClaimCode(code.data);
+              isScanning = false;
+              return;
+            }
+          }
+        } catch {}
       }
 
       if (isScanning) {

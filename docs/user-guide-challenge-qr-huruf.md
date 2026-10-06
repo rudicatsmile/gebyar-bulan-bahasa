@@ -119,6 +119,7 @@ Panitia Seksi Acara dan Admin Sistem bertugas mengelola tantangan, mengunduh/men
 
 | Masalah / Kendala | Penyebab Utama | Solusi & Langkah Penanganan |
 |---|---|---|
+| **Kamera terbuka tetapi terdiam / tidak ada reaksi saat mengarahkan ke QR** | Browser HP (seperti iOS Safari / Chrome iOS) belum mendukung API pemindai bawaan (*Native BarcodeDetector*). | Sistem telah dilengkapi **Dual-Engine Decoder (`BarcodeDetector` + `jsQR Fallback`)**. Cukup pastikan jarak kamera sekitar 15–30 cm dan stiker QR berada di tengah area pemindaian. Jika masih tidak merespons, gunakan **Input Kode Manual 6-Karakter**. |
 | **Kamera tidak muncul / layar hitam saat klik Scan QR** | Izin kamera diblokir oleh browser smartphone. | 1. Klik ikon gembok/pengaturan di address bar browser.<br>2. Cari menu **Permissions / Izin** -> **Kamera** -> ubah ke **Allow / Izinkan**.<br>3. Muat ulang (*refresh*) halaman web dan coba lagi. |
 | **Kamera tidak bisa fokus pada stiker QR** | Pencahayaan minim atau lensa kamera kotor/pantulan cahaya. | 1. Bersihkan lensa kamera smartphone.<br>2. Jauhkan atau dekatkan jarak HP sekitar 15–30 cm dari stiker.<br>3. Jika masih gagal, gunakan **Input Kode Manual 6-Karakter**. |
 | **Gagal Klaim: "Kode QR sudah pernah kamu scan"** | Peserta mencoba memindai stiker huruf yang sama dua kali. | Sistem mencegah duplikasi scan. Informasikan ke peserta bahwa huruf tersebut sudah tersimpan di inventarisnya dan mintalah peserta mencari stiker huruf lainnya. |
