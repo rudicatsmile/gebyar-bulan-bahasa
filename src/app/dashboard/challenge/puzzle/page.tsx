@@ -473,100 +473,185 @@ export default function DashboardPuzzlePage() {
         ) : tab === "items" ? (
           /* ============ TAB: DAFTAR SOAL ============ */
           items.length > 0 ? (
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16 text-center">#</TableHead>
-                    <TableHead>Baju Daerah</TableHead>
-                    <TableHead>Daerah (Jawaban)</TableHead>
-                    <TableHead className="text-center">Gambar</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((item, idx) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-center font-mono text-xs">
-                        {idx + 1}
-                      </TableCell>
-                      <TableCell>
-                        <strong className="text-foreground text-xs sm:text-sm block">
-                          {item.costumeName}
-                        </strong>
-                        {item.hint && (
-                          <span className="text-[11px] text-muted-foreground">
-                            Hint: {item.hint}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs font-semibold text-foreground">
-                        {item.regionName}
-                      </TableCell>
-                      <TableCell className="text-center">
+            <div className="space-y-3">
+              {/* Mobile View: Daftar Soal Card List */}
+              <div className="block sm:hidden space-y-2.5">
+                {items.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-border bg-card p-3.5 space-y-3 shadow-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-start gap-2.5 min-w-0">
                         {item.costumeImageUrl ? (
-                          <div className="flex items-center justify-center gap-1.5">
-                            <img
-                              src={item.costumeImageUrl}
-                              alt={item.costumeName}
-                              className="w-7 h-7 rounded-md object-cover border border-border shadow-2xs"
-                            />
-                            <Badge variant="success" className="text-[10px]">
-                              Ada
-                            </Badge>
-                          </div>
+                          <img
+                            src={item.costumeImageUrl}
+                            alt={item.costumeName}
+                            className="w-11 h-11 rounded-lg object-cover border border-border shrink-0"
+                          />
                         ) : (
-                          <Badge variant="default" className="text-[10px]">
-                            Belum
+                          <div className="w-11 h-11 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0 border border-border">
+                            <Puzzle className="h-5 w-5 opacity-40" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-xs text-muted-foreground">#{idx + 1}</span>
+                            <p className="font-semibold text-foreground text-sm truncate">
+                              {item.costumeName}
+                            </p>
+                          </div>
+                          {item.hint && (
+                            <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                              Hint: {item.hint}
+                            </p>
+                          )}
+                          <div className="mt-1">
+                            <span className="text-[11px] text-muted-foreground">Daerah: </span>
+                            <span className="text-xs font-semibold text-accent">{item.regionName}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleToggle(item)}
+                        className="cursor-pointer shrink-0"
+                        title={item.isActive ? "Klik untuk nonaktifkan" : "Klik untuk aktifkan"}
+                      >
+                        {item.isActive ? (
+                          <Badge variant="success" className="text-[10px] gap-1">
+                            <ToggleRight className="h-3 w-3" />
+                            AKTIF
+                          </Badge>
+                        ) : (
+                          <Badge variant="default" className="text-[10px] gap-1">
+                            <ToggleLeft className="h-3 w-3" />
+                            NONAKTIF
                           </Badge>
                         )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <button
-                          onClick={() => handleToggle(item)}
-                          className="cursor-pointer"
-                          title={item.isActive ? "Klik untuk nonaktifkan" : "Klik untuk aktifkan"}
-                        >
-                          {item.isActive ? (
-                            <Badge variant="success" className="text-[10px] gap-1">
-                              <ToggleRight className="h-3 w-3" />
-                              AKTIF
-                            </Badge>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-border/60">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEdit(item)}
+                        className="h-8 px-3 text-xs gap-1 cursor-pointer"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        <span>Edit</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteTarget(item)}
+                        className="h-8 px-3 text-xs gap-1 text-danger hover:text-danger hover:bg-danger/10 border-danger/30 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Hapus</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop View: Daftar Soal Tabel */}
+              <div className="hidden sm:block rounded-xl border border-border bg-card overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16 text-center">#</TableHead>
+                      <TableHead>Baju Daerah</TableHead>
+                      <TableHead>Daerah (Jawaban)</TableHead>
+                      <TableHead className="text-center">Gambar</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((item, idx) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-center font-mono text-xs">
+                          {idx + 1}
+                        </TableCell>
+                        <TableCell>
+                          <strong className="text-foreground text-xs sm:text-sm block">
+                            {item.costumeName}
+                          </strong>
+                          {item.hint && (
+                            <span className="text-[11px] text-muted-foreground">
+                              Hint: {item.hint}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs font-semibold text-foreground">
+                          {item.regionName}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.costumeImageUrl ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <img
+                                src={item.costumeImageUrl}
+                                alt={item.costumeName}
+                                className="w-7 h-7 rounded-md object-cover border border-border shadow-2xs"
+                              />
+                              <Badge variant="success" className="text-[10px]">
+                                Ada
+                              </Badge>
+                            </div>
                           ) : (
-                            <Badge variant="default" className="text-[10px] gap-1">
-                              <ToggleLeft className="h-3 w-3" />
-                              NONAKTIF
+                            <Badge variant="default" className="text-[10px]">
+                              Belum
                             </Badge>
                           )}
-                        </button>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEdit(item)}
-                            className="h-7 w-7 p-0 cursor-pointer"
-                            title="Edit"
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <button
+                            onClick={() => handleToggle(item)}
+                            className="cursor-pointer"
+                            title={item.isActive ? "Klik untuk nonaktifkan" : "Klik untuk aktifkan"}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDeleteTarget(item)}
-                            className="h-7 w-7 p-0 text-danger hover:text-danger cursor-pointer"
-                            title="Hapus"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                            {item.isActive ? (
+                              <Badge variant="success" className="text-[10px] gap-1">
+                                <ToggleRight className="h-3 w-3" />
+                                AKTIF
+                              </Badge>
+                            ) : (
+                              <Badge variant="default" className="text-[10px] gap-1">
+                                <ToggleLeft className="h-3 w-3" />
+                                NONAKTIF
+                              </Badge>
+                            )}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEdit(item)}
+                              className="h-7 w-7 p-0 cursor-pointer"
+                              title="Edit"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeleteTarget(item)}
+                              className="h-7 w-7 p-0 text-danger hover:text-danger cursor-pointer"
+                              title="Hapus"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           ) : (
             <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-2">
@@ -587,7 +672,77 @@ export default function DashboardPuzzlePage() {
                   <span>{resetSuccessMessage}</span>
                 </div>
               )}
-              <div className="rounded-xl border border-border bg-card overflow-hidden">
+
+              {/* Mobile View: Percobaan Peserta Card List */}
+              <div className="block sm:hidden space-y-2.5">
+                {attempts.map((att, idx) => (
+                  <div
+                    key={att.id}
+                    className="rounded-xl border border-border bg-card p-3.5 space-y-2.5 shadow-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs text-muted-foreground font-bold">#{idx + 1}</span>
+                          <strong className="text-foreground text-sm truncate block">
+                            {att.participantName}
+                          </strong>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                          {att.institution}
+                        </p>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="font-mono font-bold text-accent text-base block">
+                          {att.score}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">Skor</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-muted/40 text-xs">
+                      <div>
+                        <span className="text-[11px] text-muted-foreground block">Benar / Total:</span>
+                        <span className="font-mono font-bold text-accent">
+                          {att.correctCount}
+                        </span>
+                        <span className="text-muted-foreground font-mono"> / {att.totalItems}</span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-muted-foreground block">Durasi Pengerjaan:</span>
+                        <span className="font-mono text-foreground font-semibold">
+                          {att.timeSeconds ? `${att.timeSeconds}s` : "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-border/60 text-xs">
+                      <span className="text-[11px] text-muted-foreground">
+                        {new Date(att.createdAt).toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResetTarget(att)}
+                        className="h-8 px-2.5 text-xs text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 border-amber-500/30 cursor-pointer"
+                        title="Reset kesempatan agar peserta dapat bermain kembali"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                        <span>Reset</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop View: Percobaan Peserta Tabel */}
+              <div className="hidden sm:block rounded-xl border border-border bg-card overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>

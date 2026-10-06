@@ -18,7 +18,7 @@ import {
   getParticipantPointLedger,
   type PointLedgerItem,
 } from "@/app/actions/challenges";
-import { Coins, ArrowLeft, PlusCircle, Sparkles, ArrowRight, Loader2 } from "lucide-react";
+import { Coins, ArrowLeft, PlusCircle, Sparkles, ArrowRight, Loader2, Clock } from "lucide-react";
 
 const DEMO_LEDGER_ITEMS: PointLedgerItem[] = [
   { id: "tx-1", source: "Scan QR Stand", description: "Kunjungan Stand Membaca Puisi (PUISI01)", pointsDelta: 10, timestamp: "27 Okt 2025, 09:15 WIB" },
@@ -140,37 +140,72 @@ export default function PesertaRiwayatPoinPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sumber Perolehan</TableHead>
-                  <TableHead>Keterangan Transaksi</TableHead>
-                  <TableHead>Waktu Transaksi</TableHead>
-                  <TableHead className="text-right">Mutasi Poin</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ledgerItems.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell>
-                      <Badge variant="gold" className="text-[10px]">
-                        {tx.source}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground text-xs sm:text-sm">
-                      {tx.description}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono">
-                      {tx.timestamp}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
+          <div className="space-y-3">
+            {/* Tampilan Mobile: Card List (Tanpa Scroll Horizontal) */}
+            <div className="block sm:hidden space-y-2.5">
+              {ledgerItems.map((tx) => (
+                <div
+                  key={tx.id}
+                  className="rounded-xl border border-border bg-card p-3.5 space-y-2 shadow-xs transition-colors hover:border-accent/40"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="gold" className="text-[10px] shrink-0 font-medium">
+                      {tx.source}
+                    </Badge>
+                    <span
+                      className={`font-mono font-bold text-sm shrink-0 ${
+                        tx.pointsDelta >= 0 ? "text-accent" : "text-destructive"
+                      }`}
+                    >
                       {tx.pointsDelta >= 0 ? `+${tx.pointsDelta}` : tx.pointsDelta} Pts
-                    </TableCell>
+                    </span>
+                  </div>
+
+                  <p className="font-medium text-foreground text-xs leading-relaxed">
+                    {tx.description}
+                  </p>
+
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-border/60 text-[11px] text-muted-foreground font-mono">
+                    <Clock className="h-3 w-3 text-muted-foreground/70 shrink-0" />
+                    <span>{tx.timestamp}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tampilan Desktop: Tabel Lengkap */}
+            <div className="hidden sm:block rounded-xl border border-border bg-card overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sumber Perolehan</TableHead>
+                    <TableHead>Keterangan Transaksi</TableHead>
+                    <TableHead>Waktu Transaksi</TableHead>
+                    <TableHead className="text-right">Mutasi Poin</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {ledgerItems.map((tx) => (
+                    <TableRow key={tx.id}>
+                      <TableCell>
+                        <Badge variant="gold" className="text-[10px]">
+                          {tx.source}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground text-xs sm:text-sm">
+                        {tx.description}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {tx.timestamp}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
+                        {tx.pointsDelta >= 0 ? `+${tx.pointsDelta}` : tx.pointsDelta} Pts
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         )}
       </div>

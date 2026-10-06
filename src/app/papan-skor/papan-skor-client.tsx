@@ -280,68 +280,126 @@ export function PapanSkorClient({
 
               {/* Stage Participants Table */}
               {currentStageParticipants.length > 0 ? (
-                <div className="rounded-xl border border-border bg-card overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-16 text-center">No.</TableHead>
-                        <TableHead className="w-28">No. Registrasi</TableHead>
-                        <TableHead>Nama Peserta / Pasangan</TableHead>
-                        <TableHead>Instansi / Sekolah</TableHead>
-                        <TableHead className="text-center w-40">Status Kualifikasi</TableHead>
-                        <TableHead className="text-right w-36">Skor Rata-Rata</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {currentStageParticipants.map((p, idx) => {
-                        const prog = p.progress[currentDutaStage.id];
-                        const status = prog?.status || "terdaftar";
-                        const isQualified = status === "lolos";
-                        const isFinalist = p.overallStatus === "finalis" || p.overallStatus === "pemenang";
+                <div className="space-y-3">
+                  {/* Mobile Card List */}
+                  <div className="block sm:hidden space-y-2.5">
+                    {currentStageParticipants.map((p, idx) => {
+                      const prog = p.progress[currentDutaStage.id];
+                      const status = prog?.status || "terdaftar";
+                      const isQualified = status === "lolos";
+                      const isFinalist = p.overallStatus === "finalis" || p.overallStatus === "pemenang";
 
-                        return (
-                          <TableRow
-                            key={p.participantId}
-                            className={
-                              isFinalist
-                                ? "bg-amber-500/10 font-medium"
-                                : isQualified
-                                ? "bg-emerald-500/5"
-                                : ""
-                            }
-                          >
-                            <TableCell className="text-center font-mono text-xs font-bold text-muted-foreground">
-                              #{idx + 1}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs font-bold text-accent">
-                              {p.registrationNumber}
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-semibold text-foreground text-sm flex items-center gap-2">
-                                <span>{p.fullName}</span>
-                                {isFinalist && (
-                                  <Badge variant="gold" className="text-[9px] px-1.5 py-0">
-                                    {p.overallStatus === "pemenang" ? "DUTA TERPILIH" : "FINALIS 3 BESAR"}
-                                  </Badge>
-                                )}
+                      return (
+                        <div
+                          key={p.participantId}
+                          className={`rounded-xl border p-3.5 space-y-2.5 transition-colors ${
+                            isFinalist
+                              ? "bg-amber-500/10 border-amber-500/30"
+                              : isQualified
+                              ? "bg-emerald-500/5 border-emerald-500/30"
+                              : "bg-card border-border"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono text-xs text-muted-foreground font-bold">#{idx + 1}</span>
+                                <span className="font-mono text-xs font-bold text-accent">{p.registrationNumber}</span>
                               </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {p.institution || "-"}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge className={`text-[10px] border ${statusBadge[status]}`}>
-                                {statusLabel[status]}
+                              <p className="font-semibold text-foreground text-sm truncate mt-0.5">
+                                {p.fullName}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">{p.institution || "-"}</p>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span className="font-mono font-bold text-accent text-base block">
+                                {prog?.score != null ? Number(prog.score).toFixed(2) : "—"}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">Skor</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1 border-t border-border/50 text-xs">
+                            <Badge className={`text-[10px] border ${statusBadge[status]}`}>
+                              {statusLabel[status]}
+                            </Badge>
+
+                            {isFinalist && (
+                              <Badge variant="gold" className="text-[9px] px-1.5 py-0">
+                                {p.overallStatus === "pemenang" ? "DUTA TERPILIH" : "FINALIS 3 BESAR"}
                               </Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-mono font-bold text-accent text-base">
-                              {prog?.score != null ? Number(prog.score).toFixed(2) : "-"}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block rounded-xl border border-border bg-card overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-16 text-center">No.</TableHead>
+                          <TableHead className="w-28">No. Registrasi</TableHead>
+                          <TableHead>Nama Peserta / Pasangan</TableHead>
+                          <TableHead>Instansi / Sekolah</TableHead>
+                          <TableHead className="text-center w-40">Status Kualifikasi</TableHead>
+                          <TableHead className="text-right w-36">Skor Rata-Rata</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentStageParticipants.map((p, idx) => {
+                          const prog = p.progress[currentDutaStage.id];
+                          const status = prog?.status || "terdaftar";
+                          const isQualified = status === "lolos";
+                          const isFinalist = p.overallStatus === "finalis" || p.overallStatus === "pemenang";
+
+                          return (
+                            <TableRow
+                              key={p.participantId}
+                              className={
+                                isFinalist
+                                  ? "bg-amber-500/10 font-medium"
+                                  : isQualified
+                                  ? "bg-emerald-500/5"
+                                  : ""
+                              }
+                            >
+                              <TableCell className="text-center font-mono text-xs font-bold text-muted-foreground">
+                                #{idx + 1}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs font-bold text-accent">
+                                {p.registrationNumber}
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-semibold text-foreground text-sm flex items-center gap-2">
+                                  <span>{p.fullName}</span>
+                                  {isFinalist && (
+                                    <Badge variant="gold" className="text-[9px] px-1.5 py-0">
+                                      {p.overallStatus === "pemenang" ? "DUTA TERPILIH" : "FINALIS 3 BESAR"}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {p.institution || "-"}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge className={`text-[10px] border ${statusBadge[status]}`}>
+                                  {statusLabel[status]}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-mono font-bold text-accent text-base">
+                                {prog?.score != null ? Number(prog.score).toFixed(2) : "-"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-12 p-8 border border-dashed border-border rounded-xl bg-card space-y-3">
@@ -359,98 +417,199 @@ export function PapanSkorClient({
             </div>
           ) : recaps.length > 0 ? (
             /* STANDARD SINGLE STAGE LEADERBOARD */
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-20 text-center">Peringkat</TableHead>
-                    <TableHead>Nama Peserta</TableHead>
-                    <TableHead>Instansi / Sekolah</TableHead>
-                    <TableHead className="text-center w-36">Status Juri</TableHead>
-                    <TableHead className="text-right w-40">Skor Rata-Rata</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recaps.map((item) => {
-                    const isPodium = item.rank <= 3;
-                    return (
-                      <TableRow
-                        key={item.registrationId}
-                        className={isPodium ? "bg-accent/5 font-medium" : ""}
-                      >
-                        <TableCell className="text-center">
+            <div className="space-y-3">
+              {/* Mobile View: Card List */}
+              <div className="block sm:hidden space-y-2.5">
+                {recaps.map((item) => {
+                  const isPodium = item.rank <= 3;
+                  return (
+                    <div
+                      key={item.registrationId}
+                      className={`rounded-xl border p-3.5 space-y-2.5 transition-colors ${
+                        item.rank === 1
+                          ? "bg-accent/10 border-accent/40"
+                          : item.rank === 2
+                          ? "bg-muted/30 border-muted-foreground/30"
+                          : item.rank === 3
+                          ? "bg-amber-700/10 border-amber-700/30 dark:border-amber-400/30"
+                          : "bg-card border-border"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <span
-                            className={`inline-flex items-center justify-center h-7 w-7 rounded-full text-xs font-mono font-bold ${
+                            className={`inline-flex items-center justify-center h-7 w-7 rounded-full text-xs font-mono font-bold shrink-0 ${
                               item.rank === 1
                                 ? "bg-accent text-accent-foreground shadow-xs"
                                 : item.rank === 2
                                 ? "bg-muted-foreground/30 text-foreground"
                                 : item.rank === 3
                                 ? "bg-amber-700/20 text-amber-700 dark:text-amber-300"
-                                : "text-muted-foreground"
+                                : "bg-muted text-muted-foreground"
                             }`}
                           >
                             #{item.rank}
                           </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-foreground text-sm truncate">
+                              {item.participantName}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">{item.institution}</p>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="font-mono font-bold text-accent text-base block">
+                            {item.finalAverageScore.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">Rata-rata</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-border/50 text-xs">
+                        <Badge variant="success" className="text-[10px]">
+                          {item.scoresPerJudge.length} Juri Terkirim
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop View: Table */}
+              <div className="hidden sm:block rounded-xl border border-border bg-card overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-20 text-center">Peringkat</TableHead>
+                      <TableHead>Nama Peserta</TableHead>
+                      <TableHead>Instansi / Sekolah</TableHead>
+                      <TableHead className="text-center w-36">Status Juri</TableHead>
+                      <TableHead className="text-right w-40">Skor Rata-Rata</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recaps.map((item) => {
+                      const isPodium = item.rank <= 3;
+                      return (
+                        <TableRow
+                          key={item.registrationId}
+                          className={isPodium ? "bg-accent/5 font-medium" : ""}
+                        >
+                          <TableCell className="text-center">
+                            <span
+                              className={`inline-flex items-center justify-center h-7 w-7 rounded-full text-xs font-mono font-bold ${
+                                item.rank === 1
+                                  ? "bg-accent text-accent-foreground shadow-xs"
+                                  : item.rank === 2
+                                  ? "bg-muted-foreground/30 text-foreground"
+                                  : item.rank === 3
+                                  ? "bg-amber-700/20 text-amber-700 dark:text-amber-300"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              #{item.rank}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-semibold text-foreground text-sm">
+                            {item.participantName}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {item.institution}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="success" className="text-[10px]">
+                              {item.scoresPerJudge.length} Juri Terkirim
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-bold text-accent text-base sm:text-lg">
+                            {item.finalAverageScore.toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : compWinners.length > 0 ? (
+            <div className="space-y-3">
+              {/* Mobile View: Winners Card List */}
+              <div className="block sm:hidden space-y-2.5">
+                {compWinners.map((win) => (
+                  <div
+                    key={win.id}
+                    className="rounded-xl border border-accent/30 bg-accent/5 p-3.5 space-y-2.5 shadow-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="inline-flex items-center justify-center h-7 w-7 rounded-full text-xs font-mono font-bold bg-accent text-accent-foreground shadow-xs shrink-0">
+                          #{win.rank}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground text-sm truncate">
+                            {win.winnerName}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">{win.institution}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="font-mono font-bold text-accent text-base block">
+                          {win.finalScore.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">Skor Akhir</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-border/50 text-xs">
+                      <Badge variant="success" className="text-[10px]">
+                        {win.title}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop View: Winners Table */}
+              <div className="hidden sm:block rounded-xl border border-border bg-card overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-20 text-center">Peringkat</TableHead>
+                      <TableHead>Nama Juara</TableHead>
+                      <TableHead>Instansi / Sanggar</TableHead>
+                      <TableHead className="text-center w-36">Status</TableHead>
+                      <TableHead className="text-right w-40">Skor Akhir</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {compWinners.map((win) => (
+                      <TableRow key={win.id} className="bg-accent/5 font-medium">
+                        <TableCell className="text-center">
+                          <span className="inline-flex items-center justify-center h-7 w-7 rounded-full text-xs font-mono font-bold bg-accent text-accent-foreground shadow-xs">
+                            #{win.rank}
+                          </span>
                         </TableCell>
                         <TableCell className="font-semibold text-foreground text-sm">
-                          {item.participantName}
+                          {win.winnerName}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {item.institution}
+                          {win.institution}
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge variant="success" className="text-[10px]">
-                            {item.scoresPerJudge.length} Juri Terkirim
+                            {win.title}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-mono font-bold text-accent text-base sm:text-lg">
-                          {item.finalAverageScore.toFixed(2)}
+                          {win.finalScore.toFixed(2)}
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          ) : compWinners.length > 0 ? (
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-20 text-center">Peringkat</TableHead>
-                    <TableHead>Nama Juara</TableHead>
-                    <TableHead>Instansi / Sanggar</TableHead>
-                    <TableHead className="text-center w-36">Status</TableHead>
-                    <TableHead className="text-right w-40">Skor Akhir</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {compWinners.map((win) => (
-                    <TableRow key={win.id} className="bg-accent/5 font-medium">
-                      <TableCell className="text-center">
-                        <span className="inline-flex items-center justify-center h-7 w-7 rounded-full text-xs font-mono font-bold bg-accent text-accent-foreground shadow-xs">
-                          #{win.rank}
-                        </span>
-                      </TableCell>
-                      <TableCell className="font-semibold text-foreground text-sm">
-                        {win.winnerName}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {win.institution}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="success" className="text-[10px]">
-                          {win.title}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold text-accent text-base sm:text-lg">
-                        {win.finalScore.toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           ) : (
             <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-3">

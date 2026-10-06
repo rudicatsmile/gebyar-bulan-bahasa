@@ -131,7 +131,68 @@ export default async function LeaderboardPage() {
               Daftar Peringkat 10 Besar Peserta
             </h3>
 
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
+            {/* Mobile Card List (Tanpa Scroll Horizontal) */}
+            <div className="block sm:hidden space-y-2.5">
+              {leaderboard.map((item) => {
+                const isPodium = item.rank <= 3;
+                return (
+                  <div
+                    key={item.rank}
+                    className={`rounded-xl border p-3.5 space-y-2.5 transition-colors ${
+                      item.rank === 1
+                        ? "border-accent/40 bg-accent/5"
+                        : item.rank === 2
+                        ? "border-muted-foreground/30 bg-muted/30"
+                        : item.rank === 3
+                        ? "border-amber-500/30 bg-amber-500/5"
+                        : "border-border bg-card"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`inline-flex items-center justify-center h-7 w-7 rounded-full text-xs font-mono font-bold shrink-0 ${
+                            item.rank === 1
+                              ? "bg-accent text-accent-foreground shadow-xs"
+                              : item.rank === 2
+                              ? "bg-muted-foreground/30 text-foreground"
+                              : item.rank === 3
+                              ? "bg-amber-600/20 text-amber-600 dark:text-amber-400"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          #{item.rank}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground text-sm truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {item.institution}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="font-mono font-bold text-accent text-sm block">
+                          {item.points} Pts
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-border/50 text-[11px]">
+                      <span className="text-muted-foreground">Lencana:</span>
+                      <Badge variant="gold" className="text-[10px]">
+                        {item.badge}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden sm:block rounded-xl border border-border bg-card overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>

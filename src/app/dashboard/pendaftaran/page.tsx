@@ -285,94 +285,187 @@ export default function DashboardPendaftaranPage() {
             <p className="text-xs">Memuat data pendaftaran tim dari database...</p>
           </div>
         ) : teams.length > 0 ? (
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-28">No. Registrasi</TableHead>
-                  <TableHead>Nama Tim & Ketua</TableHead>
-                  <TableHead>Cabang Lomba</TableHead>
-                  <TableHead>Sekolah / Sanggar</TableHead>
-                  <TableHead>Daftar Anggota Tim</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-center w-20">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {teams.map((p) => (
-                  <TableRow key={p.registrationId}>
-                    <TableCell className="font-mono text-xs font-bold text-accent">
-                      {p.registrationNumber}
-                    </TableCell>
-                    <TableCell>
-                      <strong className="text-foreground text-xs sm:text-sm block">
-                        {p.teamName}
-                      </strong>
-                      <span className="text-[11px] text-muted-foreground">Ketua: {p.leaderName}</span>
-                    </TableCell>
-                    <TableCell className="text-xs text-foreground font-medium">
-                      {p.competitionName}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {p.institution}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-xs">
-                      <div className="flex flex-wrap gap-1">
-                        {p.teamMembers?.map((m, idx) => (
-                          <span
-                            key={idx}
-                            className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              m.includes("(Ketua)")
-                                ? "bg-accent/15 text-accent font-semibold border border-accent/20"
-                                : "bg-muted text-foreground"
-                            }`}
-                          >
-                            {m}
-                          </span>
-                        ))}
+          <div className="space-y-3">
+            {/* Tampilan Mobile: Card List (Tanpa Scroll Horizontal) */}
+            <div className="block md:hidden space-y-3">
+              {teams.map((p) => {
+                const statusVariant =
+                  p.status === "terverifikasi"
+                    ? "success"
+                    : p.status === "ditolak"
+                    ? "danger"
+                    : "warning";
+
+                return (
+                  <div
+                    key={p.registrationId}
+                    className="rounded-xl border border-border bg-card p-4 space-y-3 shadow-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-mono text-xs font-bold text-accent block">
+                          {p.registrationNumber}
+                        </span>
+                        <strong className="text-foreground text-sm block truncate mt-0.5">
+                          {p.teamName}
+                        </strong>
+                        <span className="text-[11px] text-muted-foreground block">
+                          Ketua: {p.leaderName}
+                        </span>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge
-                        variant={
-                          p.status === "terverifikasi"
-                            ? "success"
-                            : p.status === "ditolak"
-                            ? "danger"
-                            : "warning"
-                        }
-                        className="text-[10px]"
-                      >
+                      <Badge variant={statusVariant} className="text-[10px] shrink-0">
                         {p.status.replace(/_/g, " ").toUpperCase()}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openEditModal(p)}
-                          className="h-7 px-2 text-xs gap-1 cursor-pointer"
-                          title="Edit Data Tim"
-                        >
-                          <Edit2 className="h-3 w-3" />
-                          <span>Edit</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openDeleteModal(p)}
-                          className="h-7 px-2 text-xs gap-1 cursor-pointer text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                          title="Hapus Data Tim"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                    </div>
+
+                    <div className="space-y-1 text-xs pt-1 border-t border-border/50">
+                      <div>
+                        <span className="text-[11px] text-muted-foreground">Lomba: </span>
+                        <span className="font-medium text-foreground">{p.competitionName}</span>
                       </div>
-                    </TableCell>
+                      <div>
+                        <span className="text-[11px] text-muted-foreground">Instansi: </span>
+                        <span className="text-muted-foreground">{p.institution}</span>
+                      </div>
+                    </div>
+
+                    {p.teamMembers && p.teamMembers.length > 0 && (
+                      <div className="pt-1">
+                        <span className="text-[11px] text-muted-foreground block mb-1">Anggota Tim:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {p.teamMembers.map((m, idx) => (
+                            <span
+                              key={idx}
+                              className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                m.includes("(Ketua)")
+                                  ? "bg-accent/15 text-accent font-semibold border border-accent/20"
+                                  : "bg-muted text-foreground"
+                              }`}
+                            >
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openEditModal(p)}
+                        className="h-8 px-3 text-xs gap-1.5 cursor-pointer"
+                        title="Edit Data Tim"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        <span>Edit</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openDeleteModal(p)}
+                        className="h-8 px-3 text-xs gap-1.5 cursor-pointer text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                        title="Hapus Data Tim"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Hapus</span>
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Tampilan Desktop: Tabel Lengkap */}
+            <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-28">No. Registrasi</TableHead>
+                    <TableHead>Nama Tim & Ketua</TableHead>
+                    <TableHead>Cabang Lomba</TableHead>
+                    <TableHead>Sekolah / Sanggar</TableHead>
+                    <TableHead>Daftar Anggota Tim</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center w-20">Aksi</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {teams.map((p) => (
+                    <TableRow key={p.registrationId}>
+                      <TableCell className="font-mono text-xs font-bold text-accent">
+                        {p.registrationNumber}
+                      </TableCell>
+                      <TableCell>
+                        <strong className="text-foreground text-xs sm:text-sm block">
+                          {p.teamName}
+                        </strong>
+                        <span className="text-[11px] text-muted-foreground">Ketua: {p.leaderName}</span>
+                      </TableCell>
+                      <TableCell className="text-xs text-foreground font-medium">
+                        {p.competitionName}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {p.institution}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-xs">
+                        <div className="flex flex-wrap gap-1">
+                          {p.teamMembers?.map((m, idx) => (
+                            <span
+                              key={idx}
+                              className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                m.includes("(Ketua)")
+                                  ? "bg-accent/15 text-accent font-semibold border border-accent/20"
+                                  : "bg-muted text-foreground"
+                              }`}
+                            >
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant={
+                            p.status === "terverifikasi"
+                              ? "success"
+                              : p.status === "ditolak"
+                              ? "danger"
+                              : "warning"
+                          }
+                          className="text-[10px]"
+                        >
+                          {p.status.replace(/_/g, " ").toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditModal(p)}
+                            className="h-7 px-2 text-xs gap-1 cursor-pointer"
+                            title="Edit Data Tim"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                            <span>Edit</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDeleteModal(p)}
+                            className="h-7 px-2 text-xs gap-1 cursor-pointer text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                            title="Hapus Data Tim"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         ) : (
           <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-2">
