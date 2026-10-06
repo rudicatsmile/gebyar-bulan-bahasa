@@ -20,6 +20,7 @@ import { useCurrentParticipant, Enrollment } from "@/lib/hooks/useCurrentPartici
 import { enrollCompetition } from "@/app/actions/participants";
 import { getActiveInstitutions, type InstitutionItem } from "@/app/actions/institutions";
 import { createClient } from "@/lib/supabase/client";
+import { getCompetitionBySlug } from "@/lib/supabase/queries";
 import { COMPETITIONS, PARTICIPANTS } from "@/lib/dummy-data";
 import { BerkasUploadSection } from "@/components/peserta/BerkasUploadSection";
 import { DutaBahasaTimeline } from "@/components/duta-bahasa/DutaBahasaTimeline";
@@ -56,6 +57,7 @@ interface TargetCompetition {
   min_team_members: number;
   max_team_members: number;
   max_participants: number | null;
+  requireDocument?: boolean;
 }
 
 interface TeamMemberRow {
@@ -94,6 +96,7 @@ export function PesertaPendaftaranClient() {
 
   const [institutions, setInstitutions] = React.useState<InstitutionItem[]>([]);
   const [loadingInstitutions, setLoadingInstitutions] = React.useState(true);
+  const [userDocCount, setUserDocCount] = React.useState<number>(0);
 
   React.useEffect(() => {
     getActiveInstitutions().then((res) => {
@@ -121,17 +124,10 @@ export function PesertaPendaftaranClient() {
     const loadTarget = async () => {
       setTargetState({ slug: lombaSlug, data: null, error: null, loading: true });
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from("competitions")
-          .select("id, name, slug, status, type, min_team_members, max_team_members, max_participants")
-          .eq("slug", lombaSlug)
-          .maybeSingle();
+        const comp = await getCompetitionBySlug(lombaSlug);
 
         if (cancelled) return;
-        if (error) {
-          setTargetState({ slug: lombaSlug, data: null, error: error.message, loading: false });
-        } else if (!data) {
+        if (!comp) {
           setTargetState({
             slug: lombaSlug,
             data: null,
@@ -141,7 +137,17 @@ export function PesertaPendaftaranClient() {
         } else {
           setTargetState({
             slug: lombaSlug,
-            data: data as unknown as TargetCompetition,
+            data: {
+              id: comp.id,
+              name: comp.name,
+              slug: comp.slug,
+              status: comp.status as CompetitionStatus,
+              type: comp.category as CompetitionType,
+              min_team_members: comp.minMembers,
+              max_team_members: comp.maxMembers,
+              max_participants: comp.maxParticipants,
+              requireDocument: comp.requireDocument ?? true,
+            },
             error: null,
             loading: false,
           });
@@ -164,6 +170,18 @@ export function PesertaPendaftaranClient() {
     };
   }, [lombaSlug]);
 
+  React.useEffect(() => {
+    if (!participant?.participantRowId) return;
+    fetch(`/api/participants/documents?participantId=${participant.participantRowId}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.documents)) {
+          setUserDocCount(data.documents.length);
+        }
+      })
+      .catch((err) => console.error("Error fetching doc count:", err));
+  }, [participant?.participantRowId]);
+
   const resetForm = React.useCallback(() => {
     setTeamName("");
     setMembers([{ name: "", role: "ketua", studentId: "", institution: participant?.institution || "" }]);
@@ -172,6 +190,14 @@ export function PesertaPendaftaranClient() {
   }, [participant?.institution]);
 
   const handleOpenForm = () => {
+    if (target?.requireDocument !== false && userDocCount === 0 && !participant?.isDemoFallback) {
+      setErrorMsg(
+        `Cabang lomba "${target?.name || "ini"}" mewajibkan unggah berkas persyaratan. Silakan unggah berkas Anda pada bagian Berkas Persyaratan terlebih dahulu.`
+      );
+      const el = document.getElementById("berkas-upload-section");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     resetForm();
     setDialogOpen(true);
   };
@@ -183,6 +209,13 @@ export function PesertaPendaftaranClient() {
     if (!participant?.participantRowId || !UUID_RE.test(participant.participantRowId)) {
       setErrorMsg(
         "Data peserta Anda belum tersinkron di sistem panitia. Buka Profil Peserta lalu simpan ulang data Anda."
+      );
+      return;
+    }
+
+    if (target.requireDocument !== false && userDocCount === 0 && !participant?.isDemoFallback) {
+      setErrorMsg(
+        `Pendaftaran ditolak: Cabang lomba "${target.name}" mewajibkan unggah berkas persyaratan. Silakan unggah berkas persyaratan Anda terlebih dahulu.`
       );
       return;
     }
@@ -466,10 +499,13 @@ export function PesertaPendaftaranClient() {
 
             {/* Bagian Unggah Berkas Persyaratan */}
             {participant?.participantRowId && (
-              <div className="pt-2">
+              <div id="berkas-upload-section" className="pt-2">
                 <BerkasUploadSection
                   participantId={participant.participantRowId}
-                  onUploadSuccess={refetch}
+                  onUploadSuccess={() => {
+                    refetch();
+                    setUserDocCount((prev) => prev + 1);
+                  }}
                 />
               </div>
             )}
@@ -521,6 +557,33 @@ export function PesertaPendaftaranClient() {
                       <p className="text-xs text-muted-foreground">
                         Kuota pendaftaran Anda penuh ({MAX_LOMBA} cabang lomba).
                       </p>
+                    ) : target.requireDocument !== false && userDocCount === 0 && !participant?.isDemoFallback ? (
+                      <div className="space-y-3">
+                        <div className="p-3.5 rounded-xl border border-warning/40 bg-warning/5 flex items-start gap-2.5 text-xs text-foreground">
+                          <AlertCircle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="font-semibold text-warning-foreground">Wajib Upload Berkas Persyaratan</p>
+                            <p className="text-muted-foreground text-[11px] leading-relaxed">
+                              Cabang lomba ini mewajibkan unggah berkas persyaratan. Silakan unggah berkas persyaratan Anda pada bagian <strong>Berkas Persyaratan</strong> di bawah terlebih dahulu sebelum mendaftar.
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            setErrorMsg(
+                              `Cabang lomba "${target.name}" mewajibkan berkas persyaratan. Silakan unggah berkas persyaratan Anda pada bagian Berkas Persyaratan di bawah.`
+                            );
+                            const el = document.getElementById("berkas-upload-section");
+                            if (el) el.scrollIntoView({ behavior: "smooth" });
+                          }}
+                          variant="outline"
+                          className="text-xs font-semibold gap-1.5 border-warning/40 text-warning hover:bg-warning/10"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>Unggah Berkas Dulu</span>
+                        </Button>
+                      </div>
                     ) : (
                       <Button
                         onClick={handleOpenForm}

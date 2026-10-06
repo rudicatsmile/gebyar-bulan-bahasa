@@ -32,10 +32,12 @@ export interface Competition {
   criteria: CompetitionCriterion[];
   manuscripts?: string[];
   eventFormats?: string[];
+  requireDocument?: boolean;
 }
 
 export interface Participant {
   id: string;
+  registrationId?: string;
   registrationNumber: string;
   fullName: string;
   institution: string;

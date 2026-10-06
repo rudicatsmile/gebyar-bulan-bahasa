@@ -109,6 +109,7 @@ export async function GET() {
 
       return {
         id: row.id,
+        registrationId: firstReg?.id || undefined,
         registrationNumber: row.registration_number || `GBB-PES-${row.id.substring(0, 4).toUpperCase()}`,
         fullName: row.full_name || "Peserta Lomba",
         institution: row.institution || "Umum",

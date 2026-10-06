@@ -17,8 +17,10 @@ import {
   Trophy,
   CheckCircle2,
   XCircle,
+  ArrowRightLeft,
 } from "lucide-react";
 import type { Participant } from "@/lib/dummy-data";
+import { PindahLombaModal, ParticipantTransferTarget } from "@/components/dashboard/PindahLombaModal";
 
 export default function DashboardPesertaDetailPage() {
   const params = useParams();
@@ -26,6 +28,7 @@ export default function DashboardPesertaDetailPage() {
 
   const [participant, setParticipant] = React.useState<Participant | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [transferOpen, setTransferOpen] = React.useState(false);
 
   const fetchParticipant = React.useCallback(async () => {
     setLoading(true);
@@ -92,6 +95,15 @@ export default function DashboardPesertaDetailPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs gap-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                onClick={() => setTransferOpen(true)}
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                <span>Pindah Lomba</span>
+              </Button>
               <Link href="/dashboard/peserta/verifikasi">
                 <Button size="sm" variant="outline" className="text-xs">
                   Antrean Verifikasi Berkas
@@ -150,10 +162,21 @@ export default function DashboardPesertaDetailPage() {
           {/* Lomba & Dokumen Card */}
           <div className="lg:col-span-8 space-y-6">
             <Card className="p-6 space-y-4">
-              <h3 className="font-heading text-base font-bold text-foreground flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-accent" />
-                <span>Pendaftaran Cabang Lomba</span>
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-heading text-base font-bold text-foreground flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-accent" />
+                  <span>Pendaftaran Cabang Lomba</span>
+                </h3>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-8 gap-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                  onClick={() => setTransferOpen(true)}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  <span>Pindah Cabang Lomba</span>
+                </Button>
+              </div>
               <div className="p-4 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
                 <div>
                   <h4 className="font-heading text-base font-bold text-foreground">
@@ -245,6 +268,22 @@ export default function DashboardPesertaDetailPage() {
             </Card>
           </div>
         </div>
+
+        {participant && (
+          <PindahLombaModal
+            open={transferOpen}
+            onOpenChange={setTransferOpen}
+            participant={{
+              id: participant.id,
+              fullName: participant.fullName,
+              competitionId: participant.competitionId,
+              competitionName: participant.competitionName,
+              registrationId: participant.registrationId,
+              documentsCount: participant.documents?.length || 0,
+            }}
+            onSuccess={fetchParticipant}
+          />
+        )}
       </div>
     </DashboardLayout>
   );

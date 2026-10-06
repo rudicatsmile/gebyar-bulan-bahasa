@@ -313,6 +313,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [addManuscripts, setAddManuscripts] = React.useState("");
   const [addNeedsEventFormats, setAddNeedsEventFormats] = React.useState(false);
   const [addEventFormats, setAddEventFormats] = React.useState("");
+  const [addRequireDocument, setAddRequireDocument] = React.useState(true);
   const [addStatus, setAddStatus] = React.useState<"draft" | "pendaftaran">("pendaftaran");
   const [isSubmittingAdd, setIsSubmittingAdd] = React.useState(false);
 
@@ -334,6 +335,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [editManuscripts, setEditManuscripts] = React.useState("");
   const [editNeedsEventFormats, setEditNeedsEventFormats] = React.useState(false);
   const [editEventFormats, setEditEventFormats] = React.useState("");
+  const [editRequireDocument, setEditRequireDocument] = React.useState(true);
   const [editStatus, setEditStatus] = React.useState<"draft" | "pendaftaran" | "berlangsung" | "selesai" | "dibatalkan">("pendaftaran");
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
 
@@ -460,6 +462,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
     );
 
     const mappedStatus = comp.status === "terjadwal" ? "pendaftaran" : comp.status;
+    setEditRequireDocument(comp.requireDocument ?? true);
     setEditStatus(mappedStatus);
     setEditOpen(true);
   };
@@ -490,6 +493,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         rules: editRules,
         manuscripts: editNeedsManuscripts ? editManuscripts : "",
         eventFormats: editNeedsEventFormats ? editEventFormats : "",
+        requireDocument: editRequireDocument,
         status: editStatus,
       });
 
@@ -531,6 +535,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                   rules: updatedRules,
                   manuscripts: updatedManuscripts,
                   eventFormats: updatedEventFormats,
+                  requireDocument: editRequireDocument,
                   status: editStatus,
                 }
               : c
@@ -574,6 +579,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         rules: addRules,
         manuscripts: addNeedsManuscripts ? addManuscripts : "",
         eventFormats: addNeedsEventFormats ? addEventFormats : "",
+        requireDocument: addRequireDocument,
         status: addStatus,
       });
 
@@ -587,6 +593,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         setAddNeedsManuscripts(false);
         setAddEventFormats("");
         setAddNeedsEventFormats(false);
+        setAddRequireDocument(true);
         setNotification({
           type: "success",
           message: `Cabang lomba baru "${addName}" berhasil ditambahkan ke database!`,
@@ -804,6 +811,15 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                             <span>{comp.eventFormats.length} Format Acara</span>
                           </span>
                         )}
+                        {comp.requireDocument === false ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-normal">
+                            Tidak Wajib Berkas
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 font-normal">
+                            Wajib Berkas
+                          </span>
+                        )}
                       </div>
                       <span className="text-[11px] text-muted-foreground">
                         Agregasi: {comp.aggregation.replace(/_/g, " ")}
@@ -913,16 +929,15 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Metode Agregasi Nilai *
+                  Ketentuan Berkas Persyaratan *
                 </label>
                 <select
-                  value={addAggregation}
-                  onChange={(e) => setAddAggregation(e.target.value as any)}
-                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
+                  value={addRequireDocument ? "true" : "false"}
+                  onChange={(e) => setAddRequireDocument(e.target.value === "true")}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none font-medium"
                 >
-                  <option value="rata_rata">Rata-Rata Standar (Mean)</option>
-                  <option value="total">Total Akumulasi (Sum)</option>
-                  <option value="rata_rata_buang_ekstrem">Rata-Rata Buang Ekstrem (Olympic Scoring)</option>
+                  <option value="true">Wajib Upload Berkas Persyaratan</option>
+                  <option value="false">Tidak Wajib Upload Berkas</option>
                 </select>
               </div>
             </div>
@@ -1378,21 +1393,37 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
               </div>
             )}
 
-            <div className="space-y-1.5 text-left">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Status Operasional Lomba *
-              </label>
-              <select
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value as any)}
-                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
-              >
-                <option value="pendaftaran">Pendaftaran Dibuka</option>
-                <option value="berlangsung">Sedang Berlangsung (Live)</option>
-                <option value="selesai">Selesai</option>
-                <option value="draft">Draft</option>
-                <option value="dibatalkan">Dibatalkan</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Ketentuan Berkas Persyaratan *
+                </label>
+                <select
+                  value={editRequireDocument ? "true" : "false"}
+                  onChange={(e) => setEditRequireDocument(e.target.value === "true")}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none font-medium"
+                >
+                  <option value="true">Wajib Upload Berkas Persyaratan</option>
+                  <option value="false">Tidak Wajib Upload Berkas</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Status Operasional Lomba *
+                </label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as any)}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
+                >
+                  <option value="pendaftaran">Pendaftaran Dibuka</option>
+                  <option value="berlangsung">Sedang Berlangsung (Live)</option>
+                  <option value="selesai">Selesai</option>
+                  <option value="draft">Draft</option>
+                  <option value="dibatalkan">Dibatalkan</option>
+                </select>
+              </div>
             </div>
 
             <DialogFooter>

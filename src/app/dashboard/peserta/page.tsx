@@ -15,7 +15,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Participant } from "@/lib/dummy-data";
-import { Users, Search, Download, FileCheck, Eye, Plus, RotateCcw, Loader2 } from "lucide-react";
+import { Users, Search, Download, FileCheck, Eye, RotateCcw, Loader2, ArrowRightLeft } from "lucide-react";
+import { PindahLombaModal, ParticipantTransferTarget } from "@/components/dashboard/PindahLombaModal";
 
 export default function DashboardPesertaPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
@@ -23,6 +24,9 @@ export default function DashboardPesertaPage() {
   const [isMounted, setIsMounted] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("semua");
+
+  const [transferTarget, setTransferTarget] = React.useState<ParticipantTransferTarget | null>(null);
+  const [transferOpen, setTransferOpen] = React.useState(false);
 
   const fetchParticipants = React.useCallback(async () => {
     setIsLoading(true);
@@ -48,6 +52,18 @@ export default function DashboardPesertaPage() {
   React.useEffect(() => {
     fetchParticipants();
   }, [fetchParticipants]);
+
+  const handleOpenTransfer = (p: Participant) => {
+    setTransferTarget({
+      id: p.id,
+      fullName: p.fullName,
+      competitionId: p.competitionId,
+      competitionName: p.competitionName,
+      registrationId: p.registrationId,
+      documentsCount: p.documents?.length || 0,
+    });
+    setTransferOpen(true);
+  };
 
   const filtered = participants.filter((p) => {
     const matchSearch =
@@ -189,14 +205,26 @@ export default function DashboardPesertaPage() {
                   )}
                   <p className="text-xs text-muted-foreground">{p.institution}</p>
                   <p className="text-xs text-foreground font-medium">{p.competitionName || "Belum Memilih Lomba"}</p>
-                  <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center justify-between pt-1 border-t border-border">
                     <span className="font-mono text-xs font-bold text-accent">{p.totalPoints} Pts</span>
-                    <Link href={`/dashboard/peserta/${p.id}`}>
-                      <Button variant="outline" size="sm" className="text-xs h-8 gap-1">
-                        <Eye className="h-3 w-3" />
-                        <span>Detail</span>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8 gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                        onClick={() => handleOpenTransfer(p)}
+                        title="Pindah Cabang Lomba"
+                      >
+                        <ArrowRightLeft className="h-3 w-3" />
+                        <span>Pindah</span>
                       </Button>
-                    </Link>
+                      <Link href={`/dashboard/peserta/${p.id}`}>
+                        <Button variant="outline" size="sm" className="text-xs h-8 gap-1">
+                          <Eye className="h-3 w-3" />
+                          <span>Detail</span>
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               );
@@ -275,12 +303,24 @@ export default function DashboardPesertaPage() {
                         {p.totalPoints} Pts
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link href={`/dashboard/peserta/${p.id}`}>
-                          <Button variant="outline" size="sm" className="text-xs h-8 gap-1">
-                            <Eye className="h-3 w-3" />
-                            <span>Detail</span>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-8 gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                            onClick={() => handleOpenTransfer(p)}
+                            title="Pindah ke lomba lain"
+                          >
+                            <ArrowRightLeft className="h-3.5 w-3.5" />
+                            <span className="hidden lg:inline">Pindah Lomba</span>
                           </Button>
-                        </Link>
+                          <Link href={`/dashboard/peserta/${p.id}`}>
+                            <Button variant="outline" size="sm" className="text-xs h-8 gap-1">
+                              <Eye className="h-3 w-3" />
+                              <span>Detail</span>
+                            </Button>
+                          </Link>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -289,6 +329,14 @@ export default function DashboardPesertaPage() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Modal Pindah Lomba */}
+        <PindahLombaModal
+          open={transferOpen}
+          onOpenChange={setTransferOpen}
+          participant={transferTarget}
+          onSuccess={fetchParticipants}
+        />
       </div>
     </DashboardLayout>
   );

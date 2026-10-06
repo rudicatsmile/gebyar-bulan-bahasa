@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCompetitionRequireDocumentsMap } from "@/app/actions/competitions";
 
 const MAX_COMPETITION_PER_PARTICIPANT = 8;
 
@@ -129,7 +130,7 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
     // perintah langsung tetap harus ditolak agar status 'draft'/'selesai' tak bisa diselipki.
     const { data: competition, error: compErr } = await supabase
       .from("competitions")
-      .select("id, name, status, type, min_team_members, max_team_members")
+      .select("id, name, slug, status, type, min_team_members, max_team_members")
       .eq("id", parsed.data.competitionId)
       .maybeSingle();
 
@@ -144,6 +145,35 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
         success: false,
         error: `Pendaftaran lomba "${competition.name}" sedang tidak dibuka (status: ${competition.status}).`,
       };
+    }
+
+    // Validasi wajib upload berkas jika cabang lomba mensyaratkan
+    const requireDocsMap = await getCompetitionRequireDocumentsMap();
+    const isDocRequired =
+      requireDocsMap[competition.id] ?? (competition.slug ? requireDocsMap[competition.slug] : undefined) ?? true;
+
+    if (isDocRequired) {
+      const admin = createAdminClient();
+      const { data: docs, error: docErr } = await admin
+        .from("participant_documents")
+        .select("id, status")
+        .eq("participant_id", parsed.data.participantId);
+
+      if (docErr) {
+        console.error("Gagal mengecek berkas peserta:", docErr.message);
+        return {
+          success: false,
+          error: "Terjadi kesalahan sistem saat memverifikasi berkas persyaratan. Silakan coba lagi.",
+        };
+      }
+
+      const validOrUploadedDocs = (docs || []).filter((d) => d.status !== "tidak_valid");
+      if (validOrUploadedDocs.length === 0) {
+        return {
+          success: false,
+          error: `Pendaftaran ditolak: Cabang lomba "${competition.name}" mewajibkan unggah berkas persyaratan. Silakan unggah berkas persyaratan Anda pada bagian Berkas Persyaratan terlebih dahulu.`,
+        };
+      }
     }
 
     // Validasi kuota tim untuk lomba berkelompok
@@ -787,6 +817,264 @@ export async function deleteTeamRegistrationAdmin(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Gagal menghapus pendaftaran tim.",
+    };
+  }
+}
+
+export interface TransferHistoryEntry {
+  registrationId: string;
+  participantId: string;
+  participantName: string;
+  fromCompetitionId: string;
+  fromCompetitionName: string;
+  toCompetitionId: string;
+  toCompetitionName: string;
+  reason: string | null;
+  transferredAt: string;
+}
+
+export async function getCompetitionTransferHistory(): Promise<TransferHistoryEntry[]> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "competition_transfer_history")
+      .maybeSingle();
+
+    if (data?.value && Array.isArray(data.value)) {
+      return (data.value as unknown) as TransferHistoryEntry[];
+    }
+    return [];
+  } catch (err) {
+    console.error("Error getCompetitionTransferHistory:", err);
+    return [];
+  }
+}
+
+export async function recordTransferHistory(entry: TransferHistoryEntry): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+    const currentHistory = await getCompetitionTransferHistory();
+    const nextHistory = [entry, ...currentHistory];
+
+    await supabase.from("event_settings").upsert(
+      {
+        key: "competition_transfer_history",
+        value: (nextHistory as unknown) as any,
+        description: "Riwayat kepindahan cabang lomba peserta oleh panitia/seksi acara",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" }
+    );
+  } catch (err) {
+    console.error("Error recordTransferHistory:", err);
+  }
+}
+
+export async function transferParticipantCompetition(data: {
+  participantId: string;
+  registrationId?: string;
+  targetCompetitionId: string;
+  reason?: string;
+}): Promise<{ success: boolean; error?: string; warning?: string }> {
+  try {
+    const supabase = createAdminClient();
+
+    if (!data.participantId) {
+      return { success: false, error: "ID Peserta tidak valid." };
+    }
+    if (!data.targetCompetitionId) {
+      return { success: false, error: "Lomba tujuan wajib dipilih." };
+    }
+
+    // 1. Ambil pendaftaran peserta (jika registrationId tidak dikirim, ambil pendaftaran pertama)
+    let regRow: any = null;
+    if (data.registrationId) {
+      const { data: reg, error: regErr } = await supabase
+        .from("registrations")
+        .select(`
+          id,
+          participant_id,
+          competition_id,
+          team_name,
+          is_confirmed,
+          competitions (id, name, slug, status, type),
+          participants (id, full_name, registration_number)
+        `)
+        .eq("id", data.registrationId)
+        .maybeSingle();
+
+      if (regErr || !reg) {
+        return { success: false, error: "Pendaftaran peserta tidak ditemukan." };
+      }
+      regRow = reg;
+    } else {
+      const { data: regs, error: regsErr } = await supabase
+        .from("registrations")
+        .select(`
+          id,
+          participant_id,
+          competition_id,
+          team_name,
+          is_confirmed,
+          competitions (id, name, slug, status, type),
+          participants (id, full_name, registration_number)
+        `)
+        .eq("participant_id", data.participantId)
+        .order("created_at", { ascending: true });
+
+      if (regsErr || !regs || regs.length === 0) {
+        return { success: false, error: "Peserta belum memiliki pendaftaran aktif yang dapat dipindahkan." };
+      }
+      regRow = regs[0];
+    }
+
+    const currentCompId = regRow.competition_id;
+    const currentCompName = regRow.competitions?.name || "Lomba Lama";
+    const participantName = regRow.participants?.full_name || "Peserta";
+
+    // 2. Cegah pindah ke lomba yang sama
+    if (currentCompId === data.targetCompetitionId) {
+      return { success: false, error: `Peserta sudah terdaftar pada cabang lomba "${currentCompName}".` };
+    }
+
+    // 3. Ambil data lomba tujuan
+    const { data: targetComp, error: targetErr } = await supabase
+      .from("competitions")
+      .select("id, name, slug, status, type, max_participants")
+      .eq("id", data.targetCompetitionId)
+      .maybeSingle();
+
+    if (targetErr || !targetComp) {
+      return { success: false, error: "Cabang lomba tujuan tidak ditemukan." };
+    }
+
+    // 4. Validasi status lomba tujuan
+    if (targetComp.status !== "pendaftaran" && targetComp.status !== "berlangsung") {
+      return {
+        success: false,
+        error: `Cabang lomba "${targetComp.name}" sedang tidak membuka pendaftaran (status: ${targetComp.status.toUpperCase()}).`,
+      };
+    }
+
+    // 5. Validasi duplikasi: cegah peserta terdaftar 2 kali pada lomba tujuan
+    const { data: duplicate } = await supabase
+      .from("registrations")
+      .select("id")
+      .eq("participant_id", data.participantId)
+      .eq("competition_id", data.targetCompetitionId)
+      .maybeSingle();
+
+    if (duplicate) {
+      return {
+        success: false,
+        error: `Peserta "${participantName}" sudah terdaftar pada cabang lomba "${targetComp.name}".`,
+      };
+    }
+
+    // 6. Validasi kuota lomba tujuan
+    if (targetComp.max_participants && targetComp.max_participants > 0) {
+      const { count } = await supabase
+        .from("registrations")
+        .select("id", { count: "exact", head: true })
+        .eq("competition_id", targetComp.id);
+
+      if ((count || 0) >= targetComp.max_participants) {
+        return {
+          success: false,
+          error: `Kuota cabang lomba "${targetComp.name}" sudah penuh (${count}/${targetComp.max_participants}).`,
+        };
+      }
+    }
+
+    // 7. Validasi berkas persyaratan jika lomba tujuan mewajibkan
+    const requireDocsMap = await getCompetitionRequireDocumentsMap();
+    const isDocRequired =
+      requireDocsMap[targetComp.id] ?? (targetComp.slug ? requireDocsMap[targetComp.slug] : undefined) ?? true;
+
+    if (isDocRequired) {
+      const { data: docs } = await supabase
+        .from("participant_documents")
+        .select("id, status")
+        .eq("participant_id", data.participantId);
+
+      const validDocs = (docs || []).filter((d) => d.status !== "tidak_valid");
+      if (validDocs.length === 0) {
+        return {
+          success: false,
+          error: `Gagal memindahkan: Cabang lomba "${targetComp.name}" mewajibkan unggah berkas persyaratan, sedangkan peserta belum mengunggah berkas yang valid.`,
+        };
+      }
+    }
+
+    // 8. Cek apakah peserta sudah memiliki lembar penilaian di lomba lama
+    let warningMsg: string | undefined = undefined;
+    const { data: existingAssessments } = await supabase
+      .from("assessments")
+      .select("id")
+      .eq("registration_id", regRow.id);
+
+    if (existingAssessments && existingAssessments.length > 0) {
+      warningMsg = `Perhatian: Peserta telah memiliki ${existingAssessments.length} lembar penilaian pada lomba lama ("${currentCompName}"). Pendaftaran berhasil dipindahkan ke "${targetComp.name}".`;
+    }
+
+    // 9. Eksekusi perpindahan lomba
+    const { error: updateErr } = await supabase
+      .from("registrations")
+      .update({
+        competition_id: targetComp.id,
+        // Hapus team_name jika pindah dari lomba kelompok ke lomba individu
+        ...(targetComp.type === "individu" ? { team_name: null } : {}),
+      })
+      .eq("id", regRow.id);
+
+    if (updateErr) {
+      return { success: false, error: updateErr.message };
+    }
+
+    // 10. Catat di Log Aktivitas & Riwayat Pindah Lomba
+    const logDesc = `Pindah lomba untuk "${participantName}": dari "${currentCompName}" ke "${targetComp.name}"${
+      data.reason?.trim() ? ` (Alasan: ${data.reason.trim()})` : ""
+    }.`;
+
+    try {
+      await supabase.from("activity_logs").insert({
+        action: "transfer_competition",
+        entity: "registrations",
+        entity_id: regRow.id,
+        description: logDesc,
+      });
+    } catch {}
+
+    await recordTransferHistory({
+      registrationId: regRow.id,
+      participantId: data.participantId,
+      participantName,
+      fromCompetitionId: currentCompId,
+      fromCompetitionName: currentCompName,
+      toCompetitionId: targetComp.id,
+      toCompetitionName: targetComp.name,
+      reason: data.reason?.trim() || null,
+      transferredAt: new Date().toISOString(),
+    });
+
+    revalidatePath("/dashboard/peserta");
+    revalidatePath(`/dashboard/peserta/${data.participantId}`);
+    revalidatePath("/dashboard/lomba");
+    revalidatePath("/dashboard/penilaian");
+    revalidatePath("/pemenang");
+    revalidatePath("/papan-skor");
+
+    return {
+      success: true,
+      warning: warningMsg,
+    };
+  } catch (err: unknown) {
+    console.error("Error transferParticipantCompetition:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal memindahkan cabang lomba peserta.",
     };
   }
 }

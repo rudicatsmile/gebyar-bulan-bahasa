@@ -763,6 +763,59 @@ export async function saveCompetitionEventFormatEntry(
   }
 }
 
+/**
+ * Helper to fetch all competition document requirement settings stored in event_settings (key: competition_require_documents)
+ */
+export async function getCompetitionRequireDocumentsMap(): Promise<Record<string, boolean>> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "competition_require_documents")
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object" && !Array.isArray(data.value)) {
+      return data.value as Record<string, boolean>;
+    }
+    return {};
+  } catch (err) {
+    console.error("Error getCompetitionRequireDocumentsMap:", err);
+    return {};
+  }
+}
+
+/**
+ * Helper to update a competition's document requirement setting in event_settings
+ */
+export async function saveCompetitionRequireDocumentEntry(
+  competitionId: string,
+  slug: string,
+  requireDocument: boolean
+): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+    const currentMap = await getCompetitionRequireDocumentsMap();
+    const nextMap = {
+      ...currentMap,
+      [competitionId]: requireDocument,
+      [slug]: requireDocument,
+    };
+
+    await supabase.from("event_settings").upsert(
+      {
+        key: "competition_require_documents",
+        value: nextMap,
+        description: "Pengaturan wajib upload berkas persyaratan untuk cabang lomba tertentu",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" }
+    );
+  } catch (err) {
+    console.error("Error saveCompetitionRequireDocumentEntry:", err);
+  }
+}
+
 export async function createCompetitionAdmin(data: {
   name: string;
   shortName: string;
@@ -772,6 +825,7 @@ export async function createCompetitionAdmin(data: {
   rules?: string;
   manuscripts?: string[] | string;
   eventFormats?: string[] | string;
+  requireDocument?: boolean;
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -845,6 +899,11 @@ export async function createCompetitionAdmin(data: {
       await saveCompetitionEventFormatEntry(inserted.id, finalSlug, list);
     }
 
+    // Simpan pengaturan wajib upload berkas
+    if (data.requireDocument !== undefined) {
+      await saveCompetitionRequireDocumentEntry(inserted.id, finalSlug, data.requireDocument);
+    }
+
     // Pasang 1 kriteria default berbobot 100% agar perhitungan penilaian langsung berfungsi
     await supabase.from("competition_criteria").insert({
       competition_id: inserted.id,
@@ -890,6 +949,7 @@ export async function updateCompetitionAdmin(data: {
   rules?: string;
   manuscripts?: string[] | string;
   eventFormats?: string[] | string;
+  requireDocument?: boolean;
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -944,6 +1004,11 @@ export async function updateCompetitionAdmin(data: {
             .map((m) => m.trim())
             .filter(Boolean);
       await saveCompetitionEventFormatEntry(data.id, data.slug, list);
+    }
+
+    // Simpan pengaturan wajib upload berkas
+    if (data.requireDocument !== undefined) {
+      await saveCompetitionRequireDocumentEntry(data.id, data.slug, data.requireDocument);
     }
 
     try {

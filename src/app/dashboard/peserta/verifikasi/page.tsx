@@ -19,12 +19,14 @@ import {
   Loader2,
   AlertCircle,
   RotateCcw,
+  Search,
 } from "lucide-react";
 
 export default function DashboardVerifikasiBerkasPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isMounted, setIsMounted] = React.useState(false);
+  const [search, setSearch] = React.useState("");
   const [processingId, setProcessingId] = React.useState<string | null>(null);
   const [selectedParticipant, setSelectedParticipant] = React.useState<Participant | null>(null);
   const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
@@ -59,7 +61,24 @@ export default function DashboardVerifikasiBerkasPage() {
     fetchParticipants();
   }, [fetchParticipants]);
 
-  const pendingList = participants.filter((p) => p.status === "menunggu_verifikasi");
+  // HANYA tampilkan peserta yang statusnya 'menunggu_verifikasi' DAN SUDAH UPLOAD BERKAS (documents.length > 0)
+  const pendingList = participants.filter(
+    (p) =>
+      p.status === "menunggu_verifikasi" &&
+      Array.isArray(p.documents) &&
+      p.documents.length > 0
+  );
+
+  const filteredPendingList = pendingList.filter((p) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      p.fullName.toLowerCase().includes(q) ||
+      p.registrationNumber.toLowerCase().includes(q) ||
+      p.institution.toLowerCase().includes(q) ||
+      (p.competitionName && p.competitionName.toLowerCase().includes(q))
+    );
+  });
 
   const handleApprove = async (id: string, participantName: string) => {
     setProcessingId(id);
@@ -298,14 +317,28 @@ export default function DashboardVerifikasiBerkasPage() {
           </div>
         )}
 
+        {/* Filter / Search Bar */}
+        {pendingList.length > 0 && (
+          <div className="flex items-center gap-2 p-3 rounded-xl border border-border bg-card">
+            <Search className="h-4 w-4 text-muted-foreground ml-1" />
+            <input
+              type="text"
+              placeholder="Cari nama peserta, nomor registrasi, instansi, atau cabang lomba..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
+            />
+          </div>
+        )}
+
         {isLoading && participants.length === 0 ? (
           <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-3">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-accent" />
             <p className="text-xs text-muted-foreground">Memuat antrean verifikasi...</p>
           </div>
-        ) : pendingList.length > 0 ? (
+        ) : filteredPendingList.length > 0 ? (
           <div className="space-y-4">
-            {pendingList.map((p) => {
+            {filteredPendingList.map((p) => {
               const isProcessingThis = processingId === p.id;
               return (
                 <Card key={p.id} className="p-6 space-y-4 border-accent/40 bg-accent/5">
