@@ -268,14 +268,21 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
   try {
     const supabase = await createClient();
 
-    // 1. Cari stand berdasarkan kode unik atau qr_token (case insensitive)
+    // 1. Cari stand berdasarkan kode unik atau qr_token/id (case insensitive)
     let stand: { id: string; name: string; points_per_visit: number; is_active: boolean } | null = null;
-    
-    const { data: dbStand } = await supabase
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanInput);
+
+    let query = supabase
       .from("stands")
-      .select("id, name, points_per_visit, is_active")
-      .or(`code.ilike.${cleanInput},qr_token.ilike.${cleanInput}`)
-      .maybeSingle();
+      .select("id, name, points_per_visit, is_active");
+
+    if (isUuid) {
+      query = query.or(`id.eq.${cleanInput},qr_token.eq.${cleanInput}`);
+    } else {
+      query = query.ilike("code", cleanInput);
+    }
+
+    const { data: dbStand } = await query.maybeSingle();
 
     if (dbStand) {
       stand = dbStand;
@@ -285,8 +292,20 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
         (s) => s.code.toUpperCase() === cleanInput.toUpperCase() || s.qrToken.toUpperCase() === cleanInput.toUpperCase()
       );
       if (matchedDummy) {
+        // Map to valid UUID format if id is in format 'stand-X'
+        const dummyUuidMap: Record<string, string> = {
+          "stand-1": "c0000000-0000-0000-0000-000000000001",
+          "stand-2": "c0000000-0000-0000-0000-000000000002",
+          "stand-3": "c0000000-0000-0000-0000-000000000003",
+          "stand-4": "c0000000-0000-0000-0000-000000000004",
+          "stand-5": "c0000000-0000-0000-0000-000000000005",
+          "stand-6": "c0000000-0000-0000-0000-000000000006",
+          "stand-7": "c0000000-0000-0000-0000-000000000007",
+          "stand-8": "c0000000-0000-0000-0000-000000000008",
+        };
+        const validId = dummyUuidMap[matchedDummy.id] || matchedDummy.id;
         stand = {
-          id: matchedDummy.id,
+          id: validId,
           name: matchedDummy.name,
           points_per_visit: matchedDummy.points,
           is_active: true,

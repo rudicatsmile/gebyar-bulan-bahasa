@@ -1070,7 +1070,7 @@ export const SCHEDULES: ScheduleItem[] = [
 // =====================================================================
 export const STANDS: Stand[] = [
   {
-    id: "stand-1",
+    id: "c0000000-0000-0000-0000-000000000001",
     name: "Stand Membaca Puisi",
     code: "PUISI01",
     competitionSlug: "membaca-puisi",
@@ -1081,7 +1081,7 @@ export const STANDS: Stand[] = [
     visitCount: 142,
   },
   {
-    id: "stand-2",
+    id: "c0000000-0000-0000-0000-000000000002",
     name: "Stand Film Pendek",
     code: "FILM02",
     competitionSlug: "film-pendek",
@@ -1092,7 +1092,7 @@ export const STANDS: Stand[] = [
     visitCount: 118,
   },
   {
-    id: "stand-3",
+    id: "c0000000-0000-0000-0000-000000000003",
     name: "Stand Teater Monolog",
     code: "MONO03",
     competitionSlug: "monolog",
@@ -1103,7 +1103,7 @@ export const STANDS: Stand[] = [
     visitCount: 95,
   },
   {
-    id: "stand-4",
+    id: "c0000000-0000-0000-0000-000000000004",
     name: "Stand Melukis Tas Kanvas",
     code: "KANVAS04",
     competitionSlug: "melukis-tas-kanvas",
@@ -1114,7 +1114,7 @@ export const STANDS: Stand[] = [
     visitCount: 165,
   },
   {
-    id: "stand-5",
+    id: "c0000000-0000-0000-0000-000000000005",
     name: "Stand MC Formal",
     code: "MCFRM05",
     competitionSlug: "mc-formal",
@@ -1125,7 +1125,7 @@ export const STANDS: Stand[] = [
     visitCount: 88,
   },
   {
-    id: "stand-6",
+    id: "c0000000-0000-0000-0000-000000000006",
     name: "Stand Tradisi Palang Pintu",
     code: "PALANG06",
     competitionSlug: "palang-pintu",
@@ -1136,7 +1136,7 @@ export const STANDS: Stand[] = [
     visitCount: 180,
   },
   {
-    id: "stand-7",
+    id: "c0000000-0000-0000-0000-000000000007",
     name: "Stand Vokal Grup",
     code: "VOKAL07",
     competitionSlug: "vokal-grup",
@@ -1147,7 +1147,7 @@ export const STANDS: Stand[] = [
     visitCount: 110,
   },
   {
-    id: "stand-8",
+    id: "c0000000-0000-0000-0000-000000000008",
     name: "Stand Media Center & Twibbon",
     code: "MEDIA08",
     competitionSlug: "media-center",
