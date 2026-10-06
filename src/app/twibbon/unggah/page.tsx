@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
@@ -27,6 +28,7 @@ import {
   RotateCcw,
   Move,
   Info,
+  UserCheck,
 } from "lucide-react";
 import { getActiveTwibbonTemplates, type TwibbonTemplate } from "@/app/actions/twibbon-template";
 import {
@@ -35,6 +37,8 @@ import {
   getTwibbonUploadQuota,
   type TwibbonUploadQuota,
 } from "@/app/actions/twibbon";
+import { getActiveInstitutions, type InstitutionItem } from "@/app/actions/institutions";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -115,6 +119,17 @@ export default function UnggahTwibbonPage() {
   const [regNumber, setRegNumber] = React.useState("");
   const [caption, setCaption] = React.useState("");
 
+  // Profil pengguna jika sudah login (diambil dari public.profiles)
+  const [userProfile, setUserProfile] = React.useState<{
+    id: string;
+    fullName: string;
+    institution: string;
+  } | null>(null);
+
+  // Master instansi untuk dropdown (diambil dari tabel event_settings key = 'master_institutions')
+  const [institutions, setInstitutions] = React.useState<InstitutionItem[]>([]);
+  const [loadingInstitutions, setLoadingInstitutions] = React.useState(true);
+
   // Submit
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -133,21 +148,91 @@ export default function UnggahTwibbonPage() {
     loadQuota().finally(() => setQuotaLoading(false));
   }, [loadQuota]);
 
-  // Load event name & templates
+  // Load event name, templates, master instansi, & user login profile
   React.useEffect(() => {
+    let cancelled = false;
+
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d) => {
-        if (d?.settings?.eventName) setEventName(d.settings.eventName);
+        if (!cancelled && d?.settings?.eventName) setEventName(d.settings.eventName);
       })
       .catch(() => {});
 
     setLoadingTemplates(true);
     getActiveTwibbonTemplates()
       .then((res) => {
-        if (res.success && res.data) setTemplates(res.data);
+        if (!cancelled && res.success && res.data) setTemplates(res.data);
       })
-      .finally(() => setLoadingTemplates(false));
+      .finally(() => {
+        if (!cancelled) setLoadingTemplates(false);
+      });
+
+    // 1. Ambil daftar master instansi dari event_settings key = 'master_institutions'
+    setLoadingInstitutions(true);
+    getActiveInstitutions()
+      .then((res) => {
+        if (!cancelled && res.success && res.institutions) {
+          setInstitutions(res.institutions);
+        }
+      })
+      .catch((err) => {
+        console.error("Gagal memuat master instansi:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingInstitutions(false);
+      });
+
+    // 2. Periksa apakah user sudah login, ambil profiles.full_name dan profiles.institution
+    const fetchUserProfile = async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user && !cancelled) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id, full_name, institution")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          if (profile && !cancelled) {
+            const resolvedName = profile.full_name || user.user_metadata?.full_name || "";
+            const resolvedInst = profile.institution || user.user_metadata?.institution || "";
+
+            setUserProfile({
+              id: profile.id,
+              fullName: resolvedName,
+              institution: resolvedInst,
+            });
+
+            if (resolvedName) setFullName(resolvedName);
+            if (resolvedInst) setInstitution(resolvedInst);
+
+            // Coba ambil nomor registrasi peserta jika ada
+            const { data: pData } = await supabase
+              .from("participants")
+              .select("registration_number")
+              .eq("user_id", user.id)
+              .maybeSingle();
+
+            if (pData?.registration_number && !cancelled) {
+              setRegNumber(pData.registration_number);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Gagal mengambil profil akun login:", err);
+      }
+    };
+
+    fetchUserProfile();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ── Step: Pilih Template ────────────────────────────────────────────────────
@@ -345,7 +430,10 @@ export default function UnggahTwibbonPage() {
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !institution || !caption) {
+    const effectiveName = (userProfile?.fullName || fullName).trim();
+    const effectiveInstitution = (userProfile?.institution || institution).trim();
+
+    if (!effectiveName || !effectiveInstitution || !caption.trim()) {
       setError("Silakan lengkapi seluruh kolom formulir.");
       return;
     }
@@ -368,7 +456,7 @@ export default function UnggahTwibbonPage() {
       // Unggah hasil komposisi lewat Server Action (service role).
       // Upload langsung dari browser dengan anon key ditolak RLS storage.objects.
       const slug =
-        fullName
+        effectiveName
           .replace(/[^A-Za-z0-9]+/g, "-")
           .replace(/^-+|-+$/g, "")
           .toLowerCase()
@@ -388,8 +476,8 @@ export default function UnggahTwibbonPage() {
 
       // Submit ke database
       const result = await submitTwibbon({
-        uploaderName: fullName,
-        uploaderInstitution: institution,
+        uploaderName: effectiveName,
+        uploaderInstitution: effectiveInstitution,
         caption,
         imageUrl: url,
         participantNumber: regNumber || undefined,
@@ -433,9 +521,14 @@ export default function UnggahTwibbonPage() {
     setZoom(1);
     setOffsetX(0);
     setOffsetY(0);
-    setFullName("");
-    setInstitution("");
-    setRegNumber("");
+    if (!userProfile) {
+      setFullName("");
+      setInstitution("");
+      setRegNumber("");
+    } else {
+      setFullName(userProfile.fullName);
+      setInstitution(userProfile.institution);
+    }
     setCaption("");
     setError("");
     setMergeError("");
@@ -928,20 +1021,77 @@ export default function UnggahTwibbonPage() {
                       </div>
                     )}
 
-                    <Input
-                      label="Nama Lengkap Pengunggah *"
-                      placeholder="Contoh: Ahmad Fauzan Ramadhan"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      required
-                    />
-                    <Input
-                      label="Asal Sekolah / Instansi / Kampus *"
-                      placeholder="Contoh: SMK Dinamika Pembangunan 2 Jakarta"
-                      value={institution}
-                      onChange={(e) => setInstitution(e.target.value)}
-                      required
-                    />
+                    {/* Jika user sudah berhasil login: Nama dan Instansi diambil dari profiles.full_name dan profiles.institution */}
+                    {userProfile ? (
+                      <div className="p-4 rounded-xl border border-border bg-card/70 space-y-3">
+                        <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-2 w-2 rounded-full bg-success shrink-0" />
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Data Pengunggah (Akun Terhubung)
+                            </p>
+                          </div>
+                          <Badge variant="success" className="text-[10px] shrink-0 font-medium">
+                            <UserCheck className="h-3 w-3 mr-1" />
+                            Terverifikasi
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <span className="block text-[11px] font-medium text-muted-foreground">
+                              Nama Lengkap Pengunggah
+                            </span>
+                            <span className="mt-0.5 block font-semibold text-foreground text-sm">
+                              {userProfile.fullName || "—"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[11px] font-medium text-muted-foreground">
+                              Asal Sekolah / Instansi / Kampus
+                            </span>
+                            <span className="mt-0.5 block font-semibold text-foreground text-sm">
+                              {userProfile.institution || "—"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-muted-foreground/80 italic">
+                          * Nama dan instansi otomatis menggunakan data akun yang sedang login (profiles).
+                        </p>
+                      </div>
+                    ) : (
+                      /* Jika belum login (tamu / publik): input nama dan dropdown instansi */
+                      <>
+                        <Input
+                          label="Nama Lengkap Pengunggah *"
+                          placeholder="Contoh: Ahmad Fauzan Ramadhan"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          required
+                        />
+
+                        <Select
+                          label="Asal Sekolah / Instansi / Kampus *"
+                          value={institution}
+                          onChange={(e) => setInstitution(e.target.value)}
+                          required
+                          helperText="Pilih nama sekolah, kampus, atau instansi Anda dari daftar resmi."
+                        >
+                          <option value="">
+                            {loadingInstitutions
+                              ? "-- Memuat daftar instansi... --"
+                              : "-- Pilih Asal Sekolah / Instansi / Kampus --"}
+                          </option>
+                          {institutions.map((inst) => (
+                            <option key={inst.id} value={inst.name}>
+                              {inst.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </>
+                    )}
+
                     <Input
                       label="Nomor Registrasi Peserta (Bila Mengikuti Lomba)"
                       placeholder="Contoh: GBB-PUI-014 (Opsional)"
@@ -971,7 +1121,10 @@ export default function UnggahTwibbonPage() {
                       <Button
                         size="sm"
                         className="text-xs"
-                        disabled={!fullName || !institution || !caption}
+                        disabled={
+                          !caption.trim() ||
+                          (!userProfile && (!fullName.trim() || !institution.trim()))
+                        }
                         onClick={() => { setError(""); setStep("preview"); }}
                       >
                         Lanjut ke Preview <ChevronRight className="h-3.5 w-3.5 ml-1" />
@@ -1016,8 +1169,8 @@ export default function UnggahTwibbonPage() {
                     {/* Data ringkasan */}
                     <div className="rounded-lg border border-border bg-muted/30 divide-y divide-border text-xs">
                       {[
-                        { label: "Nama", value: fullName },
-                        { label: "Instansi", value: institution },
+                        { label: "Nama", value: userProfile?.fullName || fullName },
+                        { label: "Instansi", value: userProfile?.institution || institution },
                         { label: "No. Registrasi", value: regNumber || "—" },
                         { label: "Caption", value: caption },
                         { label: "Template", value: selectedTemplate?.name || "Tanpa template" },

@@ -159,7 +159,7 @@ interface MemoryAttemptRow {
   createdAt: string;
 }
 
-const fallbackMemoryAttempts: MemoryAttemptRow[] = [
+let fallbackMemoryAttempts: MemoryAttemptRow[] = [
   {
     id: "att-demo-01",
     participantId: "demo-part-1",
@@ -681,6 +681,30 @@ export async function submitPuzzleAnswers(
   try {
     const supabase = createAdminClient();
 
+    // 0. Cek apakah peserta sudah pernah menyelesaikan challenge puzzle (Hanya 1x per peserta)
+    const { data: existingAttempt } = await supabase
+      .from("puzzle_attempts")
+      .select("id")
+      .eq("participant_id", parsed.data.participantId)
+      .maybeSingle();
+
+    if (existingAttempt) {
+      return {
+        success: false,
+        error: "Anda sudah pernah menyelesaikan challenge puzzle ini. Kesempatan hanya 1 kali per peserta.",
+      };
+    }
+
+    const memoryExisting = fallbackMemoryAttempts.find(
+      (a) => a.participantId === parsed.data.participantId
+    );
+    if (memoryExisting) {
+      return {
+        success: false,
+        error: "Anda sudah pernah menyelesaikan challenge puzzle ini. Kesempatan hanya 1 kali per peserta.",
+      };
+    }
+
     // 1. Ambil jawaban benar dari DB atau fallback
     const itemIds = parsed.data.answers.map((a) => a.itemId);
     let answerMap = new Map<string, { id: string; costume_name: string; region_name: string }>();
@@ -854,6 +878,7 @@ export async function getAdminPuzzleAttempts(): Promise<{
   success: boolean;
   attempts: Array<{
     id: string;
+    participantId: string;
     participantName: string;
     institution: string;
     totalItems: number;
@@ -876,6 +901,7 @@ export async function getAdminPuzzleAttempts(): Promise<{
     if (!error && data && data.length > 0) {
       const attempts = data.map((row: any) => ({
         id: row.id,
+        participantId: row.participant_id,
         participantName: row.participants?.full_name || "Peserta",
         institution: row.participants?.institution || "-",
         totalItems: row.total_items,
@@ -887,8 +913,135 @@ export async function getAdminPuzzleAttempts(): Promise<{
       return { success: true, attempts };
     }
 
-    return { success: true, attempts: fallbackMemoryAttempts };
+    return {
+      success: true,
+      attempts: fallbackMemoryAttempts.map((a) => ({
+        ...a,
+      })),
+    };
   } catch {
-    return { success: true, attempts: fallbackMemoryAttempts };
+    return {
+      success: true,
+      attempts: fallbackMemoryAttempts.map((a) => ({
+        ...a,
+      })),
+    };
+  }
+}
+
+// =============================================================================
+// ADMIN — RESET PARTICIPANT PUZZLE ATTEMPT (Memberikan kesempatan ulang)
+// =============================================================================
+export async function resetParticipantPuzzleAttempt(participantId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Hapus riwayat attempt peserta
+    const { error: dErr } = await supabase
+      .from("puzzle_attempts")
+      .delete()
+      .eq("participant_id", participantId);
+
+    if (dErr) {
+      console.warn("Notice: Gagal menghapus puzzle_attempts:", dErr);
+    }
+
+    // 2. Hapus transaksi poin puzzle jika ada
+    await supabase
+      .from("point_transactions")
+      .delete()
+      .eq("participant_id", participantId)
+      .ilike("note", "%Challenge Puzzle Baju Daerah%");
+
+    // 3. Hapus dari fallback memory
+    fallbackMemoryAttempts = fallbackMemoryAttempts.filter(
+      (a) => a.participantId !== participantId
+    );
+
+    safeRevalidate("/dashboard/challenge/puzzle");
+    safeRevalidate("/peserta/challenge/puzzle");
+    safeRevalidate("/peserta/challenge");
+    safeRevalidate("/peserta/riwayat-poin");
+    safeRevalidate("/peserta");
+    safeRevalidate("/leaderboard");
+    safeRevalidate("/monitor");
+
+    return { success: true };
+  } catch (err: unknown) {
+    fallbackMemoryAttempts = fallbackMemoryAttempts.filter(
+      (a) => a.participantId !== participantId
+    );
+    safeRevalidate("/dashboard/challenge/puzzle");
+    safeRevalidate("/peserta/challenge/puzzle");
+    safeRevalidate("/peserta/challenge");
+    return { success: true };
+  }
+}
+
+// =============================================================================
+// PESERTA — CHECK IF PARTICIPANT ALREADY COMPLETED PUZZLE
+// =============================================================================
+export async function checkParticipantPuzzleAttempt(participantId: string): Promise<{
+  hasAttempted: boolean;
+  attempt?: PuzzleAttemptResult;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("puzzle_attempts")
+      .select("id, total_items, correct_count, score, time_seconds, created_at")
+      .eq("participant_id", participantId)
+      .order("created_at", { ascending: false })
+      .maybeSingle();
+
+    if (data) {
+      return {
+        hasAttempted: true,
+        attempt: {
+          id: data.id,
+          totalItems: data.total_items,
+          correctCount: data.correct_count,
+          score: data.score,
+          timeSeconds: data.time_seconds,
+          createdAt: data.created_at,
+        },
+      };
+    }
+
+    const mem = fallbackMemoryAttempts.find((a) => a.participantId === participantId);
+    if (mem) {
+      return {
+        hasAttempted: true,
+        attempt: {
+          id: mem.id,
+          totalItems: mem.totalItems,
+          correctCount: mem.correctCount,
+          score: mem.score,
+          timeSeconds: mem.timeSeconds,
+          createdAt: mem.createdAt,
+        },
+      };
+    }
+
+    return { hasAttempted: false };
+  } catch {
+    const mem = fallbackMemoryAttempts.find((a) => a.participantId === participantId);
+    if (mem) {
+      return {
+        hasAttempted: true,
+        attempt: {
+          id: mem.id,
+          totalItems: mem.totalItems,
+          correctCount: mem.correctCount,
+          score: mem.score,
+          timeSeconds: mem.timeSeconds,
+          createdAt: mem.createdAt,
+        },
+      };
+    }
+    return { hasAttempted: false };
   }
 }

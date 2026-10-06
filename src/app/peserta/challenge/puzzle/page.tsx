@@ -29,7 +29,7 @@ import {
 } from "@/app/actions/puzzle";
 import { cn } from "@/lib/utils";
 
-type GamePhase = "loading" | "ready" | "playing" | "result";
+type GamePhase = "loading" | "ready" | "playing" | "result" | "completed";
 
 interface CostumeData {
   id: string;
@@ -95,8 +95,27 @@ export default function PesertaPuzzlePage() {
   const loadPuzzle = React.useCallback(async () => {
     setPhase("loading");
     try {
-      const res = await getActivePuzzleItems();
-      if (res.success && res.costumes.length > 0) {
+      const [res, historyRes] = await Promise.all([
+        getActivePuzzleItems(),
+        participant?.participantRowId
+          ? getMyPuzzleAttempts(participant.participantRowId)
+          : Promise.resolve({ success: true, attempts: [] as PuzzleAttemptResult[] }),
+      ]);
+
+      if (historyRes.success && historyRes.attempts && historyRes.attempts.length > 0) {
+        const latest = historyRes.attempts[0];
+        setHistory(historyRes.attempts);
+        setResultScore(latest.score);
+        setResultCorrect(latest.correctCount);
+        setResultTotal(latest.totalItems);
+        setTimer(latest.timeSeconds || 0);
+        if (res.success && res.costumes) {
+          setCostumes(res.costumes);
+          setRegions(res.regions);
+          setTimeLimit(res.timeLimitSeconds ?? 60);
+        }
+        setPhase("completed");
+      } else if (res.success && res.costumes.length > 0) {
         setCostumes(res.costumes);
         setRegions(res.regions);
         const limit = res.timeLimitSeconds ?? 60;
@@ -111,13 +130,15 @@ export default function PesertaPuzzlePage() {
     } catch {
       setPhase("ready");
     }
-  }, []);
+  }, [participant?.participantRowId]);
 
   const loadHistory = React.useCallback(async () => {
     if (!participant?.participantRowId) return;
     try {
       const res = await getMyPuzzleAttempts(participant.participantRowId);
-      if (res.success) setHistory(res.attempts);
+      if (res.success && res.attempts) {
+        setHistory(res.attempts);
+      }
     } catch {
       // ignore
     }
@@ -837,6 +858,19 @@ export default function PesertaPuzzlePage() {
         {/* ============ PHASE: RESULT ============ */}
         {phase === "result" && (
           <div className="space-y-6">
+            {/* Status Banner */}
+            <div className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 flex items-start gap-3 max-w-lg mx-auto">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+              <div className="space-y-0.5 text-left">
+                <h3 className="font-heading text-sm font-bold text-foreground">
+                  Challenge Selesai! Poin Berhasil Ditambahkan
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Terima kasih telah berpartisipasi! Setiap peserta hanya memiliki <strong>1 kali kesempatan</strong> pada challenge puzzle ini.
+                </p>
+              </div>
+            </div>
+
             {/* Score summary */}
             <Card className="p-8 text-center space-y-4 max-w-lg mx-auto">
               <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto">
@@ -884,10 +918,19 @@ export default function PesertaPuzzlePage() {
                   </p>
                 </div>
               </div>
-              <Button onClick={handleRetry} variant="outline" className="text-xs gap-1.5 cursor-pointer">
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span>Main Lagi</span>
-              </Button>
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                <Link href="/peserta/challenge">
+                  <Button variant="outline" size="sm" className="text-xs gap-1.5 cursor-pointer">
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>Kembali ke Daftar Challenge</span>
+                  </Button>
+                </Link>
+                <Link href="/peserta">
+                  <Button variant="accent" size="sm" className="text-xs gap-1.5 cursor-pointer">
+                    <span>Lihat Beranda Peserta</span>
+                  </Button>
+                </Link>
+              </div>
             </Card>
 
             {/* Answer details */}
@@ -927,6 +970,80 @@ export default function PesertaPuzzlePage() {
                 </Card>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ============ PHASE: COMPLETED (SUDAH PERNAH MENGERJAKAN) ============ */}
+        {phase === "completed" && (
+          <div className="space-y-6 max-w-lg mx-auto">
+            {/* Status Banner */}
+            <div className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+              <div className="space-y-0.5 text-left">
+                <h3 className="font-heading text-sm font-bold text-foreground">
+                  Anda Sudah Menyelesaikan Challenge Ini
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Setiap peserta hanya berhak mencoba <strong>1 kali</strong>. Poin dari percobaan Anda telah resmi tercatat di sistem dan leaderboard.
+                </p>
+              </div>
+            </div>
+
+            {/* Score Summary Card */}
+            <Card className="p-6 sm:p-8 text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto">
+                <Trophy className="h-8 w-8 text-accent" />
+              </div>
+              <div className="space-y-1">
+                <Badge variant="gold" className="text-xs mb-1">
+                  Percobaan Selesai (1x Digunakan)
+                </Badge>
+                <h2 className="font-heading text-xl sm:text-2xl font-bold text-foreground">
+                  Riwayat Skor Puzzle Anda
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Waktu pengerjaan: <strong className="text-foreground">{formatTime(timer)}</strong>
+                  {timeLimit > 0 && ` (dari batas ${timeLimit} detik)`}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-6 sm:gap-8 pt-2">
+                <div className="text-center">
+                  <p className="text-3xl font-bold font-mono text-accent">{resultCorrect}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Benar
+                  </p>
+                </div>
+                <div className="w-px h-10 bg-border" />
+                <div className="text-center">
+                  <p className="text-3xl font-bold font-mono text-foreground">{resultTotal}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Total Soal
+                  </p>
+                </div>
+                <div className="w-px h-10 bg-border" />
+                <div className="text-center">
+                  <p className="text-3xl font-bold font-mono text-accent">+{resultScore}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    Poin Diperoleh
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 flex flex-wrap items-center justify-center gap-2">
+                <Link href="/peserta/challenge">
+                  <Button variant="outline" size="sm" className="text-xs gap-1.5 cursor-pointer">
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>Kembali ke Daftar Challenge</span>
+                  </Button>
+                </Link>
+                <Link href="/peserta">
+                  <Button variant="accent" size="sm" className="text-xs gap-1.5 cursor-pointer">
+                    <span>Lihat Beranda Peserta</span>
+                  </Button>
+                </Link>
+              </div>
+            </Card>
           </div>
         )}
 

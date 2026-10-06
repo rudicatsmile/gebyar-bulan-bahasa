@@ -371,11 +371,29 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
     // Penyebab error awal: policy INSERT pada public.twibbons tidak mengizinkan
     // peran `anon`, sehingga insert dari halaman publik ditolak RLS (42501).
     // user_id dipaksa sesuai sesi agar tidak bisa memalsukan milik user lain.
+    let finalUploaderName = parsed.data.uploaderName;
+    let finalUploaderInstitution = parsed.data.uploaderInstitution;
+
+    if (user) {
+      const { data: profile } = await adminClient
+        .from("profiles")
+        .select("full_name, institution")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile?.full_name?.trim()) {
+        finalUploaderName = profile.full_name.trim();
+      }
+      if (profile?.institution?.trim()) {
+        finalUploaderInstitution = profile.institution.trim();
+      }
+    }
+
     const { data: twibbon, error } = await adminClient
       .from("twibbons")
       .insert({
-        uploader_name: parsed.data.uploaderName,
-        uploader_institution: parsed.data.uploaderInstitution,
+        uploader_name: finalUploaderName,
+        uploader_institution: finalUploaderInstitution,
         caption: parsed.data.caption || null,
         image_url: parsed.data.imageUrl,
         user_id: user?.id || null,

@@ -39,6 +39,7 @@ import {
   Upload,
   X,
   Clock,
+  RotateCcw,
 } from "lucide-react";
 import {
   getAdminPuzzleItems,
@@ -47,6 +48,7 @@ import {
   deletePuzzleItem,
   togglePuzzleItemActive,
   getAdminPuzzleAttempts,
+  resetParticipantPuzzleAttempt,
   uploadPuzzleCostumeImage,
   getPuzzleConfig,
   updatePuzzleConfig,
@@ -56,6 +58,7 @@ import { cn } from "@/lib/utils";
 
 interface AttemptRow {
   id: string;
+  participantId: string;
   participantName: string;
   institution: string;
   totalItems: number;
@@ -81,6 +84,31 @@ export default function DashboardPuzzlePage() {
   const [dialogMode, setDialogMode] = React.useState<"create" | "edit" | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<PuzzleItem | null>(null);
   const [saving, setSaving] = React.useState(false);
+
+  // Reset attempt state
+  const [resetTarget, setResetTarget] = React.useState<AttemptRow | null>(null);
+  const [resetting, setResetting] = React.useState(false);
+  const [resetSuccessMessage, setResetSuccessMessage] = React.useState<string | null>(null);
+
+  const handleConfirmReset = async () => {
+    if (!resetTarget || !resetTarget.participantId) return;
+    try {
+      setResetting(true);
+      const res = await resetParticipantPuzzleAttempt(resetTarget.participantId);
+      if (res.success) {
+        setResetSuccessMessage(
+          `Kesempatan bermain untuk ${resetTarget.participantName} berhasil direset!`
+        );
+        setTimeout(() => setResetSuccessMessage(null), 3500);
+        setResetTarget(null);
+        await loadData();
+      }
+    } catch (err) {
+      console.error("Gagal mereset percobaan peserta:", err);
+    } finally {
+      setResetting(false);
+    }
+  };
 
   // Form states
   const [formCostume, setFormCostume] = React.useState("");
@@ -552,53 +580,74 @@ export default function DashboardPuzzlePage() {
         ) : (
           /* ============ TAB: PERCOBAAN PESERTA ============ */
           attempts.length > 0 ? (
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12 text-center">#</TableHead>
-                    <TableHead>Peserta</TableHead>
-                    <TableHead className="text-center">Benar / Total</TableHead>
-                    <TableHead className="text-center">Skor</TableHead>
-                    <TableHead className="text-center">Waktu</TableHead>
-                    <TableHead className="text-right">Tanggal</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {attempts.map((att, idx) => (
-                    <TableRow key={att.id}>
-                      <TableCell className="text-center font-mono text-xs">
-                        {idx + 1}
-                      </TableCell>
-                      <TableCell>
-                        <strong className="text-foreground text-xs sm:text-sm block">
-                          {att.participantName}
-                        </strong>
-                        <span className="text-[11px] text-muted-foreground">
-                          {att.institution}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center font-mono text-xs">
-                        <span className="text-accent font-bold">{att.correctCount}</span>
-                        <span className="text-muted-foreground"> / {att.totalItems}</span>
-                      </TableCell>
-                      <TableCell className="text-center font-mono font-bold text-accent text-sm">
-                        {att.score}
-                      </TableCell>
-                      <TableCell className="text-center font-mono text-xs text-muted-foreground">
-                        {att.timeSeconds ? `${att.timeSeconds}s` : "—"}
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">
-                        {new Date(att.createdAt).toLocaleDateString("id-ID", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </TableCell>
+            <div className="space-y-3">
+              {resetSuccessMessage && (
+                <div className="flex items-center gap-2 p-3 rounded-lg border border-success/40 bg-success/10 text-success text-xs font-medium">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{resetSuccessMessage}</span>
+                </div>
+              )}
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12 text-center">#</TableHead>
+                      <TableHead>Peserta</TableHead>
+                      <TableHead className="text-center">Benar / Total</TableHead>
+                      <TableHead className="text-center">Skor</TableHead>
+                      <TableHead className="text-center">Waktu</TableHead>
+                      <TableHead className="text-center">Tanggal</TableHead>
+                      <TableHead className="text-right w-24">Aksi</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {attempts.map((att, idx) => (
+                      <TableRow key={att.id}>
+                        <TableCell className="text-center font-mono text-xs">
+                          {idx + 1}
+                        </TableCell>
+                        <TableCell>
+                          <strong className="text-foreground text-xs sm:text-sm block">
+                            {att.participantName}
+                          </strong>
+                          <span className="text-[11px] text-muted-foreground">
+                            {att.institution}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center font-mono text-xs">
+                          <span className="text-accent font-bold">{att.correctCount}</span>
+                          <span className="text-muted-foreground"> / {att.totalItems}</span>
+                        </TableCell>
+                        <TableCell className="text-center font-mono font-bold text-accent text-sm">
+                          {att.score}
+                        </TableCell>
+                        <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                          {att.timeSeconds ? `${att.timeSeconds}s` : "—"}
+                        </TableCell>
+                        <TableCell className="text-center text-xs text-muted-foreground">
+                          {new Date(att.createdAt).toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setResetTarget(att)}
+                            className="h-8 px-2.5 text-xs text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                            title="Reset kesempatan agar peserta dapat bermain kembali"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                            <span>Reset</span>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           ) : (
             <div className="text-center py-16 p-8 border border-dashed border-border rounded-xl bg-card space-y-2">
@@ -847,6 +896,54 @@ export default function DashboardPuzzlePage() {
               </>
             ) : (
               "Hapus Soal"
+            )}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* ============ DIALOG: RESET ATTEMPT CONFIRM ============ */}
+      <Dialog
+        open={resetTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !resetting) setResetTarget(null);
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Reset Kesempatan Puzzle Peserta</DialogTitle>
+          <DialogDescription>
+            Apakah Anda yakin ingin mereset kesempatan pengerjaan puzzle untuk peserta{" "}
+            <strong>&quot;{resetTarget?.participantName}&quot;</strong>?
+            <br />
+            Data pengerjaan serta transaksi poin puzzle terkait akan dihapus, sehingga peserta dapat mengerjakan kembali (1 kali kesempatan).
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setResetTarget(null)}
+            disabled={resetting}
+          >
+            Batal
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleConfirmReset}
+            disabled={isMounted ? resetting : false}
+            className="gap-1.5"
+            suppressHydrationWarning
+          >
+            {resetting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                <span>Mereset...</span>
+              </>
+            ) : (
+              <>
+                <RotateCcw className="h-4 w-4" />
+                <span>Ya, Reset Kesempatan</span>
+              </>
             )}
           </Button>
         </DialogFooter>

@@ -9,8 +9,18 @@ import {
   getParticipantChallenges,
   type ParticipantChallengeItem,
 } from "@/app/actions/challenges";
+import { checkParticipantPuzzleAttempt } from "@/app/actions/puzzle";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
-import { Sparkles, QrCode, ArrowLeft, Puzzle, AlertCircle, Camera } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Sparkles,
+  QrCode,
+  ArrowLeft,
+  Puzzle,
+  AlertCircle,
+  Camera,
+  CheckCircle2,
+} from "lucide-react";
 
 // Tombol aksi disesuaikan dengan tipe challenge dan alur yang tersedia bagi peserta.
 function getChallengeAction(ch: ParticipantChallengeItem): { href: string; label: string } | null {
@@ -32,31 +42,44 @@ interface ChallengeItemProps {
   href: string | null;
   actionLabel: string;
   icon?: React.ComponentType<{ className?: string }>;
+  badge?: React.ReactNode;
+  variant?: "accent" | "outline" | "default";
 }
 
 /**
  * Satu struktur untuk semua item challenge: nama + tombol aksi.
  * Tombol selebar kartu dengan tinggi 44px agar nyaman disentuh di HP.
  */
-function ChallengeItem({ title, meta, href, actionLabel, icon: Icon }: ChallengeItemProps) {
+function ChallengeItem({
+  title,
+  meta,
+  href,
+  actionLabel,
+  icon: Icon,
+  badge,
+  variant = "accent",
+}: ChallengeItemProps) {
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card className="flex flex-col justify-between gap-3 p-4">
       <div className="min-w-0">
-        <h3 className="font-heading text-sm sm:text-base font-semibold leading-snug text-foreground line-clamp-2">
-          {title}
-        </h3>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-heading text-sm sm:text-base font-semibold leading-snug text-foreground line-clamp-2">
+            {title}
+          </h3>
+          {badge}
+        </div>
         {meta ? <p className="mt-1 text-xs text-muted-foreground">{meta}</p> : null}
       </div>
 
       {href ? (
-        <Link href={href} className="block">
-          <Button variant="accent" className="h-11 w-full text-sm">
+        <Link href={href} className="block mt-auto">
+          <Button variant={variant} className="h-11 w-full text-sm">
             {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
             <span className="truncate">{actionLabel}</span>
           </Button>
         </Link>
       ) : (
-        <Button variant="outline" className="h-11 w-full text-sm" disabled>
+        <Button variant="outline" className="h-11 w-full text-sm mt-auto" disabled>
           <span className="truncate">{actionLabel}</span>
         </Button>
       )}
@@ -70,6 +93,29 @@ export default function PesertaChallengeListPage() {
   const [challenges, setChallenges] = React.useState<ParticipantChallengeItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [puzzleAttempt, setPuzzleAttempt] = React.useState<{
+    hasAttempted: boolean;
+    score?: number;
+  } | null>(null);
+
+  // Periksa apakah peserta sudah pernah menyelesaikan challenge puzzle
+  React.useEffect(() => {
+    if (!participant?.id) return;
+    checkParticipantPuzzleAttempt(participant.id)
+      .then((res) => {
+        if (res.hasAttempted) {
+          setPuzzleAttempt({
+            hasAttempted: true,
+            score: res.attempt?.score ?? 0,
+          });
+        } else {
+          setPuzzleAttempt({ hasAttempted: false });
+        }
+      })
+      .catch(() => {
+        setPuzzleAttempt({ hasAttempted: false });
+      });
+  }, [participant?.id]);
 
   // challenge yang tampil di sini bersumber dari tabel `challenges` yang sama
   // dengan halaman admin /dashboard/challenge
@@ -160,10 +206,26 @@ export default function PesertaChallengeListPage() {
               />
               <ChallengeItem
                 title="Challenge Puzzle: Cocokkan Baju Daerah"
-                meta="+10 poin tiap jawaban benar"
+                meta={
+                  puzzleAttempt?.hasAttempted
+                    ? `Perolehan Skor: ${puzzleAttempt.score ?? 0} Poin (1x Percobaan Selesai)`
+                    : "+10 poin tiap jawaban benar"
+                }
                 href="/peserta/challenge/puzzle"
-                actionLabel="Mulai Main Puzzle"
-                icon={Puzzle}
+                actionLabel={
+                  puzzleAttempt?.hasAttempted
+                    ? "Lihat Hasil Percobaan"
+                    : "Mulai Main Puzzle"
+                }
+                icon={puzzleAttempt?.hasAttempted ? CheckCircle2 : Puzzle}
+                variant={puzzleAttempt?.hasAttempted ? "outline" : "accent"}
+                badge={
+                  puzzleAttempt?.hasAttempted ? (
+                    <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                      Sudah Selesai
+                    </Badge>
+                  ) : null
+                }
               />
               <ChallengeItem
                 title="Challenge QR Huruf: Jelajah Aksara & Susun Kata"
