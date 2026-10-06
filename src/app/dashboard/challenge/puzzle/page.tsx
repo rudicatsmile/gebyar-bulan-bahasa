@@ -38,6 +38,7 @@ import {
   ImageIcon,
   Upload,
   X,
+  Clock,
 } from "lucide-react";
 import {
   getAdminPuzzleItems,
@@ -47,6 +48,8 @@ import {
   togglePuzzleItemActive,
   getAdminPuzzleAttempts,
   uploadPuzzleCostumeImage,
+  getPuzzleConfig,
+  updatePuzzleConfig,
   type PuzzleItem,
 } from "@/app/actions/puzzle";
 import { cn } from "@/lib/utils";
@@ -68,6 +71,11 @@ export default function DashboardPuzzlePage() {
   const [items, setItems] = React.useState<PuzzleItem[]>([]);
   const [attempts, setAttempts] = React.useState<AttemptRow[]>([]);
   const [tab, setTab] = React.useState<"items" | "attempts">("items");
+
+  // Configuration (Time limit) states
+  const [timeLimit, setTimeLimit] = React.useState<number>(60);
+  const [savingConfig, setSavingConfig] = React.useState(false);
+  const [configSavedMessage, setConfigSavedMessage] = React.useState<string | null>(null);
 
   // Dialog states
   const [dialogMode, setDialogMode] = React.useState<"create" | "edit" | null>(null);
@@ -94,12 +102,16 @@ export default function DashboardPuzzlePage() {
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const [itemsRes, attemptsRes] = await Promise.all([
+      const [itemsRes, attemptsRes, configRes] = await Promise.all([
         getAdminPuzzleItems(),
         getAdminPuzzleAttempts(),
+        getPuzzleConfig(),
       ]);
       if (itemsRes.success) setItems(itemsRes.items);
       if (attemptsRes.success) setAttempts(attemptsRes.attempts);
+      if (configRes.success && configRes.timeLimitSeconds !== undefined) {
+        setTimeLimit(configRes.timeLimitSeconds);
+      }
     } catch (err) {
       console.error("Gagal memuat data puzzle:", err);
     } finally {
@@ -110,6 +122,22 @@ export default function DashboardPuzzlePage() {
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSavingConfig(true);
+      const res = await updatePuzzleConfig(timeLimit);
+      if (res.success) {
+        setConfigSavedMessage("Batas waktu berhasil disimpan!");
+        setTimeout(() => setConfigSavedMessage(null), 3500);
+      }
+    } catch (err) {
+      console.error("Gagal menyimpan batas waktu:", err);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -317,6 +345,64 @@ export default function DashboardPuzzlePage() {
             </p>
           </Card>
         </div>
+
+        {/* Time Limit Setting Card */}
+        <Card className="p-4 sm:p-5 border border-border/80 bg-card/60 backdrop-blur-xs">
+          <form onSubmit={handleSaveConfig} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-accent" />
+                <h3 className="font-heading text-sm font-bold text-foreground">
+                  Batas Waktu Pengerjaan Puzzle
+                </h3>
+                <Badge variant={timeLimit > 0 ? "gold" : "default"} className="text-[10px]">
+                  {timeLimit > 0 ? `${timeLimit} Detik` : "Tanpa Batas (Unlimited)"}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Tentukan durasi pengerjaan bagi peserta. Masukkan <strong>0</strong> untuk mode tanpa batas waktu (unlimited).
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <div className="relative w-36">
+                <Input
+                  type="number"
+                  min={0}
+                  max={3600}
+                  step={5}
+                  value={timeLimit}
+                  onChange={(e) => setTimeLimit(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="text-center font-mono font-bold pr-12 text-sm h-9"
+                  required
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                  detik
+                </span>
+              </div>
+
+              <Button
+                type="submit"
+                size="sm"
+                disabled={savingConfig}
+                className="text-xs gap-1.5 cursor-pointer shrink-0"
+              >
+                {savingConfig ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                <span>{savingConfig ? "Menyimpan..." : "Simpan Durasi"}</span>
+              </Button>
+            </div>
+          </form>
+          {configSavedMessage && (
+            <p className="text-xs text-emerald-500 font-medium mt-2.5 flex items-center gap-1.5 animate-in fade-in">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>{configSavedMessage}</span>
+            </p>
+          )}
+        </Card>
 
         {/* Tab Switcher */}
         <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">

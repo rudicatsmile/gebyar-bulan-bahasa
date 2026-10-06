@@ -513,14 +513,85 @@ export async function togglePuzzleItemActive(
 }
 
 // =============================================================================
+// PUZZLE CONFIGURATION (BATAS WAKTU)
+// =============================================================================
+let fallbackMemoryTimeLimit = 60;
+
+export async function getPuzzleConfig(): Promise<{
+  success: boolean;
+  timeLimitSeconds: number;
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "puzzle_time_limit_seconds")
+      .maybeSingle();
+
+    if (!error && data && data.value !== null && data.value !== undefined) {
+      let val = typeof data.value === "number" ? data.value : Number(data.value);
+      if (typeof data.value === "object" && data.value !== null && (data.value as any).timeLimitSeconds !== undefined) {
+        val = Number((data.value as any).timeLimitSeconds);
+      }
+      if (!isNaN(val) && val >= 0) {
+        return { success: true, timeLimitSeconds: val };
+      }
+    }
+    return { success: true, timeLimitSeconds: fallbackMemoryTimeLimit };
+  } catch {
+    return { success: true, timeLimitSeconds: fallbackMemoryTimeLimit };
+  }
+}
+
+export async function updatePuzzleConfig(timeLimitSeconds: number): Promise<{
+  success: boolean;
+  timeLimitSeconds?: number;
+  error?: string;
+}> {
+  const parsedTime = Math.max(0, Math.floor(Number(timeLimitSeconds) || 0));
+  fallbackMemoryTimeLimit = parsedTime;
+
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("event_settings")
+      .upsert({
+        key: "puzzle_time_limit_seconds",
+        value: parsedTime,
+        description: "Batas waktu pengerjaan challenge puzzle baju daerah dalam detik (0 = tanpa batas waktu)",
+        updated_at: new Date().toISOString(),
+      });
+
+    if (error) {
+      console.warn("Notice: Gagal menyimpan puzzle_time_limit_seconds ke event_settings:", error);
+    }
+
+    safeRevalidate("/dashboard/challenge/puzzle");
+    safeRevalidate("/peserta/challenge/puzzle");
+    safeRevalidate("/peserta/challenge");
+    return { success: true, timeLimitSeconds: parsedTime };
+  } catch (err: unknown) {
+    safeRevalidate("/dashboard/challenge/puzzle");
+    safeRevalidate("/peserta/challenge/puzzle");
+    return { success: true, timeLimitSeconds: parsedTime };
+  }
+}
+
+// =============================================================================
 // PESERTA — GET ACTIVE PUZZLE ITEMS (shuffled, tanpa jawaban terekspos)
 // =============================================================================
 export async function getActivePuzzleItems(): Promise<{
   success: boolean;
   costumes: Array<{ id: string; costumeName: string; costumeImageUrl: string | null; hint: string | null }>;
   regions: string[];
+  timeLimitSeconds: number;
   error?: string;
 }> {
+  const config = await getPuzzleConfig();
+  const timeLimitSeconds = config.timeLimitSeconds ?? 60;
+
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -541,7 +612,7 @@ export async function getActivePuzzleItems(): Promise<{
         .map((row) => row.region_name)
         .sort(() => Math.random() - 0.5);
 
-      return { success: true, costumes, regions };
+      return { success: true, costumes, regions, timeLimitSeconds };
     }
 
     // Fallback dari memory
@@ -556,7 +627,7 @@ export async function getActivePuzzleItems(): Promise<{
       .map((i) => i.regionName)
       .sort(() => Math.random() - 0.5);
 
-    return { success: true, costumes, regions };
+    return { success: true, costumes, regions, timeLimitSeconds };
   } catch {
     const active = fallbackMemoryItems.filter((i) => i.isActive);
     const costumes = active.map((i) => ({
@@ -569,7 +640,7 @@ export async function getActivePuzzleItems(): Promise<{
       .map((i) => i.regionName)
       .sort(() => Math.random() - 0.5);
 
-    return { success: true, costumes, regions };
+    return { success: true, costumes, regions, timeLimitSeconds };
   }
 }
 
@@ -580,11 +651,11 @@ const SubmitPuzzleSchema = z.object({
   participantId: z.string().uuid("ID Peserta tidak valid"),
   answers: z.array(
     z.object({
-      itemId: z.string().uuid(),
-      selectedRegion: z.string().min(1),
+      itemId: z.string(),
+      selectedRegion: z.string().default(""),
     })
   ),
-  timeSeconds: z.number().int().optional(),
+  timeSeconds: z.number().int().nullable().optional(),
 });
 
 export async function submitPuzzleAnswers(

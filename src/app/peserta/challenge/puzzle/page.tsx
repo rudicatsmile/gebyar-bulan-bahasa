@@ -56,8 +56,27 @@ export default function PesertaPuzzlePage() {
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
   
   const [timer, setTimer] = React.useState(0);
+  const [timeLimit, setTimeLimit] = React.useState<number>(60);
+  const [timeRemaining, setTimeRemaining] = React.useState<number>(60);
+  const [isTimeoutSubmitted, setIsTimeoutSubmitted] = React.useState<boolean>(false);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+
+  // References to prevent stale closures during timeout auto-submit
+  const answersRef = React.useRef(answers);
+  React.useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  const costumesRef = React.useRef(costumes);
+  React.useEffect(() => {
+    costumesRef.current = costumes;
+  }, [costumes]);
+
+  const timeRemainingRef = React.useRef(timeRemaining);
+  React.useEffect(() => {
+    timeRemainingRef.current = timeRemaining;
+  }, [timeRemaining]);
 
   // Drag & Tap-to-Place state
   const [draggedCostumeId, setDraggedCostumeId] = React.useState<string | null>(null);
@@ -80,6 +99,9 @@ export default function PesertaPuzzlePage() {
       if (res.success && res.costumes.length > 0) {
         setCostumes(res.costumes);
         setRegions(res.regions);
+        const limit = res.timeLimitSeconds ?? 60;
+        setTimeLimit(limit);
+        setTimeRemaining(limit);
         setPhase("ready");
       } else {
         setCostumes([]);
@@ -109,17 +131,6 @@ export default function PesertaPuzzlePage() {
     loadHistory();
   }, [loadHistory]);
 
-  const startGame = () => {
-    setAnswers({});
-    setSelectedCostumeId(null);
-    setDraggedCostumeId(null);
-    setTimer(0);
-    setPhase("playing");
-    timerRef.current = setInterval(() => {
-      setTimer((prev) => prev + 1);
-    }, 1000);
-  };
-
   const stopTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -127,9 +138,40 @@ export default function PesertaPuzzlePage() {
     }
   };
 
+  const startGame = () => {
+    setAnswers({});
+    setSelectedCostumeId(null);
+    setDraggedCostumeId(null);
+    setIsTimeoutSubmitted(false);
+    setTimer(0);
+    const limit = timeLimit;
+    setTimeRemaining(limit);
+    setPhase("playing");
+
+    timerRef.current = setInterval(() => {
+      setTimer((prev) => prev + 1);
+      if (limit > 0) {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
+    }, 1000);
+  };
+
   React.useEffect(() => {
     return () => stopTimer();
   }, []);
+
+  // Auto-submit saat waktu habis
+  React.useEffect(() => {
+    if (phase === "playing" && timeLimit > 0 && timeRemaining === 0 && !submitting) {
+      stopTimer();
+      handleSubmit(true);
+    }
+  }, [phase, timeLimit, timeRemaining, submitting]);
 
   // Helper: Pasangkan baju (costumeId) ke region tertentu
   const handleAssignCostumeToRegion = (costumeId: string, regionName: string) => {
@@ -198,7 +240,8 @@ export default function PesertaPuzzlePage() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (isTimeoutOrEvent?: boolean | React.MouseEvent) => {
+    const isTimeout = typeof isTimeoutOrEvent === "boolean" ? isTimeoutOrEvent : false;
     if (!participant?.participantRowId) {
       alert("Data peserta tidak ditemukan. Pastikan Anda sudah login.");
       return;
@@ -206,17 +249,25 @@ export default function PesertaPuzzlePage() {
 
     stopTimer();
     setSubmitting(true);
+    if (isTimeout) {
+      setIsTimeoutSubmitted(true);
+    }
 
     try {
-      const submissionAnswers = costumes.map((c) => ({
+      const currentAnswers = answersRef.current;
+      const currentCostumes = costumesRef.current;
+
+      const submissionAnswers = currentCostumes.map((c) => ({
         itemId: c.id,
-        selectedRegion: answers[c.id] || "",
+        selectedRegion: currentAnswers[c.id] || "",
       }));
+
+      const elapsed = timeLimit > 0 ? (timeLimit - timeRemainingRef.current) : timer;
 
       const res = await submitPuzzleAnswers({
         participantId: participant.participantRowId,
         answers: submissionAnswers,
-        timeSeconds: timer,
+        timeSeconds: Math.max(1, elapsed),
       });
 
       if (res.success && res.details) {
@@ -227,10 +278,17 @@ export default function PesertaPuzzlePage() {
         setPhase("result");
         await loadHistory();
       } else {
-        alert(res.error || "Gagal mengirim jawaban.");
-        timerRef.current = setInterval(() => {
-          setTimer((prev) => prev + 1);
-        }, 1000);
+        if (!isTimeout) {
+          alert(res.error || "Gagal mengirim jawaban.");
+          timerRef.current = setInterval(() => {
+            setTimer((prev) => prev + 1);
+            if (timeLimit > 0) {
+              setTimeRemaining((prev) => (prev <= 1 ? 0 : prev - 1));
+            }
+          }, 1000);
+        } else {
+          setPhase("result");
+        }
       }
     } finally {
       setSubmitting(false);
@@ -238,7 +296,14 @@ export default function PesertaPuzzlePage() {
   };
 
   const handleRetry = () => {
-    loadPuzzle();
+    setAnswers({});
+    setSelectedCostumeId(null);
+    setDraggedCostumeId(null);
+    setResultDetails([]);
+    setIsTimeoutSubmitted(false);
+    setTimer(0);
+    setTimeRemaining(timeLimit);
+    setPhase("ready");
   };
 
   const formatTime = (seconds: number) => {
@@ -284,12 +349,33 @@ export default function PesertaPuzzlePage() {
             </div>
             {phase === "playing" && (
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-card shadow-xs">
-                  <Clock className="h-4 w-4 text-accent" />
-                  <span className="font-mono text-base font-bold text-foreground">
-                    {formatTime(timer)}
-                  </span>
-                </div>
+                {timeLimit > 0 ? (
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 px-3.5 py-1.5 rounded-xl border transition-all shadow-xs",
+                      timeRemaining <= 10
+                        ? "border-rose-500/80 bg-rose-500/15 text-rose-500 animate-pulse"
+                        : "border-border bg-card text-foreground"
+                    )}
+                  >
+                    <Clock
+                      className={cn(
+                        "h-4 w-4",
+                        timeRemaining <= 10 ? "text-rose-500 animate-spin" : "text-accent"
+                      )}
+                    />
+                    <span className="font-mono text-base font-bold">
+                      {formatTime(timeRemaining)}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-card shadow-xs">
+                    <Clock className="h-4 w-4 text-accent" />
+                    <span className="font-mono text-base font-bold text-foreground">
+                      {formatTime(timer)}
+                    </span>
+                  </div>
+                )}
                 <Badge variant={allAnswered ? "success" : "gold"} className="text-xs">
                   {totalAnswered}/{costumes.length} Terpasang
                 </Badge>
@@ -320,6 +406,16 @@ export default function PesertaPuzzlePage() {
                 Anda akan mencocokkan <strong>{costumes.length} objek baju daerah</strong> ke lokasi daerah yang tepat.
                 Di HP, cukup tap kartu baju lalu tap nama daerah target, atau seret langsung!
               </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                <Badge variant={timeLimit > 0 ? "gold" : "default"} className="text-xs gap-1.5 py-1 px-3">
+                  <Clock className="h-3.5 w-3.5 text-accent" />
+                  <span>Batas Waktu: <strong>{timeLimit > 0 ? `${timeLimit} Detik` : "Tanpa Batas"}</strong></span>
+                </Badge>
+                <Badge variant="default" className="text-xs gap-1.5 py-1 px-3">
+                  <Trophy className="h-3.5 w-3.5 text-accent" />
+                  <span>Reward: <strong>10 Poin / Benar</strong></span>
+                </Badge>
+              </div>
             </div>
             <Button onClick={startGame} size="lg" className="text-sm gap-2 cursor-pointer">
               <Sparkles className="h-4 w-4" />
@@ -341,6 +437,46 @@ export default function PesertaPuzzlePage() {
         {/* ============ PHASE: PLAYING ============ */}
         {phase === "playing" && (
           <div className="space-y-6">
+            {/* Top Timer Progress Bar if timeLimit > 0 */}
+            {timeLimit > 0 && (
+              <div className="p-3 rounded-xl border border-border bg-card/60 backdrop-blur-xs space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                    <Clock
+                      className={cn(
+                        "h-3.5 w-3.5",
+                        timeRemaining <= 10 ? "text-rose-500 animate-pulse" : "text-accent"
+                      )}
+                    />
+                    <span>Sisa Waktu Pengerjaan:</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "font-mono font-bold text-sm",
+                      timeRemaining <= 10 ? "text-rose-500 animate-pulse" : "text-foreground"
+                    )}
+                  >
+                    {formatTime(timeRemaining)} / {formatTime(timeLimit)}
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full transition-all duration-300",
+                      timeRemaining <= 10
+                        ? "bg-rose-500 animate-pulse"
+                        : timeRemaining <= timeLimit * 0.3
+                        ? "bg-amber-500"
+                        : "bg-emerald-500"
+                    )}
+                    style={{
+                      width: `${Math.max(0, Math.min(100, (timeRemaining / timeLimit) * 100))}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Top Info Bar & Progress (Mobile & Desktop) */}
             <div className="p-3.5 rounded-xl border border-border bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2">
@@ -707,12 +843,24 @@ export default function PesertaPuzzlePage() {
                 <Trophy className="h-8 w-8 text-accent" />
               </div>
               <div className="space-y-1">
+                {isTimeoutSubmitted && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-500 text-xs font-semibold mb-2 animate-pulse">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>Waktu Pengerjaan Telah Habis!</span>
+                  </div>
+                )}
                 <h2 className="font-heading text-2xl font-bold text-foreground">
-                  Hasil Challenge Puzzle
+                  {isTimeoutSubmitted ? "Percobaan Selesai (Waktu Habis)" : "Hasil Challenge Puzzle"}
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   Waktu pengerjaan: <strong className="text-foreground">{formatTime(timer)}</strong>
+                  {timeLimit > 0 && ` (batas: ${timeLimit} detik)`}
                 </p>
+                {isTimeoutSubmitted && (
+                  <p className="text-[11px] text-muted-foreground italic">
+                    Jawaban yang sempat Anda pasangkan telah otomatis dihitung poinnya.
+                  </p>
+                )}
               </div>
               <div className="flex items-center justify-center gap-8">
                 <div className="text-center">
