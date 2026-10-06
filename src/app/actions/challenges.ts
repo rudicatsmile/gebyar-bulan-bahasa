@@ -849,3 +849,128 @@ export async function verifyChallengeSubmissionAction(data: {
   }
 }
 
+// =============================================================================
+// RIWAYAT MUTASI POIN PESERTA (LEDGER)
+// =============================================================================
+export interface PointLedgerItem {
+  id: string;
+  source: string;
+  description: string;
+  pointsDelta: number;
+  timestamp: string;
+}
+
+export async function getParticipantPointLedger(participantId?: string): Promise<{
+  success: boolean;
+  transactions: PointLedgerItem[];
+  error?: string;
+}> {
+  try {
+    const admin = createAdminClient();
+    let resolvedParticipantId = participantId;
+
+    if (!resolvedParticipantId) {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: p } = await admin
+          .from("participants")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (p?.id) {
+          resolvedParticipantId = p.id;
+        }
+      }
+    }
+
+    if (!resolvedParticipantId) {
+      return { success: true, transactions: [] };
+    }
+
+    const { data, error } = await (admin
+      .from("point_transactions") as any)
+      .select(`
+        id,
+        points,
+        source,
+        note,
+        created_at,
+        stand_id,
+        challenge_id,
+        stands (
+          name
+        ),
+        challenges (
+          title
+        )
+      `)
+      .eq("participant_id", resolvedParticipantId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const sourceMap = (src: string, note?: string | null): string => {
+      const n = (note || "").toLowerCase();
+      if (n.includes("puzzle")) return "Challenge Puzzle";
+      if (n.includes("twibbon")) return "Tantangan Twibbon";
+      if (n.includes("qr huruf") || n.includes("susun kata")) return "Challenge QR Huruf";
+      if (src === "scan_qr") return "Scan QR Stand";
+      if (src === "kode_unik") return "Kode Stand";
+      if (src === "verifikasi_bukti") return "Misi Challenge";
+      if (src === "input_panitia") return "Bonus Panitia";
+      if (src === "penyesuaian") return "Penyesuaian Poin";
+      return "Mutasi Poin";
+    };
+
+    const transactions: PointLedgerItem[] = (data || []).map((row: any) => {
+      const standName = Array.isArray(row.stands) ? row.stands[0]?.name : row.stands?.name;
+      const challengeTitle = Array.isArray(row.challenges) ? row.challenges[0]?.title : row.challenges?.title;
+
+      let description = row.note?.trim();
+      if (!description) {
+        if (standName) {
+          description = `Kunjungan stand: ${standName}`;
+        } else if (challengeTitle) {
+          description = `Penyelesaian tantangan: ${challengeTitle}`;
+        } else {
+          description = "Perolehan poin aktivitas festival";
+        }
+      }
+
+      const dateObj = new Date(row.created_at);
+      const timestamp = !isNaN(dateObj.getTime())
+        ? dateObj.toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }) + " WIB"
+        : "-";
+
+      return {
+        id: row.id,
+        source: sourceMap(row.source, row.note),
+        description,
+        pointsDelta: Number(row.points) || 0,
+        timestamp,
+      };
+    });
+
+    return { success: true, transactions };
+  } catch (err: unknown) {
+    console.error("Error getParticipantPointLedger:", err);
+    return {
+      success: false,
+      transactions: [],
+      error: err instanceof Error ? err.message : "Gagal memuat riwayat poin.",
+    };
+  }
+}
+
+

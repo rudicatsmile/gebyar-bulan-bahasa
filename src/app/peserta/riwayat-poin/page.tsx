@@ -14,20 +14,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
+import {
+  getParticipantPointLedger,
+  type PointLedgerItem,
+} from "@/app/actions/challenges";
 import { Coins, ArrowLeft, PlusCircle, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 
-interface PointLedgerItem {
-  id: string;
-  source: string;
-  description: string;
-  pointsDelta: number;
-  timestamp: string;
-}
-
 const DEMO_LEDGER_ITEMS: PointLedgerItem[] = [
-  { id: "tx-1", source: "Scan QR", description: "Kunjungan Stand Membaca Puisi (PUISI01)", pointsDelta: 10, timestamp: "27 Okt 2025, 09:15 WIB" },
-  { id: "tx-2", source: "Scan QR", description: "Kunjungan Stand Melukis Tas Kanvas (KANVAS04)", pointsDelta: 10, timestamp: "27 Okt 2025, 09:40 WIB" },
-  { id: "tx-3", source: "Scan QR", description: "Kunjungan Stand Tradisi Palang Pintu (PALANG06)", pointsDelta: 10, timestamp: "27 Okt 2025, 10:05 WIB" },
+  { id: "tx-1", source: "Scan QR Stand", description: "Kunjungan Stand Membaca Puisi (PUISI01)", pointsDelta: 10, timestamp: "27 Okt 2025, 09:15 WIB" },
+  { id: "tx-2", source: "Scan QR Stand", description: "Kunjungan Stand Melukis Tas Kanvas (KANVAS04)", pointsDelta: 10, timestamp: "27 Okt 2025, 09:40 WIB" },
+  { id: "tx-3", source: "Scan QR Stand", description: "Kunjungan Stand Tradisi Palang Pintu (PALANG06)", pointsDelta: 10, timestamp: "27 Okt 2025, 10:05 WIB" },
   { id: "tx-4", source: "Tantangan Twibbon", description: "Verifikasi unggahan twibbon media sosial", pointsDelta: 20, timestamp: "27 Okt 2025, 10:30 WIB" },
   { id: "tx-5", source: "Misi Video", description: "Rekam Videoa", pointsDelta: 50, timestamp: "27 Okt 2025, 11:10 WIB" },
   { id: "tx-6", source: "Kuis EYD", description: "Kuis Bahasa Indonesia 10 Soal", pointsDelta: 30, timestamp: "27 Okt 2025, 11:35 WIB" },
@@ -35,11 +31,46 @@ const DEMO_LEDGER_ITEMS: PointLedgerItem[] = [
 ];
 
 export default function PesertaRiwayatPoinPage() {
-  const { participant, loading } = useCurrentParticipant();
+  const { participant, loading: participantLoading } = useCurrentParticipant();
+  const [ledgerItems, setLedgerItems] = React.useState<PointLedgerItem[]>([]);
+  const [loadingLedger, setLoadingLedger] = React.useState(true);
 
   const isDemo = participant?.isDemoFallback;
   const currentTotal = participant?.totalPoints ?? 0;
-  const ledgerItems = isDemo ? DEMO_LEDGER_ITEMS : [];
+
+  React.useEffect(() => {
+    if (participantLoading) return;
+
+    if (isDemo) {
+      setLedgerItems(DEMO_LEDGER_ITEMS);
+      setLoadingLedger(false);
+      return;
+    }
+
+    if (participant?.id) {
+      setLoadingLedger(true);
+      getParticipantPointLedger(participant.id)
+        .then((res) => {
+          if (res.success) {
+            setLedgerItems(res.transactions);
+          } else {
+            setLedgerItems([]);
+          }
+        })
+        .catch((err) => {
+          console.error("Gagal memuat riwayat mutasi poin:", err);
+          setLedgerItems([]);
+        })
+        .finally(() => {
+          setLoadingLedger(false);
+        });
+    } else {
+      setLedgerItems([]);
+      setLoadingLedger(false);
+    }
+  }, [participant?.id, isDemo, participantLoading]);
+
+  const isLoading = participantLoading || loadingLedger;
 
   return (
     <DashboardLayout role="peserta" participantPoints={currentTotal}>
@@ -74,7 +105,7 @@ export default function PesertaRiwayatPoinPage() {
           </div>
         </div>
 
-        {loading ? (
+        {isLoading ? (
           <div className="py-16 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin text-accent" />
             <p className="text-xs">Memuat riwayat poin peserta...</p>
@@ -89,7 +120,9 @@ export default function PesertaRiwayatPoinPage() {
                 Belum Ada Riwayat Mutasi Poin
               </h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Anda saat ini memiliki saldo 0 poin. Kunjungi stand pameran budaya, lakukan scan QR, atau kerjakan misi tantangan untuk mulai mengumpulkan poin festival.
+                {currentTotal > 0
+                  ? `Anda saat ini memiliki saldo ${currentTotal} poin. Rincian riwayat transaksi poin saat ini belum tersedia di sistem.`
+                  : "Anda saat ini memiliki saldo 0 poin. Kunjungi stand pameran budaya, lakukan scan QR, atau kerjakan misi tantangan untuk mulai mengumpulkan poin festival."}
               </p>
             </div>
             <div className="flex items-center justify-center gap-3 pt-2">
@@ -132,7 +165,7 @@ export default function PesertaRiwayatPoinPage() {
                       {tx.timestamp}
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold text-accent text-sm sm:text-base">
-                      +{tx.pointsDelta} Pts
+                      {tx.pointsDelta >= 0 ? `+${tx.pointsDelta}` : tx.pointsDelta} Pts
                     </TableCell>
                   </TableRow>
                 ))}
