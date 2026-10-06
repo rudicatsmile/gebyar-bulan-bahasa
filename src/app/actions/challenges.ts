@@ -266,7 +266,7 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // 1. Cari stand berdasarkan kode unik atau qr_token/id (case insensitive)
     let stand: { id: string; name: string; points_per_visit: number; is_active: boolean } | null = null;
@@ -378,7 +378,7 @@ export async function redeemReward(data: z.infer<typeof RedeemRewardSchema>) {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // 1. Cek saldo poin peserta
     const { data: participant } = await supabase
