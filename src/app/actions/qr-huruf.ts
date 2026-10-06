@@ -635,16 +635,35 @@ export async function scanQrLetterToken(
     return { success: false, error: parsed.error.issues[0]?.message };
   }
 
-  const cleanToken = parsed.data.qrToken.trim();
+  let cleanToken = parsed.data.qrToken.trim();
+
+  // Defensively extract token if payload is JSON (from QRLetterCard or external scanner)
+  if (cleanToken.startsWith("{") && cleanToken.endsWith("}")) {
+    try {
+      const obj = JSON.parse(cleanToken);
+      if (obj.token) cleanToken = String(obj.token).trim();
+      else if (obj.qrToken) cleanToken = String(obj.qrToken).trim();
+      else if (obj.code) cleanToken = String(obj.code).trim();
+    } catch {}
+  }
+
+  // Defensively extract token if URL
+  if (cleanToken.includes("http://") || cleanToken.includes("https://") || cleanToken.includes("HTTP://") || cleanToken.includes("HTTPS://")) {
+    try {
+      const url = new URL(cleanToken);
+      const param = url.searchParams.get("token") || url.searchParams.get("code") || url.searchParams.get("letter");
+      if (param) cleanToken = param.trim();
+    } catch {}
+  }
 
   try {
     const supabase = createAdminClient();
 
-    // 1. Cari QR code dari token
+    // 1. Cari QR code dari token (case-insensitive)
     const { data: code, error: codeErr } = await supabase
       .from("qr_letter_codes")
       .select("*, qr_letter_challenges(id, is_active)")
-      .eq("qr_token", cleanToken)
+      .ilike("qr_token", cleanToken)
       .maybeSingle();
 
     if (!codeErr && code) {

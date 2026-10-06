@@ -79,9 +79,20 @@ export default function PesertaQrHurufPage() {
   const [facingMode, setFacingMode] = React.useState<"environment" | "user">("environment");
   const [cameraErrorMsg, setCameraErrorMsg] = React.useState("");
   
+  // Real-time in-modal feedback
+  const [modalFeedback, setModalFeedback] = React.useState<{
+    status: "scanning" | "processing" | "success" | "info" | "error";
+    letter?: string;
+    message: string;
+  }>({ status: "scanning", message: "Arahkan kamera ke stiker QR" });
+
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const animFrameRef = React.useRef<number | null>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const barcodeDetectorRef = React.useRef<any>(null);
+  const isProcessingFrameRef = React.useRef<boolean>(false);
+  const lastScanTimestampRef = React.useRef<number>(0);
 
   // Construction board state
   // letters placed into the formed sentence
@@ -141,6 +152,60 @@ export default function PesertaQrHurufPage() {
     loadData();
   }, [loadData]);
 
+  // Sound and haptic feedback
+  const triggerScanFeedback = React.useCallback(() => {
+    if (typeof window !== "undefined") {
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate([70, 40, 70]);
+        } catch {}
+      }
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          gain.gain.setValueAtTime(0.15, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.15);
+        }
+      } catch {}
+    }
+  }, []);
+
+  // Helper to extract clean token from any scanned payload format (JSON, URL, plain token)
+  const extractToken = React.useCallback((raw: string): string => {
+    let val = raw.trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1).trim();
+    }
+    // If JSON payload (from QRLetterCard)
+    if (val.startsWith("{") && val.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(val);
+        if (parsed.token) return String(parsed.token).trim();
+        if (parsed.qrToken) return String(parsed.qrToken).trim();
+        if (parsed.code) return String(parsed.code).trim();
+        if (parsed.letter) return String(parsed.letter).trim();
+      } catch {}
+    }
+    // If URL payload
+    if (val.includes("http://") || val.includes("https://") || val.includes("HTTP://") || val.includes("HTTPS://")) {
+      try {
+        const url = new URL(val);
+        const codeParam = url.searchParams.get("token") || url.searchParams.get("code") || url.searchParams.get("letter");
+        if (codeParam) return codeParam.trim();
+      } catch {}
+    }
+    return val.toUpperCase();
+  }, []);
+
   // Stop Live Camera
   const stopCamera = React.useCallback(() => {
     if (animFrameRef.current) {
@@ -155,6 +220,7 @@ export default function PesertaQrHurufPage() {
       videoRef.current.srcObject = null;
     }
     setCameraStatus("idle");
+    isProcessingFrameRef.current = false;
   }, []);
 
   // Start Live Camera
@@ -162,58 +228,260 @@ export default function PesertaQrHurufPage() {
     stopCamera();
     if (typeof window === "undefined" || !navigator?.mediaDevices?.getUserMedia) {
       setCameraStatus("error");
-      setCameraErrorMsg("Browser tidak mendukung kamera.");
+      setCameraErrorMsg("Browser tidak mendukung akses kamera langsung.");
       return;
     }
 
     setCameraStatus("requesting");
     setCameraErrorMsg("");
+    setModalFeedback({ status: "scanning", message: "Membuka kamera..." });
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
       });
       streamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        await videoRef.current.play().catch(() => {});
       }
       setCameraStatus("active");
+      setModalFeedback({ status: "scanning", message: "Arahkan kamera ke stiker QR" });
     } catch (err: any) {
+      console.error("Camera access error:", err);
       if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
         setCameraStatus("denied");
-        setCameraErrorMsg("Izin kamera ditolak. Silakan izinkan akses kamera di browser Anda.");
+        setCameraErrorMsg("Izin kamera ditolak. Silakan izinkan akses kamera di setelan browser HP Anda.");
       } else {
         setCameraStatus("error");
-        setCameraErrorMsg(err.message || "Gagal mengakses kamera.");
+        setCameraErrorMsg(err.message || "Gagal membuka kamera perangkat.");
       }
     }
   }, [facingMode, stopCamera]);
 
+  // Keep video element attached to stream whenever modal is open
+  React.useEffect(() => {
+    if (cameraModalOpen && videoRef.current && streamRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+      }
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraModalOpen, cameraStatus]);
+
+  // Initialize BarcodeDetector once if available
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && "BarcodeDetector" in window && !barcodeDetectorRef.current) {
+      try {
+        barcodeDetectorRef.current = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+      } catch {}
+    }
+  }, []);
+
   const openCameraModal = () => {
+    setModalFeedback({ status: "scanning", message: "Arahkan kamera ke stiker QR" });
     setCameraModalOpen(true);
     startCamera();
   };
 
-  const closeCameraModal = () => {
+  const closeCameraModal = React.useCallback(() => {
     stopCamera();
     setCameraModalOpen(false);
+    setModalFeedback({ status: "scanning", message: "Arahkan kamera ke stiker QR" });
+  }, [stopCamera]);
+
+  const toggleFacingMode = () => {
+    setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
   };
 
-  // Handle Scan / Manual Token Input
-  const handleScanSubmit = async (tokenToScan?: string) => {
-    let cleanToken = (tokenToScan || inputToken).trim().toUpperCase();
-    if (!cleanToken) return;
+  // Auto-Scan Handler (Instant detection without pressing buttons)
+  const handleAutoScan = React.useCallback(
+    async (rawCode: string) => {
+      const cleanToken = extractToken(rawCode);
+      if (!cleanToken) return;
 
-    // Extract token if text is a URL
-    if (cleanToken.includes("HTTP://") || cleanToken.includes("HTTPS://")) {
+      // Trigger instant beep & haptic feedback
+      triggerScanFeedback();
+
+      // Visual feedback in modal: DETECTED!
+      setModalFeedback({
+        status: "processing",
+        message: "QR Terdeteksi! Memverifikasi token...",
+      });
+
       try {
-        const parsedUrl = new URL(cleanToken);
-        const codeParam = parsedUrl.searchParams.get("code") || parsedUrl.searchParams.get("token") || parsedUrl.searchParams.get("letter");
-        if (codeParam) cleanToken = codeParam.toUpperCase();
-      } catch {}
-    }
+        const res = await scanQrLetterToken({
+          participantId: pId,
+          qrToken: cleanToken,
+        });
+
+        if (res.success) {
+          if (res.alreadyScanned) {
+            setModalFeedback({
+              status: "info",
+              letter: res.letter,
+              message: `Huruf "${res.letter}" di ${res.locationHint || "lokasi ini"} sudah pernah Anda scan sebelumnya!`,
+            });
+            setScanFeedback({
+              type: "info",
+              message: `Huruf "${res.letter}" di ${res.locationHint || "lokasi ini"} sudah pernah Anda scan sebelumnya!`,
+            });
+            setTimeout(() => {
+              closeCameraModal();
+            }, 1800);
+          } else {
+            setModalFeedback({
+              status: "success",
+              letter: res.letter,
+              message: `🎉 Berhasil! Menemukan huruf "${res.letter}" di ${res.locationHint || "lokasi rahasia"}!`,
+            });
+            setScanFeedback({
+              type: "success",
+              message: `🎉 Berhasil! Anda menemukan huruf "${res.letter}" di ${res.locationHint || "lokasi rahasia"}! (${res.totalCollected}/${res.totalNeeded} terkumpul)`,
+            });
+            if (!timerRunning) setTimerRunning(true);
+            await loadData();
+            setTimeout(() => {
+              closeCameraModal();
+            }, 1300);
+          }
+        } else {
+          setModalFeedback({
+            status: "error",
+            message: res.error || "Kode QR tidak valid atau tidak terdaftar.",
+          });
+          setScanFeedback({
+            type: "error",
+            message: res.error || "Kode QR tidak valid atau tidak terdaftar.",
+          });
+          // Auto resume scanning after 2 seconds
+          setTimeout(() => {
+            setModalFeedback({
+              status: "scanning",
+              message: "Arahkan kamera ke stiker QR",
+            });
+            isProcessingFrameRef.current = false;
+          }, 2000);
+        }
+      } catch {
+        setModalFeedback({
+          status: "error",
+          message: "Gagal memproses pemindaian.",
+        });
+        setTimeout(() => {
+          setModalFeedback({
+            status: "scanning",
+            message: "Arahkan kamera ke stiker QR",
+          });
+          isProcessingFrameRef.current = false;
+        }, 2000);
+      }
+    },
+    [pId, timerRunning, loadData, closeCameraModal, extractToken, triggerScanFeedback]
+  );
+
+  // Continuous High-Performance Scanner Loop (Native BarcodeDetector + jsQR Fallback)
+  React.useEffect(() => {
+    if (!cameraModalOpen || cameraStatus !== "active") return;
+
+    let isScanningActive = true;
+
+    const detectFrame = async (timestamp: number) => {
+      if (!isScanningActive || !videoRef.current) return;
+      const videoEl = videoRef.current;
+
+      // Throttle scanning to every 100ms and avoid concurrent frame decoding
+      if (
+        !isProcessingFrameRef.current &&
+        timestamp - lastScanTimestampRef.current >= 100 &&
+        videoEl.readyState >= 2 &&
+        videoEl.videoWidth > 0 &&
+        videoEl.videoHeight > 0
+      ) {
+        lastScanTimestampRef.current = timestamp;
+        isProcessingFrameRef.current = true;
+
+        try {
+          let detectedValue: string | null = null;
+
+          // Engine 1: Native BarcodeDetector (Chrome / Chromium Android / Edge)
+          if (barcodeDetectorRef.current) {
+            try {
+              const barcodes = await barcodeDetectorRef.current.detect(videoEl);
+              if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+                detectedValue = barcodes[0].rawValue;
+              }
+            } catch {}
+          }
+
+          // Engine 2: High-Speed Canvas jsQR Fallback (iOS Safari / Firefox / older Android)
+          if (!detectedValue) {
+            try {
+              if (!canvasRef.current) {
+                canvasRef.current = document.createElement("canvas");
+              }
+              const canvas = canvasRef.current;
+              // Downscale to max 480px for lightning-fast JS decode (10-20ms)
+              const maxDim = 480;
+              const scale = Math.min(1, maxDim / Math.max(videoEl.videoWidth, videoEl.videoHeight));
+              const w = Math.round(videoEl.videoWidth * scale);
+              const h = Math.round(videoEl.videoHeight * scale);
+
+              if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+              }
+
+              const ctx = canvas.getContext("2d", { willReadFrequently: true });
+              if (ctx) {
+                ctx.drawImage(videoEl, 0, 0, w, h);
+                const imageData = ctx.getImageData(0, 0, w, h);
+                const code = jsQR(imageData.data, w, h, {
+                  inversionAttempts: "dontInvert",
+                });
+                if (code && code.data) {
+                  detectedValue = code.data;
+                }
+              }
+            } catch {}
+          }
+
+          if (detectedValue && isScanningActive) {
+            isScanningActive = false; // Stop further frame capture
+            await handleAutoScan(detectedValue);
+            return;
+          }
+        } finally {
+          isProcessingFrameRef.current = false;
+        }
+      }
+
+      if (isScanningActive) {
+        animFrameRef.current = requestAnimationFrame(detectFrame);
+      }
+    };
+
+    animFrameRef.current = requestAnimationFrame(detectFrame);
+
+    return () => {
+      isScanningActive = false;
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+    };
+  }, [cameraModalOpen, cameraStatus, handleAutoScan]);
+
+  // Handle Manual Token Input
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanToken = extractToken(inputToken);
+    if (!cleanToken) return;
 
     setScanning(true);
     setScanFeedback(null);
@@ -238,7 +506,6 @@ export default function PesertaQrHurufPage() {
           if (!timerRunning) setTimerRunning(true);
         }
         setInputToken("");
-        closeCameraModal();
         await loadData();
       } else {
         setScanFeedback({
@@ -250,76 +517,6 @@ export default function PesertaQrHurufPage() {
       setScanning(false);
     }
   };
-
-  // Continuous Dual-Engine Scanner loop (Native BarcodeDetector + jsQR fallback for iOS/Safari)
-  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-
-  React.useEffect(() => {
-    if (!cameraModalOpen || cameraStatus !== "active") return;
-
-    let isScanning = true;
-
-    const detectFrame = async () => {
-      if (!isScanning || !videoRef.current) return;
-      const videoEl = videoRef.current;
-
-      if (videoEl.readyState >= 2) {
-        // Engine 1: Native BarcodeDetector (Chrome / Chromium Android / Edge)
-        if ("BarcodeDetector" in window) {
-          try {
-            const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
-            const barcodes = await detector.detect(videoEl);
-
-            if (barcodes && barcodes.length > 0) {
-              const detectedValue = barcodes[0].rawValue;
-              if (detectedValue) {
-                isScanning = false;
-                handleScanSubmit(detectedValue);
-                return;
-              }
-            }
-          } catch {}
-        }
-
-        // Engine 2: Pure JS jsQR Fallback (iOS Safari / Chrome iOS / Older Android)
-        try {
-          if (!canvasRef.current) {
-            canvasRef.current = document.createElement("canvas");
-          }
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext("2d", { willReadFrequently: true });
-          if (ctx && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
-            canvas.width = videoEl.videoWidth;
-            canvas.height = videoEl.videoHeight;
-            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: "dontInvert",
-            });
-
-            if (code && code.data) {
-              isScanning = false;
-              handleScanSubmit(code.data);
-              return;
-            }
-          }
-        } catch {}
-      }
-
-      if (isScanning) {
-        animFrameRef.current = requestAnimationFrame(detectFrame);
-      }
-    };
-
-    animFrameRef.current = requestAnimationFrame(detectFrame);
-
-    return () => {
-      isScanning = false;
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-      }
-    };
-  }, [cameraModalOpen, cameraStatus]);
 
   // Letters available in inventory (not yet placed into sentence)
   const placedScanIds = new Set(placedTokens.map((p) => p.scanId));
@@ -486,10 +683,7 @@ export default function PesertaQrHurufPage() {
           </div>
 
           <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleScanSubmit();
-            }}
+            onSubmit={handleManualSubmit}
             className="flex flex-col sm:flex-row gap-2"
           >
             <div className="relative flex-1">
@@ -544,7 +738,7 @@ export default function PesertaQrHurufPage() {
 
         {/* MODAL POPUP KAMERA PEMINDAI LANGSUNG */}
         {cameraModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-card border border-border rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl animate-in zoom-in-95">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
@@ -553,13 +747,25 @@ export default function PesertaQrHurufPage() {
                     Memindai QR Stiker Huruf
                   </h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeCameraModal}
-                  className="text-xs text-muted-foreground hover:text-foreground font-bold px-2 py-1"
-                >
-                  ✕ Tutup
-                </button>
+                <div className="flex items-center gap-1">
+                  {cameraStatus === "active" && (
+                    <button
+                      type="button"
+                      onClick={toggleFacingMode}
+                      className="text-xs text-muted-foreground hover:text-foreground font-semibold px-2 py-1 rounded bg-muted/60"
+                      title="Ganti Kamera Depan/Belakang"
+                    >
+                      🔄 Putar
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeCameraModal}
+                    className="text-xs text-muted-foreground hover:text-foreground font-bold px-2 py-1"
+                  >
+                    ✕ Tutup
+                  </button>
+                </div>
               </div>
 
               {/* Viewfinder Box */}
@@ -569,21 +775,76 @@ export default function PesertaQrHurufPage() {
                   playsInline
                   autoPlay
                   muted
+                  onLoadedMetadata={() => videoRef.current?.play().catch(() => {})}
                   className={`w-full h-full object-cover ${cameraStatus === "active" ? "block" : "hidden"}`}
                 />
 
+                {/* Status Overlays */}
                 {cameraStatus === "active" && (
-                  <div className="absolute inset-6 border-2 border-amber-400 rounded-lg pointer-events-none flex flex-col justify-between p-2">
-                    <div className="flex justify-between">
-                      <span className="h-4 w-4 border-t-2 border-l-2 border-amber-400" />
-                      <span className="h-4 w-4 border-t-2 border-r-2 border-amber-400" />
+                  <>
+                    {/* Viewfinder Target Border */}
+                    <div
+                      className={cn(
+                        "absolute inset-6 border-2 rounded-lg pointer-events-none flex flex-col justify-between p-2 transition-colors duration-200",
+                        modalFeedback.status === "scanning" && "border-amber-400",
+                        modalFeedback.status === "processing" && "border-emerald-400 bg-emerald-500/10",
+                        modalFeedback.status === "success" && "border-emerald-500 bg-emerald-500/20",
+                        modalFeedback.status === "info" && "border-blue-400 bg-blue-500/20",
+                        modalFeedback.status === "error" && "border-rose-500 bg-rose-500/20"
+                      )}
+                    >
+                      <div className="flex justify-between">
+                        <span className={cn("h-4 w-4 border-t-2 border-l-2", modalFeedback.status === "scanning" ? "border-amber-400" : modalFeedback.status === "error" ? "border-rose-500" : "border-emerald-400")} />
+                        <span className={cn("h-4 w-4 border-t-2 border-r-2", modalFeedback.status === "scanning" ? "border-amber-400" : modalFeedback.status === "error" ? "border-rose-500" : "border-emerald-400")} />
+                      </div>
+
+                      {/* Scanning Laser Line */}
+                      {modalFeedback.status === "scanning" && (
+                        <div className="w-full h-0.5 bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                      )}
+
+                      {/* Processing / Success Banner in Center */}
+                      {modalFeedback.status === "processing" && (
+                        <div className="self-center flex items-center gap-1.5 px-3 py-1 bg-black/80 rounded-full text-emerald-400 text-xs font-semibold">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>QR Terdeteksi!</span>
+                        </div>
+                      )}
+
+                      {modalFeedback.status === "success" && (
+                        <div className="self-center text-center space-y-1">
+                          <div className="h-14 w-14 mx-auto rounded-xl bg-emerald-500 text-white flex items-center justify-center text-2xl font-black font-mono shadow-lg animate-bounce">
+                            {modalFeedback.letter}
+                          </div>
+                          <div className="text-[11px] font-bold text-white bg-emerald-600/90 px-2 py-0.5 rounded-full">
+                            Terkumpul!
+                          </div>
+                        </div>
+                      )}
+
+                      {modalFeedback.status === "info" && (
+                        <div className="self-center text-center space-y-1">
+                          <div className="h-12 w-12 mx-auto rounded-xl bg-blue-500 text-white flex items-center justify-center text-xl font-bold font-mono shadow-lg">
+                            {modalFeedback.letter}
+                          </div>
+                          <div className="text-[10px] font-bold text-white bg-blue-600/90 px-2 py-0.5 rounded-full">
+                            Sudah Ada
+                          </div>
+                        </div>
+                      )}
+
+                      {modalFeedback.status === "error" && (
+                        <div className="self-center text-center px-2 py-1 bg-rose-600/90 text-white text-xs font-bold rounded-lg">
+                          Tidak Dikenali
+                        </div>
+                      )}
+
+                      <div className="flex justify-between">
+                        <span className={cn("h-4 w-4 border-b-2 border-l-2", modalFeedback.status === "scanning" ? "border-amber-400" : modalFeedback.status === "error" ? "border-rose-500" : "border-emerald-400")} />
+                        <span className={cn("h-4 w-4 border-b-2 border-r-2", modalFeedback.status === "scanning" ? "border-amber-400" : modalFeedback.status === "error" ? "border-rose-500" : "border-emerald-400")} />
+                      </div>
                     </div>
-                    <div className="w-full h-0.5 bg-amber-400 animate-pulse" />
-                    <div className="flex justify-between">
-                      <span className="h-4 w-4 border-b-2 border-l-2 border-amber-400" />
-                      <span className="h-4 w-4 border-b-2 border-r-2 border-amber-400" />
-                    </div>
-                  </div>
+                  </>
                 )}
 
                 {cameraStatus === "requesting" && (
@@ -611,15 +872,18 @@ export default function PesertaQrHurufPage() {
                 )}
               </div>
 
-              <div className="text-center space-y-1">
-                <p className="text-xs font-semibold text-foreground">
-                  {cameraStatus === "active"
-                    ? "Arahkan ke QR Stiker di Lokasi Pameran"
-                    : "Kamera HP"}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Huruf yang terdeteksi akan otomatis bertambah ke inventaris Anda.
-                </p>
+              {/* Real-time Status Feedback Bar */}
+              <div
+                className={cn(
+                  "p-2.5 rounded-xl text-center text-xs font-medium transition-all",
+                  modalFeedback.status === "scanning" && "bg-muted text-muted-foreground",
+                  modalFeedback.status === "processing" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold animate-pulse",
+                  modalFeedback.status === "success" && "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold",
+                  modalFeedback.status === "info" && "bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold",
+                  modalFeedback.status === "error" && "bg-destructive/15 text-destructive font-semibold"
+                )}
+              >
+                {modalFeedback.message}
               </div>
 
               <Button
@@ -627,7 +891,7 @@ export default function PesertaQrHurufPage() {
                 onClick={closeCameraModal}
                 className="w-full text-xs"
               >
-                Gunakan Input Kode Manual
+                Tutup & Gunakan Input Kode Manual
               </Button>
             </div>
           </div>
