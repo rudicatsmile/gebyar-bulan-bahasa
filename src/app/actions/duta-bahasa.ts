@@ -194,34 +194,55 @@ export async function getDutaBahasaProgress(): Promise<{
     const stagesResult = await getDutaBahasaStages();
     const stages = stagesResult.stages;
 
-    // 2. Get progress data from event_settings
+    // 2. Get saved progress data from event_settings
     const { data: progressData } = await supabase
       .from("event_settings")
       .select("value")
       .eq("key", "duta_bahasa_progress")
-      .single();
+      .maybeSingle();
 
     const progressMap: Record<
       string,
       Record<string, DutaBahasaParticipantProgress>
     > = ((progressData?.value as unknown) as Record<string, Record<string, DutaBahasaParticipantProgress>>) || {};
 
-    // 3. Get participant info from participants table
-    const participantIds = Object.keys(progressMap);
+    // 3. Get all participants registered in Duta Bahasa from public.registrations
+    const { data: dutaComps } = await supabase
+      .from("competitions")
+      .select("id")
+      .or("name.ilike.%Duta Bahasa%,slug.eq.pidato,slug.ilike.%duta%");
 
-    if (participantIds.length === 0) {
+    const dutaCompIds = (dutaComps || []).map((c) => c.id);
+
+    let registeredParticipantIds: string[] = [];
+    if (dutaCompIds.length > 0) {
+      const { data: regs } = await supabase
+        .from("registrations")
+        .select("participant_id")
+        .in("competition_id", dutaCompIds);
+      registeredParticipantIds = (regs || []).map((r) => r.participant_id).filter(Boolean);
+    }
+
+    // 4. Combine participant IDs from progressMap AND registeredParticipantIds
+    const allParticipantIds = Array.from(
+      new Set([...Object.keys(progressMap), ...registeredParticipantIds])
+    );
+
+    if (allParticipantIds.length === 0) {
       return { success: true, participants: [] };
     }
 
+    // 5. Fetch participant details
     const { data: participantsData } = await supabase
       .from("participants")
       .select("id, full_name, institution, registration_number")
-      .in("id", participantIds);
+      .in("id", allParticipantIds);
 
     const participantLookup: Record<
       string,
       { fullName: string; institution: string; registrationNumber: string }
     > = {};
+
     (participantsData || []).forEach((p) => {
       participantLookup[p.id] = {
         fullName: p.full_name,
@@ -230,14 +251,47 @@ export async function getDutaBahasaProgress(): Promise<{
       };
     });
 
-    // 4. Build participant info list
-    const participants: DutaBahasaParticipantInfo[] = participantIds
+    // 6. Build participant info & progress per stage
+    const firstStageId = stages[0]?.id || "db-stage-1";
+
+    const participants: DutaBahasaParticipantInfo[] = allParticipantIds
       .filter((pid) => participantLookup[pid])
       .map((pid) => {
         const info = participantLookup[pid];
-        const progress = progressMap[pid] || {};
+        const progress: Record<string, DutaBahasaParticipantProgress> = { ...(progressMap[pid] || {}) };
 
-        let currentStageId = stages[0]?.id || "db-stage-1";
+        // Ensure Stage 1 progress exists by default for every registered participant
+        if (!progress[firstStageId]) {
+          progress[firstStageId] = {
+            participantId: pid,
+            stageId: firstStageId,
+            status: "terdaftar",
+            score: null,
+            notes: "Terdaftar pada pendaftaran awal Duta Bahasa",
+            reviewedAt: new Date().toISOString(),
+          };
+        }
+
+        // Auto-propagate progress to subsequent stages if previous stage is "lolos"
+        for (let i = 0; i < stages.length - 1; i++) {
+          const currentStage = stages[i];
+          const nextStage = stages[i + 1];
+
+          const currentProg = progress[currentStage.id];
+          if (currentProg && currentProg.status === "lolos" && !progress[nextStage.id]) {
+            progress[nextStage.id] = {
+              participantId: pid,
+              stageId: nextStage.id,
+              status: "menunggu",
+              score: null,
+              notes: `Lolos dari tahap ${currentStage.stageOrder} (${currentStage.title})`,
+              reviewedAt: new Date().toISOString(),
+            };
+          }
+        }
+
+        // Determine current stage & overall status
+        let currentStageId = firstStageId;
         let currentStageOrder = 1;
         let overallStatus: DutaBahasaParticipantInfo["overallStatus"] = "aktif";
 

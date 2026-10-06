@@ -59,7 +59,12 @@ export function DutaBahasaTimeline({
   const [stages, setStages] = React.useState<DutaBahasaStage[]>([]);
   const [participants, setParticipants] = React.useState<DutaBahasaParticipantInfo[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
+  const [isMounted, setIsMounted] = React.useState<boolean>(false);
   const [selectedStageId, setSelectedStageId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   React.useEffect(() => {
     async function loadData() {

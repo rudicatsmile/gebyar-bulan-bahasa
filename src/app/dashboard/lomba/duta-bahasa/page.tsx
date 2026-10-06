@@ -108,11 +108,16 @@ export default function DashboardDutaBahasaPage() {
   const [stages, setStages] = React.useState<DutaBahasaStage[]>([]);
   const [participants, setParticipants] = React.useState<DutaBahasaParticipantInfo[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [isMounted, setIsMounted] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [feedback, setFeedback] = React.useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Expanded stage view
   const [expandedStage, setExpandedStage] = React.useState<string | null>(null);
@@ -315,10 +320,11 @@ export default function DashboardDutaBahasaPage() {
                 variant="outline"
                 size="sm"
                 onClick={loadData}
-                disabled={loading}
+                disabled={isMounted ? loading : false}
+                suppressHydrationWarning
                 className="text-xs gap-1.5 cursor-pointer"
               >
-                <RotateCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                <RotateCcw className={`h-3.5 w-3.5 ${isMounted && loading ? "animate-spin" : ""}`} />
                 <span>Muat Ulang</span>
               </Button>
               <Button
