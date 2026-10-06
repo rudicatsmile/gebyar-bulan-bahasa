@@ -253,16 +253,16 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
       const obj = JSON.parse(cleanInput);
       if (obj.code) cleanInput = String(obj.code).trim();
       else if (obj.token) cleanInput = String(obj.token).trim();
-    } catch {}
+    } catch { }
   }
 
-  // Defensively extract if URL
+  // Defensively extract if URLs
   if (cleanInput.includes("http://") || cleanInput.includes("https://") || cleanInput.includes("HTTP://") || cleanInput.includes("HTTPS://")) {
     try {
       const parsedUrl = new URL(cleanInput);
       const codeParam = parsedUrl.searchParams.get("code") || parsedUrl.searchParams.get("stand") || parsedUrl.searchParams.get("token");
       if (codeParam) cleanInput = codeParam.trim();
-    } catch {}
+    } catch { }
   }
 
   try {
