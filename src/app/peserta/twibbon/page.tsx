@@ -38,7 +38,8 @@ const STATUS_META: Record<
 function statusNotes(item: TwibbonItem): string[] {
   if (item.status === "disetujui") {
     return [
-      "Foto Anda sudah tayang di Galeri Twibbon publik.",
+      "Foto Anda sudah disetujui dan tayang di Galeri Twibbon publik.",
+      "Poin reward tantangan (+20 Poin) telah ditambahkan ke saldo akun Anda.",
       item.isFeatured
         ? "Foto Anda ditandai Unggulan sehingga diprioritaskan pada rotasi modul galeri."
         : "Foto diputar secara berkala pada Layar TV Monitor Lapangan setiap rotasi modul galeri.",
@@ -47,11 +48,12 @@ function statusNotes(item: TwibbonItem): string[] {
   if (item.status === "ditolak") {
     return [
       "Foto belum lolos kurasi Media Center sehingga tidak ditampilkan di galeri maupun monitor.",
-      "Silakan unggah ulang dengan foto lain yang sesuai ketentuan.",
+      "Silakan unggah ulang dengan foto lain yang sesuai ketentuan untuk berkesempatan memperoleh poin.",
     ];
   }
   return [
     "Foto sedang antre moderasi tim Media Center, estimasi waktu peninjauan < 30 menit.",
+    "Poin reward tantangan (+20 Poin) akan otomatis masuk ke akun Anda setelah foto disetujui panitia.",
     "Setelah disetujui, foto otomatis tampil di Galeri Twibbon dan Layar Monitor Lapangan.",
   ];
 }

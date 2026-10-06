@@ -29,6 +29,7 @@ import {
   Move,
   Info,
   UserCheck,
+  Sparkles,
 } from "lucide-react";
 import { getActiveTwibbonTemplates, type TwibbonTemplate } from "@/app/actions/twibbon-template";
 import {
@@ -644,8 +645,23 @@ export default function UnggahTwibbonPage() {
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
                   Terima kasih, <strong>{fullName}</strong>. Foto twibbon Anda saat ini berada dalam antrean moderasi Media Center. Estimasi waktu moderasi &lt; 30 menit.
                 </p>
+                {userProfile && (
+                  <div className="mt-2.5 p-3 rounded-lg border border-accent/30 bg-accent/10 text-xs text-accent max-w-md mx-auto flex items-center justify-center gap-2">
+                    <Sparkles className="h-4 w-4 shrink-0 text-accent" />
+                    <span>
+                      Poin reward tantangan <strong>(+20 Poin)</strong> akan otomatis masuk ke akun Anda setelah foto disetujui oleh tim Media Center.
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="pt-4 flex justify-center gap-3 flex-wrap">
+                {isDashboard && role === "peserta" && (
+                  <Link href="/peserta/twibbon">
+                    <Button variant="accent" size="sm" className="text-xs">
+                      Cek Status di Twibbon Saya
+                    </Button>
+                  </Link>
+                )}
                 <Link href="/galeri/twibbon">
                   <Button variant="outline" size="sm" className="text-xs">
                     Lihat Galeri Twibbon

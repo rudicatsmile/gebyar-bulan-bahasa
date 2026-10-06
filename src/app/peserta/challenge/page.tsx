@@ -10,6 +10,7 @@ import {
   type ParticipantChallengeItem,
 } from "@/app/actions/challenges";
 import { checkParticipantPuzzleAttempt } from "@/app/actions/puzzle";
+import { checkParticipantTwibbonStatus } from "@/app/actions/twibbon";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -97,6 +98,11 @@ export default function PesertaChallengeListPage() {
     hasAttempted: boolean;
     score?: number;
   } | null>(null);
+  const [twibbonStatus, setTwibbonStatus] = React.useState<{
+    hasSubmitted: boolean;
+    hasApproved: boolean;
+    pointsAwarded: boolean;
+  } | null>(null);
 
   // Periksa apakah peserta sudah pernah menyelesaikan challenge puzzle
   React.useEffect(() => {
@@ -114,6 +120,15 @@ export default function PesertaChallengeListPage() {
       })
       .catch(() => {
         setPuzzleAttempt({ hasAttempted: false });
+      });
+
+    // Periksa status tantangan twibbon
+    checkParticipantTwibbonStatus(participant.id)
+      .then((res) => {
+        setTwibbonStatus(res);
+      })
+      .catch(() => {
+        setTwibbonStatus({ hasSubmitted: false, hasApproved: false, pointsAwarded: false });
       });
   }, [participant?.id]);
 
@@ -199,10 +214,34 @@ export default function PesertaChallengeListPage() {
               />
               <ChallengeItem
                 title="Tantangan Twibbon GebyarBulanBahasa"
-                meta="+20 poin per unggahan foto"
-                href="/twibbon/unggah"
-                actionLabel="Kirim Bukti Twibbon"
-                icon={Camera}
+                meta={
+                  twibbonStatus?.pointsAwarded
+                    ? "+20 Poin Diperoleh (Disetujui)"
+                    : twibbonStatus?.hasSubmitted
+                    ? "Menunggu verifikasi moderasi Media Center"
+                    : "+20 poin per unggahan foto (setelah disetujui)"
+                }
+                href={twibbonStatus?.hasSubmitted ? "/peserta/twibbon" : "/twibbon/unggah"}
+                actionLabel={
+                  twibbonStatus?.pointsAwarded
+                    ? "Lihat Twibbon Saya"
+                    : twibbonStatus?.hasSubmitted
+                    ? "Cek Status Moderasi"
+                    : "Kirim Bukti Twibbon"
+                }
+                icon={twibbonStatus?.pointsAwarded ? CheckCircle2 : Camera}
+                variant={twibbonStatus?.pointsAwarded ? "outline" : "accent"}
+                badge={
+                  twibbonStatus?.pointsAwarded ? (
+                    <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                      Sudah Selesai
+                    </Badge>
+                  ) : twibbonStatus?.hasSubmitted ? (
+                    <Badge variant="info" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                      Sedang Ditinjau
+                    </Badge>
+                  ) : null
+                }
               />
               <ChallengeItem
                 title="Challenge Puzzle: Cocokkan Baju Daerah"

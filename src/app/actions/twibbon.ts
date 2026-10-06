@@ -374,6 +374,7 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
     let finalUploaderName = parsed.data.uploaderName;
     let finalUploaderInstitution = parsed.data.uploaderInstitution;
 
+    let participantId: string | null = null;
     if (user) {
       const { data: profile } = await adminClient
         .from("profiles")
@@ -387,16 +388,24 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
       if (profile?.institution?.trim()) {
         finalUploaderInstitution = profile.institution.trim();
       }
+
+      const { data: p } = await adminClient
+        .from("participants")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (p) participantId = p.id;
     }
 
-    const { data: twibbon, error } = await adminClient
-      .from("twibbons")
+    const { data: twibbon, error } = await (adminClient
+      .from("twibbons") as any)
       .insert({
         uploader_name: finalUploaderName,
         uploader_institution: finalUploaderInstitution,
         caption: parsed.data.caption || null,
         image_url: parsed.data.imageUrl,
         user_id: user?.id || null,
+        participant_id: participantId,
         uploader_ip: clientIp,
         status: "menunggu",
         is_featured: false,
@@ -432,7 +441,17 @@ export async function moderateTwibbon(data: z.infer<typeof ModerateTwibbonSchema
       data: { user },
     } = await supabase.auth.getUser();
 
-    const { error } = await supabase
+    const admin = createAdminClient();
+
+    // 1. Ambil data twibbon saat ini sebelum update
+    const { data: existingTwibbon } = await (admin
+      .from("twibbons") as any)
+      .select("id, user_id, participant_id, status")
+      .eq("id", parsed.data.twibbonId)
+      .maybeSingle();
+
+    // 2. Update status twibbon
+    const { error } = await admin
       .from("twibbons")
       .update({
         status: parsed.data.status,
@@ -445,14 +464,159 @@ export async function moderateTwibbon(data: z.infer<typeof ModerateTwibbonSchema
 
     if (error) return { success: false, error: error.message };
 
+    // 3. Cari peserta terkait untuk penambahan / penyesuaian poin
+    let participantId: string | null = (existingTwibbon as any)?.participant_id || null;
+    if (!participantId && (existingTwibbon as any)?.user_id) {
+      const { data: pRow } = await admin
+        .from("participants")
+        .select("id")
+        .eq("user_id", (existingTwibbon as any).user_id)
+        .maybeSingle();
+      if (pRow) participantId = pRow.id;
+    }
+
+    // 4. Jika status disetujui: beri +20 poin (maksimal 1 kali klaim per peserta)
+    if (parsed.data.status === "disetujui" && participantId) {
+      const { data: existingTx } = await admin
+        .from("point_transactions")
+        .select("id")
+        .eq("participant_id", participantId)
+        .or("note.ilike.%Tantangan Twibbon%,challenge_id.eq.d0000000-0000-0000-0000-000000000004")
+        .maybeSingle();
+
+      if (!existingTx) {
+        // Catat transaksi poin
+        await admin.from("point_transactions").insert({
+          participant_id: participantId,
+          challenge_id: "d0000000-0000-0000-0000-000000000004",
+          points: 20,
+          source: "verifikasi_bukti",
+          note: "Tantangan Twibbon: Unggahan Foto Twibbon Disetujui Media Center",
+          granted_by: user?.id || null,
+        });
+
+        // Tambahkan total poin peserta
+        const { data: currentP } = await admin
+          .from("participants")
+          .select("total_points")
+          .eq("id", participantId)
+          .single();
+
+        const newTotal = (Number(currentP?.total_points) || 0) + 20;
+        await admin
+          .from("participants")
+          .update({ total_points: newTotal })
+          .eq("id", participantId);
+      }
+    }
+
+    // 5. Jika status diubah menjadi ditolak dan sebelumnya sempat disetujui: rollback poin
+    if (
+      parsed.data.status === "ditolak" &&
+      (existingTwibbon as any)?.status === "disetujui" &&
+      participantId
+    ) {
+      // Cek apakah ada twibbon lain milik peserta yang masih disetujui
+      let otherApproved = false;
+      if ((existingTwibbon as any)?.user_id) {
+        const { count } = await admin
+          .from("twibbons")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", (existingTwibbon as any).user_id)
+          .eq("status", "disetujui")
+          .neq("id", parsed.data.twibbonId);
+        otherApproved = Boolean(count && count > 0);
+      }
+
+      // Jika tidak ada twibbon lain yang disetujui, tarik kembali poin reward
+      if (!otherApproved) {
+        const { data: txToDelete } = await admin
+          .from("point_transactions")
+          .select("id, points")
+          .eq("participant_id", participantId)
+          .or("note.ilike.%Tantangan Twibbon%,challenge_id.eq.d0000000-0000-0000-0000-000000000004")
+          .maybeSingle();
+
+        if (txToDelete) {
+          await admin.from("point_transactions").delete().eq("id", txToDelete.id);
+
+          const { data: currentP } = await admin
+            .from("participants")
+            .select("total_points")
+            .eq("id", participantId)
+            .single();
+
+          const newTotal = Math.max(0, (Number(currentP?.total_points) || 0) - txToDelete.points);
+          await admin
+            .from("participants")
+            .update({ total_points: newTotal })
+            .eq("id", participantId);
+        }
+      }
+    }
+
     revalidatePath("/dashboard/twibbon");
     revalidatePath("/media/twibbon");
     revalidatePath("/galeri/twibbon");
+    revalidatePath("/peserta/twibbon");
+    revalidatePath("/peserta/challenge");
+    revalidatePath("/peserta/riwayat-poin");
+    revalidatePath("/peserta");
+    revalidatePath("/leaderboard");
     revalidatePath("/monitor");
     revalidatePath("/monitor/twibbon");
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal memoderasi twibbon.";
     return { success: false, error: message };
+  }
+}
+
+/**
+ * Cek status pengerjaan tantangan twibbon untuk peserta tertentu
+ */
+export async function checkParticipantTwibbonStatus(participantId: string): Promise<{
+  hasSubmitted: boolean;
+  hasApproved: boolean;
+  pointsAwarded: boolean;
+}> {
+  try {
+    const admin = createAdminClient();
+    const { data: part } = await admin
+      .from("participants")
+      .select("id, user_id, registration_number")
+      .eq("id", participantId)
+      .maybeSingle();
+
+    if (!part) return { hasSubmitted: false, hasApproved: false, pointsAwarded: false };
+
+    // Cek apakah poin sudah tercatat di transaksi
+    const { data: tx } = await admin
+      .from("point_transactions")
+      .select("id")
+      .eq("participant_id", participantId)
+      .or("note.ilike.%Tantangan Twibbon%,challenge_id.eq.d0000000-0000-0000-0000-000000000004")
+      .maybeSingle();
+
+    const pointsAwarded = Boolean(tx);
+
+    let twQuery = (admin.from("twibbons") as any).select("id, status");
+    if (part.user_id) {
+      twQuery = twQuery.or(`user_id.eq.${part.user_id},participant_id.eq.${participantId}`);
+    } else {
+      twQuery = twQuery.eq("participant_id", participantId);
+    }
+    const { data: twList } = await twQuery;
+
+    const hasSubmitted = Boolean(twList && twList.length > 0);
+    const hasApproved = Boolean(twList && twList.some((t: any) => t.status === "disetujui"));
+
+    return {
+      hasSubmitted,
+      hasApproved,
+      pointsAwarded: pointsAwarded || hasApproved,
+    };
+  } catch {
+    return { hasSubmitted: false, hasApproved: false, pointsAwarded: false };
   }
 }
