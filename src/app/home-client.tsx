@@ -37,6 +37,8 @@ interface HomeClientProps {
   eventDate?: string;
   eventYear?: string;
   heroImageUrl?: string;
+  verifiedParticipantsCount?: number;
+  judgesCount?: number;
 }
 
 /**
@@ -199,6 +201,8 @@ export function HomeClient({
   eventDate = "11 November 2026",
   eventYear = "2026",
   heroImageUrl = "",
+  verifiedParticipantsCount,
+  judgesCount,
 }: HomeClientProps) {
   const [currentEventName, setCurrentEventName] = React.useState(eventName);
   const [currentEventTheme, setCurrentEventTheme] = React.useState(eventTheme);
@@ -441,11 +445,15 @@ export function HomeClient({
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Cabang Lomba Paralel</p>
             </div>
             <div className="space-y-1 border-l border-border">
-              <span className="font-mono text-3xl font-bold text-foreground">150+</span>
+              <span className="font-mono text-3xl font-bold text-foreground">
+                {verifiedParticipantsCount !== undefined ? verifiedParticipantsCount : "150+"}
+              </span>
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Peserta Terverifikasi</p>
             </div>
             <div className="space-y-1 border-l border-border">
-              <span className="font-mono text-3xl font-bold text-foreground">8</span>
+              <span className="font-mono text-3xl font-bold text-foreground">
+                {judgesCount !== undefined ? judgesCount : "8"}
+              </span>
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Dewan Juri Ahli</p>
             </div>
             <div className="space-y-1 border-l border-border">

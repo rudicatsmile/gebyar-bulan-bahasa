@@ -736,6 +736,37 @@ export async function getChallengeLeaderboard() {
   }
 }
 
+export async function getHomeStats() {
+  try {
+    const adminClient = createAdminClient();
+
+    const { count: verifiedCount } = await adminClient
+      .from("participants")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "terverifikasi");
+
+    const { count: totalCount } = await adminClient
+      .from("participants")
+      .select("id", { count: "exact", head: true });
+
+    const { count: juriCount } = await adminClient
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "juri");
+
+    return {
+      verifiedParticipantsCount: (verifiedCount ?? 0) > 0 ? (verifiedCount as number) : (totalCount ?? 0),
+      judgesCount: juriCount ?? 0,
+    };
+  } catch (err) {
+    console.error("Supabase getHomeStats error:", err);
+    return {
+      verifiedParticipantsCount: 0,
+      judgesCount: 0,
+    };
+  }
+}
+
 export interface MonitorScoreItem {
   rank: number;
   registrationId: string;

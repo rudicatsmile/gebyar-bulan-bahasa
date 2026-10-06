@@ -3,6 +3,7 @@ import {
   getSchedules,
   getAnnouncements,
   getChallengeLeaderboard,
+  getHomeStats,
 } from "@/lib/supabase/queries";
 import { getEventSettings } from "@/app/actions/settings";
 import { HomeClient } from "./home-client";
@@ -10,13 +11,15 @@ import { HomeClient } from "./home-client";
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [competitions, schedules, announcements, leaderboard, settingsRes] = await Promise.all([
-    getCompetitions(),
-    getSchedules(),
-    getAnnouncements(),
-    getChallengeLeaderboard(),
-    getEventSettings(),
-  ]);
+  const [competitions, schedules, announcements, leaderboard, settingsRes, homeStats] =
+    await Promise.all([
+      getCompetitions(),
+      getSchedules(),
+      getAnnouncements(),
+      getChallengeLeaderboard(),
+      getEventSettings(),
+      getHomeStats(),
+    ]);
 
   const eventName =
     settingsRes.success && settingsRes.settings?.eventName
@@ -54,6 +57,8 @@ export default async function HomePage() {
       eventDate={eventDate}
       eventYear={eventYear}
       heroImageUrl={heroImageUrl}
+      verifiedParticipantsCount={homeStats.verifiedParticipantsCount}
+      judgesCount={homeStats.judgesCount}
     />
   );
 }
