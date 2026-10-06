@@ -133,6 +133,8 @@ export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtim
     // 2. Setup Realtime
     let channel: any = null;
 
+    /*
+    // Polling fallback interval (Di-nonaktifkan — disimpan sebagai komentar untuk kebutuhan masa mendatang)
     const startPolling = () => {
       if (pollingRef.current) return;
       pollingRef.current = setInterval(() => {
@@ -141,6 +143,7 @@ export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtim
         }
       }, POLL_INTERVAL_MS);
     };
+    */
 
     try {
       const supabase = createBrowserSupabase();
@@ -153,11 +156,19 @@ export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtim
             schema: "public",
             table: "assessments",
           },
-          (payload: any) => {
-            const row = payload.new || payload.old;
-            if (!row || !row.competition_id || !compIdRef.current || row.competition_id === compIdRef.current) {
-              debouncedFetch();
-            }
+          () => {
+            debouncedFetch();
+          }
+        )
+        .on(
+          "postgres_changes" as any,
+          {
+            event: "*",
+            schema: "public",
+            table: "assessment_scores",
+          },
+          () => {
+            debouncedFetch();
           }
         )
         .on(
@@ -167,11 +178,8 @@ export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtim
             schema: "public",
             table: "registrations",
           },
-          (payload: any) => {
-            const row = payload.new || payload.old;
-            if (!row || !row.competition_id || !compIdRef.current || row.competition_id === compIdRef.current) {
-              debouncedFetch();
-            }
+          () => {
+            debouncedFetch();
           }
         )
         .subscribe((status: string) => {
@@ -184,9 +192,9 @@ export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtim
               pollingRef.current = null;
             }
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            console.warn("[RealtimeScoringRecap] Realtime channel error, switching to polling fallback");
-            setRealtimeStatus("polling");
-            startPolling();
+            console.warn("[RealtimeScoringRecap] Realtime channel error / timeout");
+            setRealtimeStatus("disconnected");
+            // startPolling(); // Polling fallback di-nonaktifkan
           } else if (status === "CLOSED") {
             if (mountedRef.current) {
               setRealtimeStatus("disconnected");
@@ -194,18 +202,20 @@ export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtim
           }
         });
     } catch (err) {
-      console.warn("[RealtimeScoringRecap] Setup failed, falling back to polling:", err);
-      setRealtimeStatus("polling");
-      startPolling();
+      console.warn("[RealtimeScoringRecap] Realtime setup failed:", err);
+      setRealtimeStatus("disconnected");
+      // startPolling(); // Polling fallback di-nonaktifkan
     }
 
-    // Safety fallback: if still connecting after 5s, start polling
+    /*
+    // Safety fallback: if still connecting after 5s, start polling (Di-nonaktifkan)
     const fallbackTimeout = setTimeout(() => {
       if (mountedRef.current && realtimeStatus === "connecting") {
-        setRealtimeStatus("polling");
-        startPolling();
+        setRealtimeStatus("disconnected");
+        // startPolling();
       }
     }, 5000);
+    */
 
     return () => {
       mountedRef.current = false;
@@ -229,7 +239,7 @@ export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtim
         pollingRef.current = null;
       }
 
-      clearTimeout(fallbackTimeout);
+      // clearTimeout(fallbackTimeout);
     };
   }, [competitionIdOrSlug, fetchData, debouncedFetch]);
 
