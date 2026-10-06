@@ -693,19 +693,28 @@ export async function getAllTwibbons(): Promise<TwibbonItem[]> {
 
 export async function getChallengeLeaderboard() {
   try {
-    const { data, error } = await publicClient
+    let { data, error } = await publicClient
       .from("participants")
       .select("id, full_name, institution, total_points")
       .order("total_points", { ascending: false })
       .limit(10);
 
-    if (error) {
-      console.error("Supabase getChallengeLeaderboard error:", error);
-      return CHALLENGE_LEADERBOARD;
+    if (error || !data || data.length === 0) {
+      const adminClient = createAdminClient();
+      const adminRes = await adminClient
+        .from("participants")
+        .select("id, full_name, institution, total_points")
+        .order("total_points", { ascending: false })
+        .limit(10);
+
+      if (adminRes.data && adminRes.data.length > 0) {
+        data = adminRes.data;
+        error = adminRes.error;
+      }
     }
 
     if (!data || data.length === 0) {
-      return [];
+      return CHALLENGE_LEADERBOARD;
     }
 
     return data.map((p, idx) => ({
@@ -722,8 +731,7 @@ export async function getChallengeLeaderboard() {
           ? "Duta Bahasa"
           : "Pilar Pemuda",
     }));
-  } catch (err) {
-    console.error("Supabase getChallengeLeaderboard fallback:", err);
+  } catch {
     return CHALLENGE_LEADERBOARD;
   }
 }

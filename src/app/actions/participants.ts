@@ -5,9 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const MAX_COMPETITION_PER_PARTICIPANT = Number(
-  process.env.NEXT_PUBLIC_MAX_COMPETITION_PER_PARTICIPANT || 3
-);
+const MAX_COMPETITION_PER_PARTICIPANT = 8;
 
 const ParticipantSchema = z.object({
   fullName: z.string().min(3, "Nama lengkap minimal 3 karakter"),

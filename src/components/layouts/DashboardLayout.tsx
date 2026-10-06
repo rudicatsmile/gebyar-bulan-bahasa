@@ -42,6 +42,7 @@ import {
   Image,
   Bell,
   Search,
+  MoreHorizontal,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -108,8 +109,8 @@ const MEDIA_NAV: NavItem[] = [
 
 const PESERTA_NAV: NavItem[] = [
   { title: "Beranda Peserta", href: "/peserta", icon: LayoutDashboard },
-  { title: "Pendaftaran Lomba", href: "/peserta/pendaftaran", icon: Trophy },
-  { title: "Daftar Challenge", href: "/peserta/challenge", icon: Sparkles },
+  { title: "Lomba", href: "/peserta/pendaftaran", icon: Trophy },
+  { title: "Challenge", href: "/peserta/challenge", icon: Sparkles },
   { title: "Riwayat Poin", href: "/peserta/riwayat-poin", icon: Coins },
   { title: "Katalog Reward", href: "/peserta/reward", icon: Gift },
   { title: "Twibbon Saya", href: "/peserta/twibbon", icon: Camera },
@@ -129,6 +130,7 @@ export function DashboardLayout({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [bottomSheetOpen, setBottomSheetOpen] = React.useState(false);
   const [internalPoints, setInternalPoints] = React.useState<number | null>(null);
   const [pendingVerificationCount, setPendingVerificationCount] = React.useState<number | null>(null);
   const [pendingChallengeProofCount, setPendingChallengeProofCount] = React.useState<number | null>(null);
@@ -304,6 +306,42 @@ export function DashboardLayout({
     });
   }, [role, pendingVerificationCount, pendingChallengeProofCount, pendingTwibbonCount]);
 
+  // Priority navigation items for mobile bottom bar per role
+  const mobileNavConfig = React.useMemo(() => {
+    if (role === "peserta") {
+      const primaryHrefs = ["/peserta", "/peserta/pendaftaran", "/peserta/challenge", "/peserta/twibbon"];
+      const primary = navItems.filter((item) => !item.isHeader && primaryHrefs.includes(item.href));
+      const remaining = navItems.filter((item) => !item.isHeader && !primaryHrefs.includes(item.href));
+      return { primary, remaining, hasMore: remaining.length > 0 };
+    }
+
+    if (role === "juri") {
+      const primary = navItems.filter((item) => !item.isHeader);
+      return { primary, remaining: [], hasMore: false };
+    }
+
+    if (role === "media_center") {
+      const primaryHrefs = ["/media", "/media/konten", "/media/twibbon", "/media/monitor"];
+      const primary = navItems.filter((item) => !item.isHeader && primaryHrefs.includes(item.href));
+      const remaining = navItems.filter((item) => !item.isHeader && !primaryHrefs.includes(item.href));
+      return { primary, remaining, hasMore: remaining.length > 0 };
+    }
+
+    // Role: seksi_acara (Superadmin / Seksi Acara)
+    const primaryHrefs = ["/dashboard", "/dashboard/peserta", "/dashboard/lomba", "/dashboard/penilaian"];
+    const primary = navItems.filter((item) => !item.isHeader && primaryHrefs.includes(item.href));
+    const remaining = navItems.filter((item) => !item.isHeader && !primaryHrefs.includes(item.href));
+    return { primary, remaining, hasMore: remaining.length > 0 };
+  }, [role, navItems]);
+
+  const hasBadgeInRemaining = React.useMemo(() => {
+    return mobileNavConfig.remaining.some((item) => Boolean(item.badge));
+  }, [mobileNavConfig.remaining]);
+
+  const isMoreActive = React.useMemo(() => {
+    return mobileNavConfig.remaining.some((item) => pathname === item.href);
+  }, [mobileNavConfig.remaining, pathname]);
+
   const roleLabel =
     role === "seksi_acara"
       ? "Seksi Acara (Admin)"
@@ -334,20 +372,19 @@ export function DashboardLayout({
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-border/80">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
+            {settings.logoImageUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={settings.logoImageUrl}
+                alt={`Logo ${settings.eventShortName}`}
+                className="h-9 w-9 rounded-xl object-contain bg-white shadow-xs ring-1 ring-border/50 transition-transform duration-200 group-hover:scale-105"
+              />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs transition-transform duration-200 group-hover:scale-105">
+                <Layers className="h-5 w-5 text-accent" />
+              </div>
+            )}
 
-          {settings.logoImageUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={settings.logoImageUrl}
-                        alt={`Logo ${settings.eventShortName}`}
-                        className="h-9 w-9 rounded-xl object-contain bg-white shadow-xs ring-1 ring-border/50 transition-transform duration-200 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs transition-transform duration-200 group-hover:scale-105">
-                        <Layers className="h-5 w-5 text-accent" />
-                      </div>
-                    )}
-            
             {!collapsed && (
               <div className="flex flex-col truncate">
                 <span className="font-heading text-sm font-bold tracking-tight text-foreground truncate">
@@ -419,73 +456,6 @@ export function DashboardLayout({
             );
           })}
         </div>
-
-        {/* Sidebar Footer with Role Switcher Quick Links */}
-        {/* <div className="p-3 border-t border-border bg-muted/20">
-          {!collapsed ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="font-semibold text-accent">Pindah Peran Acara:</span>
-                <Link href="/" title="Ke Beranda Publik" className="text-muted-foreground hover:text-foreground">
-                  <LogOut className="h-3 w-3" />
-                </Link>
-              </div>
-              <div className="grid grid-cols-2 gap-1 text-[11px]">
-                <Link
-                  href="/dashboard"
-                  className={cn(
-                    "px-2 py-1 rounded text-center border transition-colors",
-                    role === "seksi_acara"
-                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-muted"
-                  )}
-                >
-                  Acara
-                </Link>
-                <Link
-                  href="/juri"
-                  className={cn(
-                    "px-2 py-1 rounded text-center border transition-colors",
-                    role === "juri"
-                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-muted"
-                  )}
-                >
-                  Juri
-                </Link>
-                <Link
-                  href="/media"
-                  className={cn(
-                    "px-2 py-1 rounded text-center border transition-colors",
-                    role === "media_center"
-                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-muted"
-                  )}
-                >
-                  Media
-                </Link>
-                <Link
-                  href="/peserta"
-                  className={cn(
-                    "px-2 py-1 rounded text-center border transition-colors",
-                    role === "peserta"
-                      ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
-                      : "border-border text-muted-foreground hover:bg-muted"
-                  )}
-                >
-                  Peserta
-                </Link>
-              </div>
-            </div>
-
-          ) : (
-            <div className="flex justify-center">
-              <Link href="/" title="Ke Beranda Publik">
-                <LogOut className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-              </Link>
-            </div>
-          )}
-        </div> */}
       </aside>
 
       {/* Main Content Area */}
@@ -501,6 +471,7 @@ export function DashboardLayout({
             <button
               onClick={() => setMobileOpen(true)}
               className="p-2 md:hidden text-foreground rounded-lg hover:bg-muted focus:outline-none shrink-0"
+              title="Buka Menu Samping"
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -545,13 +516,13 @@ export function DashboardLayout({
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        {/* Page Content with bottom padding on mobile to clear bottom nav */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-24 md:pb-8">
           {children}
         </main>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer (Left Sidebar Menu) */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div
@@ -622,6 +593,167 @@ export function DashboardLayout({
           </div>
         </div>
       )}
+
+      {/* Mobile Bottom Navigation Bar (Handphone) */}
+      <nav
+        aria-label="Navigasi Bawah Seluler"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border/80 shadow-2xl flex items-center justify-around h-16 px-1 md:hidden select-none"
+      >
+        {mobileNavConfig.primary.map((item) => {
+          const isActive = pathname === item.href;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setBottomSheetOpen(false)}
+              className={cn(
+                "flex-1 flex flex-col items-center justify-center h-full gap-1 px-1 text-center transition-all duration-150 relative active:scale-95",
+                isActive
+                  ? "text-accent font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <div className="relative">
+                <Icon
+                  className={cn(
+                    "h-5 w-5 transition-transform duration-200",
+                    isActive && "scale-110 text-accent"
+                  )}
+                />
+                {item.badge && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 flex items-center justify-center text-[9px] font-black rounded-full bg-accent text-accent-foreground ring-2 ring-card animate-pulse">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
+              <span className={cn("text-[10px] leading-none truncate max-w-[68px]", isActive && "font-bold text-accent")}>
+                {item.title.split(" ")[0]}
+              </span>
+              {isActive && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-accent rounded-b-full shadow-xs" />
+              )}
+            </Link>
+          );
+        })}
+
+        {/* Button 'Lainnya' if role has remaining items */}
+        {mobileNavConfig.hasMore && (
+          <button
+            onClick={() => setBottomSheetOpen(true)}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center h-full gap-1 px-1 text-center transition-all duration-150 relative active:scale-95 cursor-pointer",
+              isMoreActive || bottomSheetOpen
+                ? "text-accent font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <div className="relative">
+              <MoreHorizontal
+                className={cn(
+                  "h-5 w-5 transition-transform duration-200",
+                  (isMoreActive || bottomSheetOpen) && "scale-110 text-accent"
+                )}
+              />
+              {hasBadgeInRemaining && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-card animate-ping" />
+              )}
+            </div>
+            <span className={cn("text-[10px] leading-none truncate", (isMoreActive || bottomSheetOpen) && "font-bold text-accent")}>
+              Lainnya
+            </span>
+            {(isMoreActive || bottomSheetOpen) && (
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-accent rounded-b-full shadow-xs" />
+            )}
+          </button>
+        )}
+      </nav>
+
+      {/* Mobile Bottom Sheet Drawer Modal */}
+      {bottomSheetOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in"
+            onClick={() => setBottomSheetOpen(false)}
+          />
+
+          {/* Bottom Sheet Content */}
+          <div className="relative z-50 bg-card rounded-t-2xl border-t border-border max-h-[80vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
+            {/* Grab Handle Header */}
+            <div className="pt-3 pb-2 px-4 flex flex-col items-center border-b border-border/60 shrink-0">
+              <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full mb-3" />
+              <div className="w-full flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge variant={roleBadgeVariant} className="text-[10px]">
+                    {roleLabel}
+                  </Badge>
+                  <span className="font-heading text-sm font-bold text-foreground">
+                    Menu Seluler
+                  </span>
+                </div>
+                <button
+                  onClick={() => setBottomSheetOpen(false)}
+                  className="p-1 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Sheet Menu Items List */}
+            <div className="p-4 overflow-y-auto space-y-1.5 pb-8">
+              {navItems.map((item, idx) => {
+                if (item.isHeader) {
+                  return (
+                    <div
+                      key={idx}
+                      className="pt-4 pb-1.5 px-3 text-[10px] font-extrabold tracking-widest text-muted-foreground uppercase border-t border-border/40 first:border-0 first:pt-0"
+                    >
+                      {item.title}
+                    </div>
+                  );
+                }
+
+                const isActive = pathname === item.href;
+                const Icon = item.icon;
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setBottomSheetOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3.5 px-3.5 py-3 text-sm font-medium rounded-xl transition-all duration-150 active:scale-[0.99]",
+                      isActive
+                        ? "bg-primary text-primary-foreground font-bold shadow-xs"
+                        : "text-foreground hover:bg-muted/80 active:bg-muted"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "p-2 rounded-lg shrink-0",
+                        isActive
+                          ? "bg-accent/20 text-accent"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <span className="flex-1 truncate">{item.title}</span>
+                    {item.badge && (
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-accent text-accent-foreground">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

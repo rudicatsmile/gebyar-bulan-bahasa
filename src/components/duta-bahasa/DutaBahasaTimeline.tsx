@@ -173,7 +173,7 @@ export function DutaBahasaTimeline({
 
       {/* Timeline Steps Bar */}
       <div className="relative">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {stages.map((stg, idx) => {
             const isSelected = selectedStage?.id === stg.id;
             return (

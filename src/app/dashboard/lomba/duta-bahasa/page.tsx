@@ -383,7 +383,7 @@ export default function DashboardDutaBahasaPage() {
             </div>
 
             {/* Timeline Tahapan */}
-            <Card className="p-6 sm:p-8">
+            <Card className="p-4 sm:p-6 lg:p-8">
               <h2 className="font-heading text-lg font-bold text-foreground mb-6 flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-accent" />
                 <span>Timeline Tahapan</span>
@@ -398,89 +398,102 @@ export default function DashboardDutaBahasaPage() {
                   });
 
                   return (
-                    <div key={stage.id} className="border border-border rounded-xl overflow-hidden">
+                    <div key={stage.id} className="border border-border rounded-xl overflow-hidden bg-card">
                       {/* Stage Header */}
                       <div
-                        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+                        className="p-3.5 sm:p-4 cursor-pointer hover:bg-muted/30 transition-colors flex flex-col sm:flex-row sm:items-center gap-3"
                         onClick={() => setExpandedStage(isExpanded ? null : stage.id)}
                       >
-                        {/* Timeline Indicator */}
-                        <div className="flex flex-col items-center shrink-0">
-                          <div
-                            className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
-                              stage.status === "completed"
-                                ? "bg-emerald-500 text-white border-emerald-500"
-                                : stage.status === "active"
-                                ? "bg-amber-500 text-white border-amber-500 animate-pulse"
-                                : "bg-muted text-muted-foreground border-border"
-                            }`}
-                          >
-                            {stage.status === "completed" ? (
-                              <CheckCircle2 className="h-5 w-5" />
+                        <div className="flex items-start gap-3 w-full sm:w-auto sm:flex-1 min-w-0">
+                          {/* Timeline Indicator */}
+                          <div className="flex flex-col items-center shrink-0">
+                            <div
+                              className={`h-9 w-9 sm:h-10 sm:w-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold border-2 ${
+                                stage.status === "completed"
+                                  ? "bg-emerald-500 text-white border-emerald-500"
+                                  : stage.status === "active"
+                                  ? "bg-amber-500 text-white border-amber-500 animate-pulse"
+                                  : "bg-muted text-muted-foreground border-border"
+                              }`}
+                            >
+                              {stage.status === "completed" ? (
+                                <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                              ) : (
+                                stage.stageOrder
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Stage Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-heading text-xs sm:text-sm font-bold text-foreground">
+                                {stage.title}
+                              </h3>
+                              <Badge
+                                className={`text-[10px] border ${stageStatusBadge[stage.status]}`}
+                              >
+                                {stageStatusLabel[stage.status]}
+                              </Badge>
+                            </div>
+                            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3 text-accent shrink-0" />
+                                <span>{stage.stageDayLabel}</span>
+                              </span>
+                              <span className="text-muted-foreground/50 hidden sm:inline">|</span>
+                              <span className="bg-muted/60 px-1.5 py-0.5 rounded text-[10px] sm:bg-transparent sm:p-0">
+                                {stageParticipants.length} peserta
+                              </span>
+                            </p>
+                          </div>
+
+                          {/* Mobile Expand Chevron */}
+                          <div className="shrink-0 pt-0.5 sm:hidden">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
                             ) : (
-                              stage.stageOrder
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
                             )}
                           </div>
-                          {idx < stages.length - 1 && (
-                            <div
-                              className={`w-0.5 h-4 mt-1 ${
-                                stage.status === "completed"
-                                  ? "bg-emerald-500"
-                                  : "bg-border"
-                              }`}
-                            />
-                          )}
                         </div>
 
-                        {/* Stage Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-heading text-sm font-bold text-foreground truncate">
-                              {stage.title}
-                            </h3>
-                            <Badge
-                              className={`text-[10px] border ${stageStatusBadge[stage.status]}`}
+                        {/* Status Toggle & Desktop Expand Chevron */}
+                        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2.5 sm:pt-0 border-t border-border/40 sm:border-0 shrink-0">
+                          <span className="text-[11px] text-muted-foreground font-medium sm:hidden">
+                            Status Tahap:
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={stage.status}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleSaveStageStatus(
+                                  stage.id,
+                                  e.target.value as DutaBahasaStage["status"]
+                                );
+                              }}
+                              className="text-[11px] px-2.5 py-1 rounded-md border border-border bg-background text-foreground cursor-pointer focus:ring-1 focus:ring-accent"
                             >
-                              {stageStatusLabel[stage.status]}
-                            </Badge>
+                              <option value="upcoming">Akan Datang</option>
+                              <option value="active">Berlangsung</option>
+                              <option value="completed">Selesai</option>
+                            </select>
+                            <div className="hidden sm:block">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                            <Calendar className="h-3 w-3" />
-                            <span>{stage.stageDayLabel}</span>
-                            <span className="text-muted-foreground/50">|</span>
-                            <span>{stageParticipants.length} peserta</span>
-                          </p>
-                        </div>
-
-                        {/* Status Toggle & Expand */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <select
-                            value={stage.status}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleSaveStageStatus(
-                                stage.id,
-                                e.target.value as DutaBahasaStage["status"]
-                              );
-                            }}
-                            className="text-[11px] px-2 py-1 rounded-md border border-border bg-background text-foreground cursor-pointer"
-                          >
-                            <option value="upcoming">Akan Datang</option>
-                            <option value="active">Berlangsung</option>
-                            <option value="completed">Selesai</option>
-                          </select>
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          )}
                         </div>
                       </div>
 
-                      {/* Expanded: Participants Table */}
+                      {/* Expanded: Participants View */}
                       {isExpanded && (
-                        <div className="border-t border-border p-4 bg-muted/10">
+                        <div className="border-t border-border p-3.5 sm:p-4 bg-muted/10">
                           <p className="text-xs text-muted-foreground mb-3">
                             {stage.description}
                           </p>
@@ -490,100 +503,165 @@ export default function DashboardDutaBahasaPage() {
                               Belum ada peserta di tahap ini.
                             </p>
                           ) : (
-                            <div className="overflow-x-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead className="text-[10px] w-8">#</TableHead>
-                                    <TableHead className="text-[10px]">Peserta</TableHead>
-                                    <TableHead className="text-[10px]">Institusi</TableHead>
-                                    <TableHead className="text-[10px]">Status Tahap</TableHead>
-                                    <TableHead className="text-[10px]">Skor</TableHead>
-                                    <TableHead className="text-[10px]">Catatan</TableHead>
-                                    <TableHead className="text-[10px] text-right">Aksi</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {stageParticipants.map((p, pIdx) => {
-                                    const progress = p.progress[stage.id];
-                                    return (
-                                      <TableRow key={p.participantId}>
-                                        <TableCell className="text-xs font-mono">
-                                          {pIdx + 1}
-                                        </TableCell>
-                                        <TableCell>
-                                          <div>
-                                            <p className="text-xs font-semibold text-foreground">
-                                              {p.fullName}
-                                            </p>
-                                            <p className="text-[10px] text-muted-foreground font-mono">
-                                              {p.registrationNumber}
-                                            </p>
+                            <>
+                              {/* Mobile Participant Card List */}
+                              <div className="space-y-2.5 sm:hidden">
+                                {stageParticipants.map((p, pIdx) => {
+                                  const progress = p.progress[stage.id];
+                                  return (
+                                    <div
+                                      key={p.participantId}
+                                      className="p-3 rounded-lg border border-border bg-card space-y-2 text-xs"
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-mono text-[10px] font-bold text-muted-foreground">
+                                              #{pIdx + 1}
+                                            </span>
+                                            <p className="font-bold text-foreground">{p.fullName}</p>
                                           </div>
-                                        </TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
-                                          {p.institution || "-"}
-                                        </TableCell>
-                                        <TableCell>
-                                          <Badge
-                                            className={`text-[10px] border ${
-                                              statusBadge[progress?.status || "terdaftar"]
-                                            }`}
-                                          >
-                                            {statusLabel[progress?.status || "terdaftar"]}
-                                          </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-xs font-mono">
-                                          {progress?.score != null ? progress.score : "-"}
-                                        </TableCell>
-                                        <TableCell className="text-[10px] text-muted-foreground max-w-[150px] truncate">
-                                          {progress?.notes || "-"}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                          <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              className="text-[10px] h-7 px-2 cursor-pointer"
-                                              onClick={() => {
-                                                setUpdateDialog({
-                                                  participantId: p.participantId,
-                                                  participantName: p.fullName,
-                                                  stageId: stage.id,
-                                                  stageTitle: stage.title,
-                                                });
-                                                setUpdateStatus(progress?.status || "menunggu");
-                                                setUpdateScore(
-                                                  progress?.score != null
-                                                    ? String(progress.score)
-                                                    : ""
-                                                );
-                                                setUpdateNotes(progress?.notes || "");
-                                              }}
+                                          <p className="text-[10px] text-muted-foreground font-mono">
+                                            {p.registrationNumber} • {p.institution || "-"}
+                                          </p>
+                                        </div>
+                                        <Badge
+                                          className={`text-[9px] border shrink-0 ${
+                                            statusBadge[progress?.status || "terdaftar"]
+                                          }`}
+                                        >
+                                          {statusLabel[progress?.status || "terdaftar"]}
+                                        </Badge>
+                                      </div>
+
+                                      {(progress?.score != null || progress?.notes) && (
+                                        <div className="pt-1.5 border-t border-border/40 text-[11px] flex items-center justify-between text-muted-foreground">
+                                          <span>
+                                            Skor:{" "}
+                                            <strong className="text-foreground font-mono">
+                                              {progress?.score != null ? progress.score : "-"}
+                                            </strong>
+                                          </span>
+                                          {progress?.notes && (
+                                            <span className="truncate max-w-[140px] text-muted-foreground">
+                                              {progress.notes}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      <div className="pt-1 flex items-center justify-end">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-[11px] h-7 px-3 w-full cursor-pointer"
+                                          onClick={() => {
+                                            setUpdateDialog({
+                                              participantId: p.participantId,
+                                              participantName: p.fullName,
+                                              stageId: stage.id,
+                                              stageTitle: stage.title,
+                                            });
+                                            setUpdateStatus(progress?.status || "menunggu");
+                                            setUpdateScore(
+                                              progress?.score != null
+                                                ? String(progress.score)
+                                                : ""
+                                            );
+                                            setUpdateNotes(progress?.notes || "");
+                                          }}
+                                        >
+                                          Kelola Status & Nilai
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Desktop/Tablet Participant Table */}
+                              <div className="hidden sm:block overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="text-[10px] w-8">#</TableHead>
+                                      <TableHead className="text-[10px]">Peserta</TableHead>
+                                      <TableHead className="text-[10px]">Institusi</TableHead>
+                                      <TableHead className="text-[10px]">Status Tahap</TableHead>
+                                      <TableHead className="text-[10px]">Skor</TableHead>
+                                      <TableHead className="text-[10px]">Catatan</TableHead>
+                                      <TableHead className="text-[10px] text-right">Aksi</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {stageParticipants.map((p, pIdx) => {
+                                      const progress = p.progress[stage.id];
+                                      return (
+                                        <TableRow key={p.participantId}>
+                                          <TableCell className="text-xs font-mono">
+                                            {pIdx + 1}
+                                          </TableCell>
+                                          <TableCell>
+                                            <div>
+                                              <p className="text-xs font-semibold text-foreground">
+                                                {p.fullName}
+                                              </p>
+                                              <p className="text-[10px] text-muted-foreground font-mono">
+                                                {p.registrationNumber}
+                                              </p>
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="text-xs text-muted-foreground">
+                                            {p.institution || "-"}
+                                          </TableCell>
+                                          <TableCell>
+                                            <Badge
+                                              className={`text-[10px] border ${
+                                                statusBadge[progress?.status || "terdaftar"]
+                                              }`}
                                             >
-                                              Update Status
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              className="text-destructive h-7 w-7 p-0 cursor-pointer"
-                                              onClick={() =>
-                                                handleRemoveParticipant(
-                                                  p.participantId,
-                                                  p.fullName
-                                                )
-                                              }
-                                            >
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                            </div>
+                                              {statusLabel[progress?.status || "terdaftar"]}
+                                            </Badge>
+                                          </TableCell>
+                                          <TableCell className="text-xs font-mono">
+                                            {progress?.score != null ? progress.score : "-"}
+                                          </TableCell>
+                                          <TableCell className="text-[10px] text-muted-foreground max-w-[150px] truncate">
+                                            {progress?.notes || "-"}
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-[10px] h-7 px-2 cursor-pointer"
+                                                onClick={() => {
+                                                  setUpdateDialog({
+                                                    participantId: p.participantId,
+                                                    participantName: p.fullName,
+                                                    stageId: stage.id,
+                                                    stageTitle: stage.title,
+                                                  });
+                                                  setUpdateStatus(progress?.status || "menunggu");
+                                                  setUpdateScore(
+                                                    progress?.score != null
+                                                      ? String(progress.score)
+                                                      : ""
+                                                  );
+                                                  setUpdateNotes(progress?.notes || "");
+                                                }}
+                                              >
+                                                Kelola
+                                              </Button>
+                                            </div>
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </>
                           )}
                         </div>
                       )}

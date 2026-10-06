@@ -262,7 +262,7 @@ export default function PesertaPuzzlePage() {
 
   return (
     <DashboardLayout role="peserta" participantPoints={participant?.totalPoints}>
-      <div className="space-y-6 pb-24 md:pb-8">
+      <div className={cn("space-y-6", phase === "playing" ? "pb-48 md:pb-8" : "pb-24 md:pb-8")}>
         {/* Header */}
         <div>
           <Link
@@ -616,8 +616,8 @@ export default function PesertaPuzzlePage() {
 
             </div>
 
-            {/* STICKY MOBILE BOTTOM DOCK (Thumb Zone Friendly) */}
-            <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t border-border shadow-2xl p-3 md:hidden">
+            {/* STICKY MOBILE BOTTOM DOCK (Thumb Zone Friendly - Stacked above Bottom Navigation Bar) */}
+            <div className="fixed bottom-16 left-0 right-0 z-30 bg-card/95 backdrop-blur-md border-t border-border shadow-xl p-3 md:hidden">
               <div className="max-w-md mx-auto space-y-2">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="font-semibold text-foreground flex items-center gap-1.5">

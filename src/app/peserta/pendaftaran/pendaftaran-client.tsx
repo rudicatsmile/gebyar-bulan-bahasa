@@ -40,8 +40,8 @@ import {
   Info,
 } from "lucide-react";
 
-/** Batas cabang lomba per peserta — selaras dengan guard di actions/participants.ts */
-const MAX_LOMBA = Number(process.env.NEXT_PUBLIC_MAX_COMPETITION_PER_PARTICIPANT || 3);
+/** Batas cabang lomba per peserta — 8 cabang lomba */
+const MAX_LOMBA = 8;
 
 /** registrations.participant_id adalah FK ke public.participants.id, jadi id fallback
  *  (profiles.id / user.id / id demo "part-1") tidak boleh dikirim ke server action. */
@@ -208,12 +208,12 @@ export function PesertaPendaftaranClient() {
       teamName: isTeam ? teamName.trim() : undefined,
       teamMembers: isTeam
         ? validMembers.map((m, idx) => ({
-            name: m.name.trim(),
-            // Ketua tim = baris pertama, sesuai kebutuhan panitia memanggil urutan tampil
-            role: idx === 0 ? ("ketua" as const) : ("anggota" as const),
-            studentId: m.studentId.trim() || undefined,
-            institution: m.institution.trim() || undefined,
-          }))
+          name: m.name.trim(),
+          // Ketua tim = baris pertama, sesuai kebutuhan panitia memanggil urutan tampil
+          role: idx === 0 ? ("ketua" as const) : ("anggota" as const),
+          studentId: m.studentId.trim() || undefined,
+          institution: m.institution.trim() || undefined,
+        }))
         : undefined,
     });
 
@@ -253,8 +253,8 @@ export function PesertaPendaftaranClient() {
         participant?.status === "ditolak"
           ? "danger"
           : participant?.status === "menunggu_verifikasi"
-          ? "warning"
-          : "success"
+            ? "warning"
+            : "success"
       }
       className="text-xs font-mono uppercase"
     >
@@ -277,10 +277,10 @@ export function PesertaPendaftaranClient() {
             <div>
               <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
                 <Trophy className="h-7 w-7 text-accent" />
-                <span>Status Pendaftaran Cabang Lomba</span>
+                <span>Pendaftaran Cabang Lomba</span>
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Daftar lomba pilihan Anda dan pantau status verifikasi berkas persyaratan.
+                Daftar lomba pilihan Anda dan status berkas persyaratan.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -426,13 +426,13 @@ export function PesertaPendaftaranClient() {
 
                       {(enr.competitionSlug?.toLowerCase().includes("duta") ||
                         enr.competitionName?.toLowerCase().includes("duta")) && (
-                        <div className="pt-3 border-t border-success/20">
-                          <DutaBahasaTimeline
-                            currentParticipantId={participant?.participantRowId || participant?.id}
-                            showParticipantsList={false}
-                          />
-                        </div>
-                      )}
+                          <div className="pt-3 border-t border-success/20">
+                            <DutaBahasaTimeline
+                              currentParticipantId={participant?.participantRowId || participant?.id}
+                              showParticipantsList={false}
+                            />
+                          </div>
+                        )}
                     </Card>
                   );
                 })}
