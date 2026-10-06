@@ -78,8 +78,20 @@ export function useRealtimeMonitoring(slug: string): UseRealtimeMonitoringReturn
           if (res.scores) setScores(res.scores);
           setLastUpdatedAt(new Date());
         }
-      } catch (err) {
-        console.error("[RealtimeMonitoring] Gagal memuat data:", err);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat memuat data.";
+        const isNetworkErr =
+          msg.toLowerCase().includes("networkerror") ||
+          msg.toLowerCase().includes("failed to fetch") ||
+          msg.toLowerCase().includes("load failed") ||
+          msg.toLowerCase().includes("abort") ||
+          msg.toLowerCase().includes("network request failed");
+
+        if (isNetworkErr) {
+          console.warn("[RealtimeMonitoring] Disrupsi jaringan sementara:", msg);
+        } else {
+          console.error("[RealtimeMonitoring] Gagal memuat data:", msg);
+        }
       } finally {
         if (mountedRef.current) setLoading(false);
       }

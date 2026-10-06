@@ -78,13 +78,31 @@ export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtim
           setError(null);
           setLastUpdatedAt(new Date());
         } else {
-          setError(res.error || "Gagal memuat data penilaian");
+          setCompetition((prev) => {
+            if (!prev) setError(res.error || "Gagal memuat data penilaian");
+            return prev;
+          });
         }
       } catch (err: unknown) {
         if (!mountedRef.current) return;
         const msg = err instanceof Error ? err.message : "Terjadi kesalahan saat memuat rekap.";
-        console.error("[RealtimeScoringRecap] Fetch error:", msg);
-        setError(msg);
+        const isNetworkErr =
+          msg.toLowerCase().includes("networkerror") ||
+          msg.toLowerCase().includes("failed to fetch") ||
+          msg.toLowerCase().includes("load failed") ||
+          msg.toLowerCase().includes("abort") ||
+          msg.toLowerCase().includes("network request failed");
+
+        if (isNetworkErr) {
+          console.warn("[RealtimeScoringRecap] Disrupsi jaringan sementara:", msg);
+          setCompetition((prev) => {
+            if (!prev) setError("Koneksi terganggu. Sistem sedang mencoba menghubungkan kembali...");
+            return prev;
+          });
+        } else {
+          console.error("[RealtimeScoringRecap] Fetch error:", msg);
+          setError(msg);
+        }
       } finally {
         if (mountedRef.current) {
           setLoading(false);
