@@ -72,6 +72,16 @@ export default function PesertaQrHurufPage() {
     message: string;
   } | null>(null);
 
+  // Live Camera Modal Scanner State
+  const [cameraModalOpen, setCameraModalOpen] = React.useState(false);
+  const [cameraStatus, setCameraStatus] = React.useState<"idle" | "requesting" | "active" | "denied" | "error">("idle");
+  const [facingMode, setFacingMode] = React.useState<"environment" | "user">("environment");
+  const [cameraErrorMsg, setCameraErrorMsg] = React.useState("");
+  
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const animFrameRef = React.useRef<number | null>(null);
+
   // Construction board state
   // letters placed into the formed sentence
   const [placedTokens, setPlacedTokens] = React.useState<
