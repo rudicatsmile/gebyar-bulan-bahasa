@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ChallengeType } from "@/types/database.types";
+import { STANDS } from "@/lib/dummy-data";
 
 export interface AdminChallengeItem {
   id: string;
@@ -244,18 +245,57 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
     return { success: false, error: parsed.error.issues[0]?.message };
   }
 
+  let cleanInput = parsed.data.standCode.trim();
+
+  // Defensively extract if user passed JSON payload (from QRCodeCard)
+  if (cleanInput.startsWith("{") && cleanInput.endsWith("}")) {
+    try {
+      const obj = JSON.parse(cleanInput);
+      if (obj.code) cleanInput = String(obj.code).trim();
+      else if (obj.token) cleanInput = String(obj.token).trim();
+    } catch {}
+  }
+
+  // Defensively extract if URL
+  if (cleanInput.includes("http://") || cleanInput.includes("https://") || cleanInput.includes("HTTP://") || cleanInput.includes("HTTPS://")) {
+    try {
+      const parsedUrl = new URL(cleanInput);
+      const codeParam = parsedUrl.searchParams.get("code") || parsedUrl.searchParams.get("stand") || parsedUrl.searchParams.get("token");
+      if (codeParam) cleanInput = codeParam.trim();
+    } catch {}
+  }
+
   try {
     const supabase = await createClient();
 
-    // 1. Cari stand berdasarkan kode unik (case insensitive)
-    const { data: stand, error: sErr } = await supabase
+    // 1. Cari stand berdasarkan kode unik atau qr_token (case insensitive)
+    let stand: { id: string; name: string; points_per_visit: number; is_active: boolean } | null = null;
+    
+    const { data: dbStand } = await supabase
       .from("stands")
       .select("id, name, points_per_visit, is_active")
-      .ilike("code", parsed.data.standCode.trim())
+      .or(`code.ilike.${cleanInput},qr_token.ilike.${cleanInput}`)
       .maybeSingle();
 
-    if (sErr || !stand) {
-      return { success: false, error: `Kode stand "${parsed.data.standCode}" tidak valid atau tidak terdaftar.` };
+    if (dbStand) {
+      stand = dbStand;
+    } else {
+      // Fallback: Check in STANDS dummy-data if database not yet migrated
+      const matchedDummy = STANDS.find(
+        (s) => s.code.toUpperCase() === cleanInput.toUpperCase() || s.qrToken.toUpperCase() === cleanInput.toUpperCase()
+      );
+      if (matchedDummy) {
+        stand = {
+          id: matchedDummy.id,
+          name: matchedDummy.name,
+          points_per_visit: matchedDummy.points,
+          is_active: true,
+        };
+      }
+    }
+
+    if (!stand) {
+      return { success: false, error: `Kode stand "${cleanInput}" tidak valid atau tidak terdaftar.` };
     }
 
     if (!stand.is_active) {

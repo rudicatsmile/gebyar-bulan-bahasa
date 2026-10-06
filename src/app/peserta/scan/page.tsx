@@ -19,10 +19,12 @@ import {
   RotateCcw,
   Loader2,
   VideoOff,
+  HelpCircle,
 } from "lucide-react";
 import { claimStandVisit } from "@/app/actions/challenges";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
+import { cn } from "@/lib/utils";
 import jsQR from "jsqr";
 
 function PesertaScanContent() {
@@ -40,6 +42,10 @@ function PesertaScanContent() {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const animFrameRef = React.useRef<number | null>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const barcodeDetectorRef = React.useRef<any>(null);
+  const isProcessingFrameRef = React.useRef<boolean>(false);
+  const lastScanTimestampRef = React.useRef<number>(0);
 
   const [cameraStatus, setCameraStatus] = React.useState<"idle" | "requesting" | "active" | "denied" | "error" | "unsupported">("idle");
   const [cameraErrorDetail, setCameraErrorDetail] = React.useState("");
@@ -47,6 +53,12 @@ function PesertaScanContent() {
   const [hasTorch, setHasTorch] = React.useState(false);
   const [torchOn, setTorchOn] = React.useState(false);
   const [lastScannedCode, setLastScannedCode] = React.useState<string | null>(null);
+
+  // Live feedback on viewfinder
+  const [scanStatus, setScanStatus] = React.useState<{
+    status: "scanning" | "processing" | "success" | "info" | "error";
+    message: string;
+  }>({ status: "scanning", message: "Arahkan kamera ke stiker QR stand" });
 
   // Helper to retrieve active participant UUID or fallback
   const resolveParticipantId = async (): Promise<string> => {
@@ -72,59 +84,149 @@ function PesertaScanContent() {
     return "11111111-1111-1111-1111-111111111111";
   };
 
-  // Process scanned code string (extract stand code from URL or raw string)
-  const processCodeString = (rawText: string): string => {
-    let clean = rawText.trim();
+  // Sound and haptic feedback
+  const triggerScanFeedback = React.useCallback(() => {
+    if (typeof window !== "undefined") {
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate([70, 40, 70]);
+        } catch {}
+      }
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          gain.gain.setValueAtTime(0.15, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.15);
+        }
+      } catch {}
+    }
+  }, []);
 
-    // If it's a URL, extract 'code' or 'stand' query parameter
-    if (clean.includes("http://") || clean.includes("https://")) {
+  // Process scanned code string (extract stand code from JSON, URL, or raw string)
+  const processCodeString = React.useCallback((rawText: string): string => {
+    let clean = rawText.trim();
+    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+      clean = clean.slice(1, -1).trim();
+    }
+    // If it's a JSON string (from QRCodeCard)
+    if (clean.startsWith("{") && clean.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(clean);
+        if (parsed.code) return String(parsed.code).trim().toUpperCase();
+        if (parsed.token) return String(parsed.token).trim().toUpperCase();
+        if (parsed.standCode) return String(parsed.standCode).trim().toUpperCase();
+      } catch {}
+    }
+    // If it's a URL, extract 'code' or 'stand' or 'token' query parameter
+    if (clean.includes("http://") || clean.includes("https://") || clean.includes("HTTP://") || clean.includes("HTTPS://")) {
       try {
         const parsedUrl = new URL(clean);
-        const codeParam = parsedUrl.searchParams.get("code") || parsedUrl.searchParams.get("stand");
-        if (codeParam) clean = codeParam;
-      } catch {
-        // fallback
-      }
+        const codeParam = parsedUrl.searchParams.get("code") || parsedUrl.searchParams.get("stand") || parsedUrl.searchParams.get("token");
+        if (codeParam) return codeParam.trim().toUpperCase();
+      } catch {}
     }
 
     return clean.toUpperCase();
-  };
+  }, []);
 
-  const handleClaimCode = async (codeString: string) => {
-    const cleanCode = processCodeString(codeString);
-    if (!cleanCode) return;
+  const handleClaimCode = React.useCallback(
+    async (codeString: string) => {
+      const cleanCode = processCodeString(codeString);
+      if (!cleanCode) return;
 
-    const matched = STANDS.find((s) => s.code === cleanCode);
-
-    if (!matched) {
-      setErrorMsg(`Kode stand "${cleanCode}" tidak terdaftar. Pastikan kode 6 karakter yang benar.`);
-      return;
-    }
-
-    setScanningSimulated(true);
-    setErrorMsg("");
-
-    try {
-      const participantId = await resolveParticipantId();
-      const res = await claimStandVisit({
-        participantId,
-        standCode: cleanCode,
+      triggerScanFeedback();
+      setScanningSimulated(true);
+      setErrorMsg("");
+      setScanStatus({
+        status: "processing",
+        message: "QR Stand Terdeteksi! Memverifikasi...",
       });
 
-      if (!res.success && res.error && !res.error.includes("placeholder")) {
-        setErrorMsg(res.error);
-        setScanningSimulated(false);
-        return;
-      }
-    } catch {
-      // Fallback to client state
-    }
+      try {
+        const participantId = await resolveParticipantId();
+        const res = await claimStandVisit({
+          participantId,
+          standCode: cleanCode,
+        });
 
-    setScanningSimulated(false);
-    setSuccessStand({ name: matched.name, points: matched.points });
-    setManualCode("");
-    refetch();
-  };
+        if (res.success) {
+          const matched = STANDS.find(
+            (s) => s.code.toUpperCase() === cleanCode.toUpperCase() || s.qrToken.toUpperCase() === cleanCode.toUpperCase()
+          );
+          const sName = res.data?.standName || matched?.name || `Stand ${cleanCode}`;
+          const sPoints = res.data?.pointsAwarded || matched?.points || 10;
+
+          setScanStatus({
+            status: "success",
+            message: `🎉 Berhasil! Mengunjungi ${sName} (+${sPoints} Poin)`,
+          });
+          setSuccessStand({ name: sName, points: sPoints });
+          setManualCode("");
+          refetch();
+        } else {
+          const isAlreadyClaimed = res.error?.includes("sudah pernah");
+          setScanStatus({
+            status: isAlreadyClaimed ? "info" : "error",
+            message: res.error || "Gagal mengklaim poin stand.",
+          });
+          setErrorMsg(res.error || "Gagal mengklaim poin stand.");
+
+          // Resume scanning automatically after 2.5 seconds
+          setTimeout(() => {
+            setScanStatus({
+              status: "scanning",
+              message: "Arahkan kamera ke stiker QR stand",
+            });
+            setLastScannedCode(null);
+            isProcessingFrameRef.current = false;
+          }, 2500);
+        }
+      } catch (err: any) {
+        setScanStatus({
+          status: "error",
+          message: err.message || "Gagal mengklaim poin stand.",
+        });
+        setErrorMsg(err.message || "Gagal mengklaim poin stand.");
+        setTimeout(() => {
+          setScanStatus({
+            status: "scanning",
+            message: "Arahkan kamera ke stiker QR stand",
+          });
+          setLastScannedCode(null);
+          isProcessingFrameRef.current = false;
+        }, 2500);
+      } finally {
+        setScanningSimulated(false);
+      }
+    },
+    [processCodeString, triggerScanFeedback, refetch]
+  );
+
+  // Stop Camera Stream
+  const stopCamera = React.useCallback(() => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraStatus("idle");
+    isProcessingFrameRef.current = false;
+  }, []);
 
   // Start Real Camera Stream
   const startCamera = React.useCallback(async () => {
@@ -139,6 +241,7 @@ function PesertaScanContent() {
 
     setCameraStatus("requesting");
     setCameraErrorDetail("");
+    setScanStatus({ status: "scanning", message: "Membuka kamera..." });
 
     try {
       const constraints: MediaStreamConstraints = {
@@ -154,10 +257,11 @@ function PesertaScanContent() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        await videoRef.current.play().catch(() => {});
       }
 
       setCameraStatus("active");
+      setScanStatus({ status: "scanning", message: "Arahkan kamera ke stiker QR stand" });
 
       // Check for torch capability
       const videoTrack = stream.getVideoTracks()[0];
@@ -175,20 +279,24 @@ function PesertaScanContent() {
         setCameraErrorDetail(err.message || "Gagal membuka kamera perangkat.");
       }
     }
-  }, [facingMode]);
+  }, [facingMode, stopCamera]);
 
-  // Stop Camera Stream
-  const stopCamera = React.useCallback(() => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
+  // Keep video element attached to stream whenever camera is active
+  React.useEffect(() => {
+    if (videoRef.current && streamRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+      }
+      videoRef.current.play().catch(() => {});
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
+  }, [cameraStatus]);
+
+  // Initialize BarcodeDetector once if available
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && "BarcodeDetector" in window && !barcodeDetectorRef.current) {
+      try {
+        barcodeDetectorRef.current = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+      } catch {}
     }
   }, []);
 
@@ -228,68 +336,86 @@ function PesertaScanContent() {
       setLastScannedCode(urlCode);
       handleClaimCode(urlCode);
     }
-  }, [urlCode]);
+  }, [urlCode, lastScannedCode, handleClaimCode]);
 
-  // Continuous Dual-Engine Scanner Loop (Native BarcodeDetector + jsQR fallback for iOS Safari)
-  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-
+  // Continuous High-Performance Scanner Loop (Native BarcodeDetector + jsQR Fallback)
   React.useEffect(() => {
     if (cameraStatus !== "active" || successStand) return;
 
-    let isScanning = true;
+    let isScanningActive = true;
 
-    const detectFrame = async () => {
-      if (!isScanning || !videoRef.current) return;
+    const detectFrame = async (timestamp: number) => {
+      if (!isScanningActive || !videoRef.current) return;
       const videoEl = videoRef.current;
 
-      if (videoEl.readyState >= 2) {
-        // Engine 1: Native BarcodeDetector (Chrome / Chromium Android)
-        if ("BarcodeDetector" in window) {
-          try {
-            const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
-            const barcodes = await detector.detect(videoEl);
+      // Throttle scanning to every 100ms and avoid concurrent frame decoding
+      if (
+        !isProcessingFrameRef.current &&
+        timestamp - lastScanTimestampRef.current >= 100 &&
+        videoEl.readyState >= 2 &&
+        videoEl.videoWidth > 0 &&
+        videoEl.videoHeight > 0
+      ) {
+        lastScanTimestampRef.current = timestamp;
+        isProcessingFrameRef.current = true;
 
-            if (barcodes && barcodes.length > 0) {
-              const detectedValue = barcodes[0].rawValue;
-              if (detectedValue && detectedValue !== lastScannedCode) {
-                setLastScannedCode(detectedValue);
-                handleClaimCode(detectedValue);
-                isScanning = false;
-                return;
-              }
-            }
-          } catch {
-            // ignore detector frame error
-          }
-        }
-
-        // Engine 2: Pure JS jsQR Fallback (iOS Safari / Chrome iOS / Firefox)
         try {
-          if (!canvasRef.current) {
-            canvasRef.current = document.createElement("canvas");
-          }
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext("2d", { willReadFrequently: true });
-          if (ctx && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
-            canvas.width = videoEl.videoWidth;
-            canvas.height = videoEl.videoHeight;
-            ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: "dontInvert",
-            });
+          let detectedValue: string | null = null;
 
-            if (code && code.data && code.data !== lastScannedCode) {
-              setLastScannedCode(code.data);
-              handleClaimCode(code.data);
-              isScanning = false;
-              return;
-            }
+          // Engine 1: Native BarcodeDetector (Chrome / Chromium Android / Edge)
+          if (barcodeDetectorRef.current) {
+            try {
+              const barcodes = await barcodeDetectorRef.current.detect(videoEl);
+              if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+                detectedValue = barcodes[0].rawValue;
+              }
+            } catch {}
           }
-        } catch {}
+
+          // Engine 2: Pure JS jsQR Fallback with Downscaling (iOS Safari / Firefox / older Android)
+          if (!detectedValue) {
+            try {
+              if (!canvasRef.current) {
+                canvasRef.current = document.createElement("canvas");
+              }
+              const canvas = canvasRef.current;
+              // Downscale to max 480px for lightning-fast JS decode (10-20ms)
+              const maxDim = 480;
+              const scale = Math.min(1, maxDim / Math.max(videoEl.videoWidth, videoEl.videoHeight));
+              const w = Math.round(videoEl.videoWidth * scale);
+              const h = Math.round(videoEl.videoHeight * scale);
+
+              if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+              }
+
+              const ctx = canvas.getContext("2d", { willReadFrequently: true });
+              if (ctx) {
+                ctx.drawImage(videoEl, 0, 0, w, h);
+                const imageData = ctx.getImageData(0, 0, w, h);
+                const code = jsQR(imageData.data, w, h, {
+                  inversionAttempts: "dontInvert",
+                });
+                if (code && code.data) {
+                  detectedValue = code.data;
+                }
+              }
+            } catch {}
+          }
+
+          if (detectedValue && isScanningActive && detectedValue !== lastScannedCode) {
+            isScanningActive = false; // Stop further frame capture
+            setLastScannedCode(detectedValue);
+            await handleClaimCode(detectedValue);
+            return;
+          }
+        } finally {
+          isProcessingFrameRef.current = false;
+        }
       }
 
-      if (isScanning) {
+      if (isScanningActive) {
         animFrameRef.current = requestAnimationFrame(detectFrame);
       }
     };
@@ -297,12 +423,13 @@ function PesertaScanContent() {
     animFrameRef.current = requestAnimationFrame(detectFrame);
 
     return () => {
-      isScanning = false;
+      isScanningActive = false;
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
       }
     };
-  }, [cameraStatus, successStand, lastScannedCode]);
+  }, [cameraStatus, successStand, lastScannedCode, handleClaimCode]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,15 +512,93 @@ function PesertaScanContent() {
 
               {/* Viewfinder Target Framing Overlay */}
               {cameraStatus === "active" && (
-                <div className="absolute inset-6 border-2 border-accent/70 rounded-lg pointer-events-none flex flex-col justify-between p-2 shadow-2xl">
+                <div
+                  className={cn(
+                    "absolute inset-6 border-2 rounded-lg pointer-events-none flex flex-col justify-between p-2 shadow-2xl transition-all duration-300",
+                    scanStatus.status === "success" && "border-emerald-500 bg-emerald-500/10",
+                    scanStatus.status === "processing" && "border-amber-400 bg-amber-500/10",
+                    scanStatus.status === "info" && "border-amber-500 bg-amber-500/10",
+                    scanStatus.status === "error" && "border-rose-500 bg-rose-500/10",
+                    scanStatus.status === "scanning" && "border-accent/70"
+                  )}
+                >
                   <div className="flex justify-between">
-                    <span className="h-5 w-5 border-t-2 border-l-2 border-accent" />
-                    <span className="h-5 w-5 border-t-2 border-r-2 border-accent" />
+                    <span
+                      className={cn(
+                        "h-5 w-5 border-t-2 border-l-2 transition-colors",
+                        scanStatus.status === "success"
+                          ? "border-emerald-500"
+                          : scanStatus.status === "processing"
+                          ? "border-amber-400"
+                          : scanStatus.status === "error"
+                          ? "border-rose-500"
+                          : "border-accent"
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "h-5 w-5 border-t-2 border-r-2 transition-colors",
+                        scanStatus.status === "success"
+                          ? "border-emerald-500"
+                          : scanStatus.status === "processing"
+                          ? "border-amber-400"
+                          : scanStatus.status === "error"
+                          ? "border-rose-500"
+                          : "border-accent"
+                      )}
+                    />
                   </div>
-                  <div className="w-full h-0.5 bg-accent/80 animate-pulse shadow-sm" />
+
+                  {/* Dynamic Laser or Center Badge Feedback */}
+                  {scanStatus.status === "processing" ? (
+                    <div className="self-center flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/85 text-amber-300 text-xs font-semibold shadow-lg backdrop-blur-sm animate-pulse border border-amber-500/30">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                      <span>Membaca QR...</span>
+                    </div>
+                  ) : scanStatus.status === "success" ? (
+                    <div className="self-center flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-xs font-semibold shadow-lg backdrop-blur-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      <span>Terverifikasi!</span>
+                    </div>
+                  ) : scanStatus.status === "error" ? (
+                    <div className="self-center flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-950/90 border border-rose-500/50 text-rose-300 text-xs font-semibold shadow-lg backdrop-blur-sm">
+                      <AlertCircle className="h-4 w-4 text-rose-400" />
+                      <span>QR Tidak Cocok</span>
+                    </div>
+                  ) : scanStatus.status === "info" ? (
+                    <div className="self-center flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-950/90 border border-amber-500/50 text-amber-300 text-xs font-semibold shadow-lg backdrop-blur-sm">
+                      <AlertCircle className="h-4 w-4 text-amber-400" />
+                      <span>Sudah Pernah</span>
+                    </div>
+                  ) : (
+                    <div className="w-full h-0.5 bg-accent/80 animate-pulse shadow-sm" />
+                  )}
+
                   <div className="flex justify-between">
-                    <span className="h-5 w-5 border-b-2 border-l-2 border-accent" />
-                    <span className="h-5 w-5 border-b-2 border-r-2 border-accent" />
+                    <span
+                      className={cn(
+                        "h-5 w-5 border-b-2 border-l-2 transition-colors",
+                        scanStatus.status === "success"
+                          ? "border-emerald-500"
+                          : scanStatus.status === "processing"
+                          ? "border-amber-400"
+                          : scanStatus.status === "error"
+                          ? "border-rose-500"
+                          : "border-accent"
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "h-5 w-5 border-b-2 border-r-2 transition-colors",
+                        scanStatus.status === "success"
+                          ? "border-emerald-500"
+                          : scanStatus.status === "processing"
+                          ? "border-amber-400"
+                          : scanStatus.status === "error"
+                          ? "border-rose-500"
+                          : "border-accent"
+                      )}
+                    />
                   </div>
                 </div>
               )}
@@ -478,21 +683,43 @@ function PesertaScanContent() {
             </div>
 
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-foreground flex items-center justify-center gap-1.5">
-                {cameraStatus === "active" ? (
-                  <>
+              <div className="flex items-center justify-center gap-2">
+                {scanStatus.status === "scanning" && cameraStatus === "active" && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-                    <span>Kamera Siap Memindai QR Stand</span>
-                  </>
-                ) : scanningSimulated ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
-                    <span>Sedang Memproses Kode QR...</span>
-                  </>
-                ) : (
-                  <span>Gunakan Input Manual di Bawah Jika Kamera Bermasalah</span>
+                    <span>{scanStatus.message}</span>
+                  </div>
                 )}
-              </p>
+                {scanStatus.status === "processing" && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-medium animate-pulse">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>{scanStatus.message}</span>
+                  </div>
+                )}
+                {scanStatus.status === "success" && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>{scanStatus.message}</span>
+                  </div>
+                )}
+                {scanStatus.status === "info" && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs font-medium">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span>{scanStatus.message}</span>
+                  </div>
+                )}
+                {scanStatus.status === "error" && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs font-medium">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span>{scanStatus.message}</span>
+                  </div>
+                )}
+                {cameraStatus !== "active" && scanStatus.status === "scanning" && (
+                  <span className="text-xs text-muted-foreground">
+                    Gunakan input kode manual di bawah jika kamera bermasalah
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-muted-foreground">
                 Poin stand akan langsung ditambahkan ke profil Anda setelah QR terdeteksi.
               </p>
