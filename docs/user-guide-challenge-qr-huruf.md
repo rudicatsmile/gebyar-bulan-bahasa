@@ -2,8 +2,10 @@
 
 **Aplikasi:** GebyarBulanBahasa  
 **Fitur:** Gamifikasi Jelajah Aksara (Berburu Token QR Huruf & Penyusunan Kalimat)  
-**Tautan Peserta:** [http://localhost:3000/peserta/challenge/qr-huruf](http://localhost:3000/peserta/challenge/qr-huruf)  
-**Tautan Panitia / Admin:** [http://localhost:3000/dashboard/challenge/qr-huruf](http://localhost:3000/dashboard/challenge/qr-huruf)  
+> [!NOTE]  
+> **Perbedaan Halaman Peserta & Panitia:**  
+> - **Halaman Peserta (`/peserta/challenge/qr-huruf`):** Digunakan peserta di lokasi acara untuk memindai QR code via kamera smartphone, menginput kode manual, mengumpulkan huruf, dan menyusun kalimat target.  
+> - **Halaman Panitia / Dashboard (`/dashboard/challenge/qr-huruf`):** Digunakan admin/panitia untuk membuat kalimat target baru, mengisi petunjuk lokasi pos, mencetak stiker QR code, dan memantau riwayat penyelesaian peserta. Pada halaman ini tersedia tombol shortcut **"Uji Coba Halaman Scan Peserta"** untuk membuka halaman scan peserta.
 
 ---
 

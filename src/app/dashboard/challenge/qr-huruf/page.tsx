@@ -196,6 +196,12 @@ export default function DashboardQrHurufPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <Link href="/peserta/challenge/qr-huruf" target="_blank">
+                <Button variant="outline" size="sm" className="gap-1.5 cursor-pointer">
+                  <Eye className="h-4 w-4 text-primary" />
+                  <span>Uji Coba Halaman Scan Peserta</span>
+                </Button>
+              </Link>
               <Button
                 onClick={() => setCreateDialogOpen(true)}
                 size="sm"
