@@ -20,8 +20,14 @@ import {
   Loader2,
   VideoOff,
   HelpCircle,
+  Gift,
+  Trophy,
+  Sparkles,
+  Copy,
+  Check,
 } from "lucide-react";
 import { claimStandVisit } from "@/app/actions/challenges";
+import { getParticipantStandProgress } from "@/app/actions/stand-rewards";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import { cn } from "@/lib/utils";
@@ -37,6 +43,30 @@ function PesertaScanContent() {
   const [successStand, setSuccessStand] = React.useState<{ name: string; points: number } | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
   const [scanningSimulated, setScanningSimulated] = React.useState(false);
+
+  // Special Reward & Progress States
+  const [standProgress, setStandProgress] = React.useState<{
+    standsCompletedCount: number;
+    totalActiveStands: number;
+    allCompleted: boolean;
+    config: { quota: number; rewardName: string };
+    grantedCount: number;
+    remainingQuota: number;
+    existingRecipient: any;
+  } | null>(null);
+
+  const [specialRewardResult, setSpecialRewardResult] = React.useState<{
+    alreadyProcessed?: boolean;
+    qualified: boolean;
+    granted: boolean;
+    rank: number;
+    quota: number;
+    rewardName: string;
+    pickupCode: string | null;
+    message: string;
+  } | null>(null);
+
+  const [copiedPickupCode, setCopiedPickupCode] = React.useState(false);
 
   // Camera & QR Scanner States
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -138,6 +168,45 @@ function PesertaScanContent() {
     return clean.toUpperCase();
   }, []);
 
+  // Load initial stand exploration progress
+  const loadProgress = React.useCallback(async () => {
+    if (!participant?.id) return;
+    try {
+      const res = await getParticipantStandProgress(participant.id);
+      if (res.success) {
+        setStandProgress(res);
+        if (res.existingRecipient) {
+          setSpecialRewardResult({
+            alreadyProcessed: true,
+            qualified: true,
+            granted: res.existingRecipient.status === "diterima",
+            rank: res.existingRecipient.rank,
+            quota: res.config.quota,
+            rewardName: res.existingRecipient.rewardName,
+            pickupCode: res.existingRecipient.pickupCode,
+            message: res.existingRecipient.status === "diterima"
+              ? `Anda adalah penerima #${res.existingRecipient.rank} dari ${res.config.quota} kuota reward khusus!`
+              : `Anda telah menyelesaikan seluruh stand di urutan #${res.existingRecipient.rank} (kuota reward khusus ${res.config.quota} peserta pertama telah habis).`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Gagal load progress stand:", err);
+    }
+  }, [participant?.id]);
+
+  React.useEffect(() => {
+    loadProgress();
+  }, [loadProgress]);
+
+  const handleCopyPickupCode = (code: string) => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(code);
+      setCopiedPickupCode(true);
+      setTimeout(() => setCopiedPickupCode(false), 2000);
+    }
+  };
+
   const handleClaimCode = React.useCallback(
     async (codeString: string) => {
       const cleanCode = processCodeString(codeString);
@@ -165,6 +234,10 @@ function PesertaScanContent() {
           const sName = res.data?.standName || matched?.name || `Stand ${cleanCode}`;
           const sPoints = res.data?.pointsAwarded || matched?.points || 10;
 
+          if (res.data?.specialReward) {
+            setSpecialRewardResult(res.data.specialReward);
+          }
+
           setScanStatus({
             status: "success",
             message: `🎉 Berhasil! Mengunjungi ${sName} (+${sPoints} Poin)`,
@@ -172,6 +245,7 @@ function PesertaScanContent() {
           setSuccessStand({ name: sName, points: sPoints });
           setManualCode("");
           refetch();
+          loadProgress();
         } else {
           const isAlreadyClaimed = res.error?.includes("sudah pernah");
           setScanStatus({
@@ -208,7 +282,7 @@ function PesertaScanContent() {
         setScanningSimulated(false);
       }
     },
-    [processCodeString, triggerScanFeedback, refetch]
+    [processCodeString, triggerScanFeedback, refetch, loadProgress]
   );
 
   // Stop Camera Stream
@@ -464,17 +538,113 @@ function PesertaScanContent() {
           </div>
         </div>
 
+        {/* Stand Exploration Progress Card */}
+        {standProgress && (
+          <div className="p-4 rounded-xl border border-border bg-card shadow-xs space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <Trophy className="h-4 w-4 text-accent" />
+                <span>Progres Jelajah Stand Lomba:</span>
+              </span>
+              <span className="font-mono font-bold text-accent">
+                {standProgress.standsCompletedCount} / {standProgress.totalActiveStands} Stand
+              </span>
+            </div>
+
+            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-accent h-2 rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.min(100, (standProgress.standsCompletedCount / Math.max(1, standProgress.totalActiveStands)) * 100)}%`,
+                }}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between text-[11px] text-muted-foreground pt-0.5 gap-2">
+              <span>
+                {standProgress.allCompleted
+                  ? "🎉 Seluruh stand aktif telah selesai dikunjungi!"
+                  : `Kunjungi ${standProgress.totalActiveStands - standProgress.standsCompletedCount} stand lagi untuk menyelesaikan challenge.`}
+              </span>
+              <span className="text-accent font-medium">
+                Kuota Hadiah Khusus: {standProgress.remainingQuota} / {standProgress.config.quota}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Success Modal / Banner */}
         {successStand && (
-          <div className="p-6 rounded-2xl border border-success/40 bg-success/10 text-center space-y-3 animate-in zoom-in-95">
+          <div className="p-6 rounded-2xl border border-success/40 bg-success/10 text-center space-y-4 animate-in zoom-in-95">
             <CheckCircle2 className="h-12 w-12 text-success mx-auto" />
-            <h3 className="font-heading text-lg font-bold text-foreground">
-              Klaim Poin Berhasil!
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Selamat! Anda telah mengunjungi <strong>{successStand.name}</strong> dan memperoleh tambahan{" "}
-              <strong className="text-accent font-mono">+{successStand.points} Poin</strong>.
-            </p>
+            <div className="space-y-1">
+              <h3 className="font-heading text-lg font-bold text-foreground">
+                Klaim Poin Berhasil!
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Selamat! Anda telah mengunjungi <strong>{successStand.name}</strong> dan memperoleh tambahan{" "}
+                <strong className="text-accent font-mono">+{successStand.points} Poin</strong>.
+              </p>
+            </div>
+
+            {/* Special Reward Feedback Box */}
+            {specialRewardResult && specialRewardResult.qualified && (
+              specialRewardResult.granted ? (
+                <div className="p-4 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 text-left space-y-2.5 shadow-sm animate-in fade-in">
+                  <div className="flex items-center gap-2 text-amber-500 font-bold text-xs uppercase tracking-wider">
+                    <Trophy className="h-4 w-4" />
+                    <span>Reward Khusus Eksklusif Diraih!</span>
+                    <Badge variant="gold" className="text-[10px] ml-auto">
+                      Penerima Ke-#{specialRewardResult.rank}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-foreground leading-relaxed">
+                    🎉 Selamat! Anda adalah <strong>peserta ke-{specialRewardResult.rank} dari {specialRewardResult.quota} kuota pertama</strong> yang berhasil memindai semua stand pameran budaya!
+                  </p>
+                  <div className="p-3 rounded-lg bg-card border border-border flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Hadiah Khusus:</span>
+                      <strong className="text-xs text-foreground">{specialRewardResult.rewardName}</strong>
+                    </div>
+                    {specialRewardResult.pickupCode && (
+                      <div className="text-right">
+                        <span className="text-[10px] text-muted-foreground block">Kode Pengambilan:</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono font-bold text-accent text-sm">
+                            {specialRewardResult.pickupCode}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPickupCode(specialRewardResult.pickupCode!)}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                            title="Salin Kode Voucher"
+                          >
+                            {copiedPickupCode ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground italic">
+                    * Tunjukkan kode pengambilan voucher di atas kepada panitia stand untuk mengambil hadiah Anda.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-left space-y-2 shadow-sm animate-in fade-in">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Seluruh Stand Selesai (Urutan ke-#{specialRewardResult.rank})</span>
+                  </div>
+                  <p className="text-xs text-foreground leading-relaxed">
+                    🏁 Hebat! Anda telah berhasil menyelesaikan pemindaian seluruh stand pameran (Urutan ke-#{specialRewardResult.rank}).
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Mohon maaf, kuota reward khusus (untuk <strong>{specialRewardResult.quota} peserta pertama</strong>) telah habis. Namun seluruh poin yang Anda kumpulkan tetap tersimpan dan dapat ditukarkan di katalog reward!
+                  </p>
+                </div>
+              )
+            )}
+
             <div className="pt-2 flex justify-center gap-2">
               <Button
                 size="sm"
@@ -483,7 +653,7 @@ function PesertaScanContent() {
                   setLastScannedCode(null);
                   startCamera();
                 }}
-                className="text-xs gap-1.5 cursor-pointer"
+                className="text-xs gap-1.5 cursor-pointer font-semibold"
               >
                 <Camera className="h-3.5 w-3.5" />
                 <span>Scan Stand Lain</span>

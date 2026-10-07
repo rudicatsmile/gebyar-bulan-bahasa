@@ -20,6 +20,7 @@ docs/
 ├── user-guide-juri.md              # Panduan Pengoperasian: Dewan Juri (Digital Scoring)
 ├── user-guide-media.md             # Panduan Pengoperasian: Tim Media Center & Monitor Venue
 ├── user-guide-peserta.md           # Panduan Interaktif: Peserta Acara & Gamifikasi Stand
+├── reward-khusus-stand-lomba.md    # Dokumentasi & Panduan Fitur Reward Khusus Challenge QR Stand
 ├── developer-guide.md              # Panduan Teknis Arsitektur & Pengembangan Developer
 └── migrasi-vps-supabase.md         # Panduan Teknis Migrasi Database Supabase Cloud ke VPS
 ```

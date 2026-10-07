@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ChallengeType } from "@/types/database.types";
 import { STANDS } from "@/lib/dummy-data";
+import { checkAndProcessStandCompletionReward } from "./stand-rewards";
 
 export interface AdminChallengeItem {
   id: string;
@@ -357,11 +358,15 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
     revalidatePath("/monitor");
     revalidatePath("/monitor/leaderboard");
 
+    // 4. Periksa apakah seluruh stand aktif telah selesai dikunjungi & proses reward khusus (50 pertama)
+    const completionResult = await checkAndProcessStandCompletionReward(parsed.data.participantId);
+
     return {
       success: true,
       data: {
         standName: stand.name,
         pointsAwarded: stand.points_per_visit,
+        ...completionResult,
       },
     };
   } catch (err: unknown) {
