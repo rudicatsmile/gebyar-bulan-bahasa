@@ -51,7 +51,7 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
   {
     id: "db-stage-1",
     stageOrder: 1,
-    title: "Pendaftaran",
+    title: "Pendaftaran dan Pengumpulan Berkas",
     description:
       "Tahap pendaftaran peserta Duta Bahasa dan Budaya. Peserta melengkapi formulir, berkas administrasi, dan foto resmi.",
     stageDate: "2026-10-10",
@@ -61,9 +61,9 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
   {
     id: "db-stage-2",
     stageOrder: 2,
-    title: "Seleksi Administrasi dan Wawancara",
+    title: "Seleksi Administrasi, Wawancara, dan Paparan Visi-Misi, serta Program Unggulan",
     description:
-      "Verifikasi kelengkapan berkas administrasi dan sesi wawancara awal oleh dewan juri.",
+      "Seleksi administrasi, wawancara, dan paparan visi-misi, serta program unggulan.",
     stageDate: "2026-10-17",
     stageDayLabel: "Sabtu, 17 Oktober 2026",
     status: "upcoming",
@@ -71,9 +71,9 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
   {
     id: "db-stage-3",
     stageOrder: 3,
-    title: "Seleksi Minat dan Bakat",
+    title: "Seleksi Akademik dan Unjuk Bakat",
     description:
-      "Peserta menunjukkan minat dan bakat di bidang bahasa, sastra, dan kebudayaan melalui presentasi/pertunjukan.",
+      "Uji kemampuan akademik dan unjuk bakat di bidang bahasa, sastra, dan kebudayaan.",
     stageDate: "2026-10-24",
     stageDayLabel: "Sabtu, 24 Oktober 2026",
     status: "upcoming",
@@ -81,9 +81,9 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
   {
     id: "db-stage-4",
     stageOrder: 4,
-    title: "Pengumuman 3 Besar",
+    title: "Semi Final dan Pengumuman 3 Besar",
     description:
-      "Pengumuman tiga finalis terbaik yang berhak maju ke tahap Grand Final.",
+      "Semi final dan pengumuman tiga finalis terbaik yang berhak maju ke tahap Grand Final.",
     stageDate: "2026-10-31",
     stageDayLabel: "Sabtu, 31 Oktober 2026",
     status: "upcoming",
@@ -91,9 +91,9 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
   {
     id: "db-stage-5",
     stageOrder: 5,
-    title: "Grand Final Penetapan Duta Bahasa dan Budaya",
+    title: "Grand Final Penetapan Duta Bahasa",
     description:
-      "Penampilan akhir dan penetapan Duta Bahasa dan Budaya terpilih di panggung utama acara.",
+      "Penampilan akhir dan penetapan Duta Bahasa terpilih di panggung utama acara.",
     stageDate: "2026-11-11",
     stageDayLabel: "Rabu, 11 November 2026",
     status: "upcoming",
