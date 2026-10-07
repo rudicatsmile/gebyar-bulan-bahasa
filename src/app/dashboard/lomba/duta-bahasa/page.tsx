@@ -47,6 +47,7 @@ import type {
   DutaBahasaStage,
   DutaBahasaParticipantInfo,
   DutaBahasaParticipantStatus,
+  DutaBahasaCandidate,
 } from "@/app/actions/duta-bahasa";
 import {
   getDutaBahasaStages,
@@ -56,6 +57,7 @@ import {
   updateParticipantStageStatus,
   addParticipantToDutaBahasa,
   removeParticipantFromDutaBahasa,
+  searchDutaBahasaRegistrationCandidates,
 } from "@/app/actions/duta-bahasa";
 
 // ======================================================================
@@ -147,10 +149,8 @@ export default function DashboardDutaBahasaPage() {
   const [updateNotes, setUpdateNotes] = React.useState("");
   const [updateLoading, setUpdateLoading] = React.useState(false);
 
-  // Participant search for adding
-  const [searchResults, setSearchResults] = React.useState<
-    Array<{ id: string; full_name: string; institution: string; registration_number: string }>
-  >([]);
+  // Participant candidates from pendaftaran Duta Bahasa
+  const [candidates, setCandidates] = React.useState<DutaBahasaCandidate[]>([]);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [searchLoading, setSearchLoading] = React.useState(false);
 
@@ -285,27 +285,34 @@ export default function DashboardDutaBahasaPage() {
   };
 
   // ======================================================================
-  // ADD PARTICIPANT
+  // ADD PARTICIPANT (CANDIDATES FROM DUTA BAHASA REGISTRATIONS)
   // ======================================================================
 
-  const handleSearchParticipant = async (query: string) => {
-    setSearchQuery(query);
-    if (query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
+  const loadCandidates = async (query: string = "") => {
     setSearchLoading(true);
     try {
-      const res = await fetch(`/api/participants?search=${encodeURIComponent(query)}&limit=10`);
-      const data = await res.json();
-      if (data.success) {
-        setSearchResults(data.participants || []);
+      const res = await searchDutaBahasaRegistrationCandidates(query);
+      if (res.success) {
+        setCandidates(res.candidates);
+      } else {
+        setCandidates([]);
       }
     } catch {
-      // silent
+      setCandidates([]);
     } finally {
       setSearchLoading(false);
     }
+  };
+
+  const handleOpenAddDialog = async () => {
+    setShowAddDialog(true);
+    setSearchQuery("");
+    await loadCandidates("");
+  };
+
+  const handleSearchParticipant = async (query: string) => {
+    setSearchQuery(query);
+    await loadCandidates(query);
   };
 
   const handleAddParticipant = async (participantId: string) => {
@@ -313,10 +320,10 @@ export default function DashboardDutaBahasaPage() {
     const res = await addParticipantToDutaBahasa(participantId);
     setAddLoading(false);
     if (res.success) {
-      setFeedback({ type: "success", message: "Peserta berhasil ditambahkan ke Duta Bahasa!" });
+      setFeedback({ type: "success", message: "Peserta/tim berhasil ditambahkan ke Tahap 1 Duta Bahasa!" });
       setShowAddDialog(false);
       setSearchQuery("");
-      setSearchResults([]);
+      setCandidates([]);
       loadData();
     } else {
       setFeedback({ type: "error", message: res.error || "Gagal menambahkan peserta." });
@@ -421,7 +428,7 @@ export default function DashboardDutaBahasaPage() {
               </Button>
               <Button
                 size="sm"
-                onClick={() => setShowAddDialog(true)}
+                onClick={handleOpenAddDialog}
                 className="text-xs gap-1.5 cursor-pointer"
               >
                 <UserPlus className="h-3.5 w-3.5" />
@@ -796,7 +803,7 @@ export default function DashboardDutaBahasaPage() {
                   <Button
                     size="sm"
                     className="mt-3 text-xs gap-1.5 cursor-pointer"
-                    onClick={() => setShowAddDialog(true)}
+                    onClick={handleOpenAddDialog}
                   >
                     <UserPlus className="h-3.5 w-3.5" />
                     <span>Tambah Peserta Pertama</span>
@@ -870,56 +877,93 @@ export default function DashboardDutaBahasaPage() {
         {/* ADD PARTICIPANT DIALOG */}
         {/* ============================================================= */}
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-lg w-full">
             <DialogHeader>
-              <DialogTitle>Tambah Peserta ke Duta Bahasa</DialogTitle>
+              <div className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5 text-accent" />
+                <DialogTitle>Tambah Peserta ke Duta Bahasa</DialogTitle>
+              </div>
               <DialogDescription>
-                Cari peserta berdasarkan nama atau nomor registrasi. Peserta akan otomatis
-                didaftarkan ke Tahap 1 (Pendaftaran).
+                Pilih peserta atau tim yang sudah terdaftar pada cabang lomba <strong>Duta Bahasa</strong> di data pendaftaran untuk dimasukkan ke Tahap 1.
               </DialogDescription>
             </DialogHeader>
 
-            <Input
-              label="Cari Peserta"
-              placeholder="Ketik nama atau no. registrasi..."
-              value={searchQuery}
-              onChange={(e) => handleSearchParticipant(e.target.value)}
-            />
+            <div className="space-y-1.5">
+              <Input
+                label="Cari Peserta / Tim"
+                placeholder="Ketik nama tim, nama peserta, institusi, atau no. registrasi..."
+                value={searchQuery}
+                onChange={(e) => handleSearchParticipant(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
+                <span>Sumber data: <strong>Halaman Pendaftaran</strong> (khusus cabang lomba Duta Bahasa)</span>
+              </p>
+            </div>
 
             {searchLoading && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Mencari peserta...</span>
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground py-6 border border-dashed rounded-lg">
+                <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                <span>Memuat data pendaftar Duta Bahasa...</span>
               </div>
             )}
 
-            {searchResults.length > 0 && (
-              <div className="max-h-60 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                {searchResults.map((p) => {
+            {!searchLoading && candidates.length > 0 && (
+              <div className="max-h-64 overflow-y-auto border border-border rounded-lg divide-y divide-border">
+                {candidates.map((c) => {
                   const alreadyAdded = participants.some(
-                    (pp) => pp.participantId === p.id
+                    (pp) => pp.participantId === c.participantId
                   );
+                  const displayName = c.teamName
+                    ? `${c.teamName} — ${c.leaderName}`
+                    : c.leaderName;
+
                   return (
                     <div
-                      key={p.id}
-                      className="flex items-center justify-between p-3 hover:bg-muted/30 transition-colors"
+                      key={`${c.registrationId}-${c.participantId}`}
+                      className="flex items-center justify-between p-3 hover:bg-muted/30 transition-colors gap-3"
                     >
-                      <div>
-                        <p className="text-xs font-semibold text-foreground">
-                          {p.full_name}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            {displayName}
+                          </p>
+                          <Badge
+                            variant="gold"
+                            className="text-[9px] px-1.5 py-0"
+                          >
+                            Duta Bahasa
+                          </Badge>
+                          {c.status === "terverifikasi" ? (
+                            <Badge variant="success" className="text-[9px] px-1.5 py-0">
+                              Terverifikasi
+                            </Badge>
+                          ) : (
+                            <Badge variant="default" className="text-[9px] px-1.5 py-0">
+                              Menunggu Verifikasi
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                          <span className="font-mono font-medium text-foreground">
+                            {c.registrationNumber}
+                          </span>{" "}
+                          · {c.institution}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {p.registration_number} · {p.institution || "Umum"}
-                        </p>
+                        {c.members.length > 0 && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                            Anggota: {c.members.join(", ")}
+                          </p>
+                        )}
                       </div>
                       <Button
                         size="sm"
                         variant={alreadyAdded ? "outline" : "default"}
                         disabled={alreadyAdded || addLoading}
-                        className="text-[10px] h-7 cursor-pointer"
-                        onClick={() => handleAddParticipant(p.id)}
+                        className="text-[10px] h-7 cursor-pointer shrink-0"
+                        onClick={() => handleAddParticipant(c.participantId)}
                       >
-                        {alreadyAdded ? "Sudah Terdaftar" : "Tambahkan"}
+                        {alreadyAdded ? "Sudah di Tahapan" : "Tambahkan"}
                       </Button>
                     </div>
                   );
@@ -927,10 +971,20 @@ export default function DashboardDutaBahasaPage() {
               </div>
             )}
 
-            {searchQuery.length >= 2 && searchResults.length === 0 && !searchLoading && (
-              <p className="text-xs text-muted-foreground text-center py-3">
-                Tidak ditemukan peserta dengan kata kunci "{searchQuery}"
-              </p>
+            {!searchLoading && candidates.length === 0 && (
+              <div className="text-center py-6 border border-dashed rounded-lg space-y-1">
+                <Users className="h-6 w-6 mx-auto text-muted-foreground opacity-50" />
+                <p className="text-xs font-semibold text-foreground">
+                  {searchQuery
+                    ? "Tidak ditemukan pendaftar yang cocok"
+                    : "Belum Ada Pendaftar Duta Bahasa"}
+                </p>
+                <p className="text-[11px] text-muted-foreground max-w-xs mx-auto">
+                  {searchQuery
+                    ? `Tidak ada pendaftar Duta Bahasa dengan kata kunci "${searchQuery}".`
+                    : "Belum ada peserta/tim yang mendaftar di cabang lomba Duta Bahasa pada halaman Pendaftaran."}
+                </p>
+              </div>
             )}
 
             <DialogFooter>
@@ -940,7 +994,6 @@ export default function DashboardDutaBahasaPage() {
                 onClick={() => {
                   setShowAddDialog(false);
                   setSearchQuery("");
-                  setSearchResults([]);
                 }}
                 className="text-xs cursor-pointer"
               >

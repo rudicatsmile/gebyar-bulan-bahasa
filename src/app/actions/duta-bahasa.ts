@@ -596,3 +596,126 @@ export async function removeParticipantFromDutaBahasa(
     };
   }
 }
+
+// ======================================================================
+// SEARCH ELIGIBLE DUTA BAHASA CANDIDATES (FROM REGISTRATIONS / DASHBOARD PENDAFTARAN)
+// ======================================================================
+
+export interface DutaBahasaCandidate {
+  registrationId: string;
+  participantId: string;
+  registrationNumber: string;
+  teamName: string | null;
+  leaderName: string;
+  institution: string;
+  competitionName: string;
+  status: string;
+  members: string[];
+}
+
+export async function searchDutaBahasaRegistrationCandidates(
+  query: string = ""
+): Promise<{
+  success: boolean;
+  candidates: DutaBahasaCandidate[];
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Ambil ID kompetisi Duta Bahasa
+    const { data: dutaComps, error: compErr } = await supabase
+      .from("competitions")
+      .select("id, name, slug")
+      .or("name.ilike.%Duta Bahasa%,slug.eq.pidato,slug.ilike.%duta%");
+
+    if (compErr) throw compErr;
+
+    const dutaCompIds = (dutaComps || []).map((c) => c.id);
+    if (dutaCompIds.length === 0) {
+      return { success: true, candidates: [] };
+    }
+
+    // 2. Ambil data pendaftaran yang terdaftar di cabang lomba Duta Bahasa (sama seperti di /dashboard/pendaftaran)
+    const { data: regs, error: regErr } = await supabase
+      .from("registrations")
+      .select(`
+        id,
+        team_name,
+        competition_id,
+        is_confirmed,
+        competitions (
+          id,
+          name,
+          slug
+        ),
+        participants (
+          id,
+          registration_number,
+          full_name,
+          institution,
+          status
+        ),
+        registration_members (
+          id,
+          member_name,
+          member_role,
+          is_leader
+        )
+      `)
+      .in("competition_id", dutaCompIds)
+      .order("created_at", { ascending: false });
+
+    if (regErr) throw regErr;
+
+    const candidates: DutaBahasaCandidate[] = (regs || [])
+      .filter((r: any) => r.participants && r.participants.id)
+      .map((r: any) => {
+        const part = r.participants;
+        const comp = r.competitions;
+        const members: string[] = (r.registration_members || []).map((m: any) =>
+          m.is_leader ? `${m.member_name} (Ketua)` : m.member_name
+        );
+
+        return {
+          registrationId: r.id,
+          participantId: part.id,
+          registrationNumber: part.registration_number || `REG-${r.id.substring(0, 8)}`,
+          teamName: r.team_name || null,
+          leaderName: part.full_name || "Peserta",
+          institution: part.institution || "-",
+          competitionName: comp?.name || "Duta Bahasa",
+          status: part.status || (r.is_confirmed ? "terverifikasi" : "menunggu_verifikasi"),
+          members,
+        };
+      });
+
+    // 3. Filter berdasarkan kata kunci pencarian (jika diisi)
+    if (query && query.trim()) {
+      const q = query.toLowerCase().trim();
+      return {
+        success: true,
+        candidates: candidates.filter(
+          (c) =>
+            (c.teamName && c.teamName.toLowerCase().includes(q)) ||
+            c.leaderName.toLowerCase().includes(q) ||
+            c.institution.toLowerCase().includes(q) ||
+            c.registrationNumber.toLowerCase().includes(q) ||
+            c.members.some((m) => m.toLowerCase().includes(q))
+        ),
+      };
+    }
+
+    return {
+      success: true,
+      candidates,
+    };
+  } catch (err: unknown) {
+    console.error("searchDutaBahasaRegistrationCandidates error:", err);
+    return {
+      success: false,
+      candidates: [],
+      error: err instanceof Error ? err.message : "Gagal memuat kandidat pendaftar Duta Bahasa.",
+    };
+  }
+}
