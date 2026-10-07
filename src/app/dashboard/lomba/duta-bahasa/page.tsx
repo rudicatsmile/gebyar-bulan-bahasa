@@ -41,6 +41,7 @@ import {
   XCircle,
   Clock,
   Star,
+  Edit2,
 } from "lucide-react";
 import type {
   DutaBahasaStage,
@@ -51,6 +52,7 @@ import {
   getDutaBahasaStages,
   getDutaBahasaProgress,
   saveDutaBahasaStages,
+  resetDutaBahasaStagesToDefault,
   updateParticipantStageStatus,
   addParticipantToDutaBahasa,
   removeParticipantFromDutaBahasa,
@@ -122,6 +124,12 @@ export default function DashboardDutaBahasaPage() {
   // Expanded stage view
   const [expandedStage, setExpandedStage] = React.useState<string | null>(null);
 
+  // Edit stages dialog
+  const [editStagesOpen, setEditStagesOpen] = React.useState(false);
+  const [editingStages, setEditingStages] = React.useState<DutaBahasaStage[]>([]);
+  const [isSavingStages, setIsSavingStages] = React.useState(false);
+  const [isResettingStages, setIsResettingStages] = React.useState(false);
+
   // Add participant dialog
   const [showAddDialog, setShowAddDialog] = React.useState(false);
   const [addParticipantId, setAddParticipantId] = React.useState("");
@@ -190,6 +198,90 @@ export default function DashboardDutaBahasaPage() {
       setFeedback({ type: "error", message: res.error || "Gagal menyimpan status tahapan." });
     }
     setTimeout(() => setFeedback(null), 4000);
+  };
+
+  // ======================================================================
+  // EDIT ALL STAGES (TITLE, DATES, DESCRIPTIONS)
+  // ======================================================================
+
+  const handleOpenEditStages = () => {
+    setEditingStages(JSON.parse(JSON.stringify(stages)));
+    setEditStagesOpen(true);
+  };
+
+  const handleStageFieldChange = (
+    index: number,
+    field: keyof DutaBahasaStage,
+    value: unknown
+  ) => {
+    setEditingStages((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleSaveEditedStages = async () => {
+    try {
+      setIsSavingStages(true);
+      const res = await saveDutaBahasaStages(editingStages);
+      if (res.success) {
+        setStages(editingStages);
+        setFeedback({
+          type: "success",
+          message: "Perubahan konfigurasi tahapan Duta Bahasa berhasil disimpan ke database!",
+        });
+        setEditStagesOpen(false);
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal menyimpan perubahan tahapan.",
+        });
+      }
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan tahapan.",
+      });
+    } finally {
+      setIsSavingStages(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const handleResetStagesToDefault = async () => {
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(
+        "Apakah Anda yakin ingin memuat ulang seluruh judul dan tanggal tahapan ke konfigurasi standar bawaan terbaru?"
+      );
+      if (!ok) return;
+    }
+    try {
+      setIsResettingStages(true);
+      const res = await resetDutaBahasaStagesToDefault();
+      if (res.success) {
+        setStages(res.stages);
+        setEditingStages(JSON.parse(JSON.stringify(res.stages)));
+        setFeedback({
+          type: "success",
+          message: "Seluruh nama dan jadwal tahapan berhasil direset ke standar default terbaru!",
+        });
+        setEditStagesOpen(false);
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal mereset tahapan ke standar.",
+        });
+      }
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Terjadi kesalahan saat mereset tahapan.",
+      });
+    } finally {
+      setIsResettingStages(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
   };
 
   // ======================================================================
@@ -390,10 +482,21 @@ export default function DashboardDutaBahasaPage() {
 
             {/* Timeline Tahapan */}
             <Card className="p-4 sm:p-6 lg:p-8">
-              <h2 className="font-heading text-lg font-bold text-foreground mb-6 flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-accent" />
-                <span>Timeline Tahapan</span>
-              </h2>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <h2 className="font-heading text-lg font-bold text-foreground flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-accent" />
+                  <span>Timeline Tahapan</span>
+                </h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenEditStages}
+                  className="gap-1.5 text-xs font-semibold self-start sm:self-auto cursor-pointer border-border hover:bg-muted"
+                >
+                  <Edit2 className="h-3.5 w-3.5 text-accent" />
+                  <span>Edit Tahapan</span>
+                </Button>
+              </div>
 
               <div className="space-y-4">
                 {stages.map((stage, idx) => {
@@ -925,6 +1028,165 @@ export default function DashboardDutaBahasaPage() {
                   </>
                 )}
               </Button>
+            </DialogFooter>
+          </div>
+        </Dialog>
+
+        {/* ============================================================= */}
+        {/* EDIT STAGES DIALOG */}
+        {/* ============================================================= */}
+        <Dialog open={editStagesOpen} onOpenChange={setEditStagesOpen}>
+          <div className="space-y-4 max-w-2xl w-full max-h-[85vh] flex flex-col p-1 sm:p-2">
+            <DialogHeader className="shrink-0">
+              <div className="flex items-center gap-2">
+                <Edit2 className="h-5 w-5 text-accent" />
+                <DialogTitle>Kelola & Edit Tahapan Duta Bahasa</DialogTitle>
+              </div>
+              <DialogDescription>
+                Sesuaikan nama tahapan, deskripsi, tanggal pelaksanaan, dan status tiap tahapan seleksi.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1 py-1">
+              {editingStages.map((stage, idx) => (
+                <div
+                  key={stage.id}
+                  className="p-4 border border-border rounded-xl bg-card space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-6 w-6 rounded-full bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center">
+                        {stage.stageOrder}
+                      </span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Tahap {stage.stageOrder}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label htmlFor={`edit-stage-status-${stage.id}`} className="text-[11px] text-muted-foreground">Status:</label>
+                      <select
+                        id={`edit-stage-status-${stage.id}`}
+                        value={stage.status}
+                        onChange={(e) =>
+                          handleStageFieldChange(
+                            idx,
+                            "status",
+                            e.target.value as DutaBahasaStage["status"]
+                          )
+                        }
+                        className="h-7 text-xs rounded-md border border-border bg-background px-2 font-medium focus:ring-1 focus:ring-accent"
+                      >
+                        <option value="upcoming">Akan Datang (Upcoming)</option>
+                        <option value="active">Sedang Berlangsung (Aktif)</option>
+                        <option value="completed">Selesai (Completed)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Judul Tahap *
+                    </label>
+                    <Input
+                      value={stage.title}
+                      onChange={(e) => handleStageFieldChange(idx, "title", e.target.value)}
+                      placeholder="Contoh: Seleksi Administrasi dan Wawancara"
+                      className="text-xs font-medium"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground">
+                        Label Hari & Tanggal Tampil
+                      </label>
+                      <Input
+                        value={stage.stageDayLabel}
+                        onChange={(e) =>
+                          handleStageFieldChange(idx, "stageDayLabel", e.target.value)
+                        }
+                        placeholder="Contoh: Sabtu, 17 Oktober 2026"
+                        className="text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground">
+                        Tanggal Kalender (ISO)
+                      </label>
+                      <Input
+                        type="date"
+                        value={stage.stageDate}
+                        onChange={(e) =>
+                          handleStageFieldChange(idx, "stageDate", e.target.value)
+                        }
+                        className="text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Deskripsi / Penjelasan Tahap
+                    </label>
+                    <Textarea
+                      rows={2}
+                      value={stage.description}
+                      onChange={(e) =>
+                        handleStageFieldChange(idx, "description", e.target.value)
+                      }
+                      placeholder="Penjelasan ringkas tahapan seleksi..."
+                      className="text-xs"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-border pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleResetStagesToDefault}
+                disabled={isResettingStages || isSavingStages}
+                className="text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 border-amber-500/30 gap-1.5 cursor-pointer w-full sm:w-auto"
+                title="Kembalikan semua nama dan jadwal tahapan ke standar bawaan terbaru"
+              >
+                {isResettingStages ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-3.5 w-3.5" />
+                )}
+                <span>Reset ke Standar Bawaan</span>
+              </Button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditStagesOpen(false)}
+                  disabled={isSavingStages}
+                  className="text-xs cursor-pointer"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSaveEditedStages}
+                  disabled={isSavingStages}
+                  className="text-xs font-bold gap-1.5 cursor-pointer"
+                >
+                  {isSavingStages ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                  <span>{isSavingStages ? "Menyimpan..." : "Simpan Perubahan Tahapan"}</span>
+                </Button>
+              </div>
             </DialogFooter>
           </div>
         </Dialog>

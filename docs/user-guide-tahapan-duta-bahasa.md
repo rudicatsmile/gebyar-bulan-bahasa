@@ -36,11 +36,11 @@ Berbeda dengan cabang perlombaan sekali jalan, **Duta Bahasa dan Budaya** menggu
 
 | No | Nama Tahapan | Jadwal Resmi | Deskripsi Kegiatan |
 |---|---|---|---|
-| **1** | **Pendaftaran** | Sabtu, 10 Oktober 2026 | Pengumpulan data peserta, formulir resmi, berkas persyaratan, dan foto profil. |
-| **2** | **Seleksi Administrasi & Wawancara** | Sabtu, 17 Oktober 2026 | Verifikasi keabsahan dokumen dan wawancara awal wawasan kebahasaan & kebudayaan. |
-| **3** | **Seleksi Minat & Bakat** | Sabtu, 24 Oktober 2026 | Unjuk kebolehan dan bakat seni, literasi, atau diplomasi budaya peserta. |
-| **4** | **Pengumuman 3 Besar** | Sabtu, 31 Oktober 2026 | Penetapan dan pengumuman 3 finalis utama yang melaju ke babak puncak. |
-| **5** | **Grand Final Penetapan Juara** | Rabu, 11 November 2026 | Penampilan akhir di panggung utama dan penobatan Duta Bahasa dan Budaya terpilih. |
+| **1** | **Pendaftaran dan Pengumpulan Berkas** | Sabtu, 10 Oktober 2026 | Tahap pendaftaran peserta Duta Bahasa dan Budaya. Peserta melengkapi formulir, berkas administrasi, dan foto resmi. |
+| **2** | **Seleksi Administrasi, Wawancara, dan Paparan Visi-Misi, serta Program Unggulan** | Sabtu, 17 Oktober 2026 | Seleksi administrasi, wawancara, dan paparan visi-misi, serta program unggulan. |
+| **3** | **Seleksi Akademik dan Unjuk Bakat** | Sabtu, 24 Oktober 2026 | Uji kemampuan akademik dan unjuk bakat di bidang bahasa, sastra, dan kebudayaan. |
+| **4** | **Semi Final dan Pengumuman 3 Besar** | Sabtu, 31 Oktober 2026 | Semi final dan pengumuman tiga finalis terbaik yang berhak maju ke tahap Grand Final. |
+| **5** | **Grand Final Penetapan Duta Bahasa** | Rabu, 11 November 2026 | Penampilan akhir dan penetapan Duta Bahasa terpilih di panggung utama acara. |
 
 ---
 
@@ -54,14 +54,25 @@ Berbeda dengan cabang perlombaan sekali jalan, **Duta Bahasa dan Budaya** menggu
 
 ---
 
-### Mengubah Status Tahapan
-Di bagian **"Alur Tahapan Resmi"**, panitia dapat mengatur fase setiap tahapan:
-1. Pilih salah satu tahapan pada tab bar (Tahap 1 s.d. 5).
-2. Pada menu drop-down status tahapan di sebelah kanan judul tahap, pilih status:
-   - **Akan Datang (*Upcoming*)**: Tahap belum dimulai.
-   - **Sedang Berlangsung (*Active*)**: Tahap sedang berjalan (akan ditandai efek visual aktif di publik).
-   - **Selesai (*Completed*)**: Tahap telah selesai dievaluasi.
-3. Sistem akan otomatis menyimpan status dan memperbarui tampilan publik.
+### Mengubah Konfigurasi & Jadwal Tahapan (Tombol Edit Tahapan)
+Panitia dapat mengubah nama tahapan, tanggal pelaksanaan, dan deskripsi masing-masing tahap secara dinamis:
+1. Pada kartu **Timeline Tahapan**, klik tombol **"Edit Tahapan"** di pojok kanan atas.
+2. Modal editor tahapan akan terbuka:
+   - **Judul Tahap:** Ubah nama tahapan sesuai kebutuhan acara.
+   - **Label Hari & Tanggal Tampil:** Contoh format: `Sabtu, 17 Oktober 2026`.
+   - **Tanggal Kalender (ISO):** Pilih tanggal pelaksanaan dari *date picker*.
+   - **Deskripsi Tahap:** Rincian atau arahan kegiatan pada tahap tersebut.
+   - **Status Tahap:** Pilih *Akan Datang*, *Sedang Berlangsung*, atau *Selesai*.
+3. Klik tombol **"Simpan Perubahan Tahapan"** untuk menyimpan seluruh pembaruan ke database.
+4. Terdapat pula opsi tombol **"Reset ke Standar Bawaan"** jika panitia ingin mengembalikan seluruh tahapan ke definisi resmi default terbaru.
+
+---
+
+### Mengubah Status Tahapan Cepat
+Di kartu **Timeline Tahapan**, panitia juga dapat mengatur status tiap tahapan secara langsung:
+1. Klik salah satu baris tahapan untuk membuka detailnya.
+2. Pada menu drop-down status di baris tahap, pilih status (*Akan Datang*, *Sedang Berlangsung*, atau *Selesai*).
+3. Sistem otomatis menyimpan perubahan status tersebut ke database.
 
 ---
 

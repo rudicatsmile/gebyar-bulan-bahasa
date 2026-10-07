@@ -179,6 +179,51 @@ export async function saveDutaBahasaStages(
 }
 
 // ======================================================================
+// RESET STAGES TO DEFAULT
+// ======================================================================
+
+export async function resetDutaBahasaStagesToDefault(): Promise<{
+  success: boolean;
+  stages: DutaBahasaStage[];
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase.from("event_settings").upsert(
+      {
+        key: "duta_bahasa",
+        value: { stages: DEFAULT_STAGES } as any,
+        description: "Konfigurasi tahapan lomba Duta Bahasa dan Budaya",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" }
+    );
+
+    if (error) {
+      return { success: false, stages: DEFAULT_STAGES, error: error.message };
+    }
+
+    revalidatePath("/dashboard/lomba/duta-bahasa");
+    revalidatePath("/lomba/duta-bahasa");
+    return { success: true, stages: DEFAULT_STAGES };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      stages: DEFAULT_STAGES,
+      error: err instanceof Error ? err.message : "Gagal mereset tahapan ke default.",
+    };
+  }
+}
+
+// ======================================================================
+// GET DEFAULT STAGES (ASYNC FOR "use server")
+// ======================================================================
+
+export async function getDefaultDutaBahasaStages(): Promise<DutaBahasaStage[]> {
+  return DEFAULT_STAGES;
+}
+
+// ======================================================================
 // GET PARTICIPANT PROGRESS
 // ======================================================================
 
