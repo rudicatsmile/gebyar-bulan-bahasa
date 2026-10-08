@@ -910,6 +910,61 @@ export async function saveCompetitionRequireDocumentEntry(
   }
 }
 
+/**
+ * Helper to fetch competition round types map from event_settings
+ */
+export async function getCompetitionRoundTypesMap(): Promise<
+  Record<string, "single_round" | "multi_stage">
+> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "competition_round_types")
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object") {
+      return data.value as Record<string, "single_round" | "multi_stage">;
+    }
+    return {};
+  } catch (err) {
+    console.error("Error getCompetitionRoundTypesMap:", err);
+    return {};
+  }
+}
+
+/**
+ * Helper to save competition round type in event_settings
+ */
+export async function saveCompetitionRoundTypeEntry(
+  competitionId: string,
+  slug: string,
+  roundType: "single_round" | "multi_stage"
+): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+    const currentMap = await getCompetitionRoundTypesMap();
+    const nextMap = {
+      ...currentMap,
+      [competitionId]: roundType,
+      [slug]: roundType,
+    };
+
+    await supabase.from("event_settings").upsert(
+      {
+        key: "competition_round_types",
+        value: nextMap,
+        description: "Pengaturan model babak lomba: single_round atau multi_stage",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" }
+    );
+  } catch (err) {
+    console.error("Error saveCompetitionRoundTypeEntry:", err);
+  }
+}
+
 export async function createCompetitionAdmin(data: {
   name: string;
   shortName: string;
@@ -922,6 +977,7 @@ export async function createCompetitionAdmin(data: {
   requireDocument?: boolean;
   documentUploadMode?: "single" | "multi";
   requiredDocumentList?: Array<string | CompetitionDocumentItem> | string;
+  roundType?: "single_round" | "multi_stage";
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -1009,6 +1065,11 @@ export async function createCompetitionAdmin(data: {
       });
     }
 
+    // Simpan model babak lomba jika ada
+    if (data.roundType !== undefined) {
+      await saveCompetitionRoundTypeEntry(inserted.id, finalSlug, data.roundType);
+    }
+
     // Pasang 1 kriteria default berbobot 100% agar perhitungan penilaian langsung berfungsi
     await supabase.from("competition_criteria").insert({
       competition_id: inserted.id,
@@ -1032,6 +1093,8 @@ export async function createCompetitionAdmin(data: {
     revalidatePath("/dashboard/kriteria");
     revalidatePath("/dashboard/juri/penugasan");
     revalidatePath("/dashboard/penilaian");
+    revalidatePath("/juri");
+    revalidatePath(`/juri/lomba/${finalSlug}`);
     revalidatePath("/lomba");
     revalidatePath("/");
     return { success: true, data: inserted };
@@ -1057,6 +1120,7 @@ export async function updateCompetitionAdmin(data: {
   requireDocument?: boolean;
   documentUploadMode?: "single" | "multi";
   requiredDocumentList?: Array<string | CompetitionDocumentItem> | string;
+  roundType?: "single_round" | "multi_stage";
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -1127,6 +1191,11 @@ export async function updateCompetitionAdmin(data: {
       });
     }
 
+    // Simpan model babak lomba jika ada
+    if (data.roundType !== undefined) {
+      await saveCompetitionRoundTypeEntry(data.id, data.slug, data.roundType);
+    }
+
     try {
       await supabase.from("activity_logs").insert({
         action: "update_competition",
@@ -1141,6 +1210,8 @@ export async function updateCompetitionAdmin(data: {
     revalidatePath("/dashboard/kriteria");
     revalidatePath("/dashboard/juri/penugasan");
     revalidatePath("/dashboard/penilaian");
+    revalidatePath("/juri");
+    revalidatePath(`/juri/lomba/${data.slug}`);
     revalidatePath("/lomba");
     revalidatePath(`/lomba/${data.slug}`);
     revalidatePath("/");
@@ -1289,6 +1360,8 @@ export async function getJudgeDashboardData(): Promise<{
       )
     `;
 
+    const roundTypesMap = await getCompetitionRoundTypesMap();
+
     // 1. Jika ada user login dan memiliki penugasan di competition_judges
     if (judgeProfile) {
       const { data: assignments } = await adminSupabase
@@ -1319,6 +1392,14 @@ export async function getJudgeDashboardData(): Promise<{
               stage = sch?.stage?.trim() || "";
             }
 
+            const roundType: "single_round" | "multi_stage" =
+              roundTypesMap[comp.id] ||
+              roundTypesMap[comp.slug] ||
+              roundTypesMap[comp.name?.toLowerCase()] ||
+              ((comp.slug === "pidato" || comp.slug === "duta-bahasa" || comp.name?.toLowerCase().includes("duta"))
+                ? "multi_stage"
+                : "single_round");
+
             return {
               id: comp.id,
               slug: comp.slug,
@@ -1330,6 +1411,7 @@ export async function getJudgeDashboardData(): Promise<{
               status: comp.status || "pendaftaran",
               criteriaCount: comp.competition_criteria?.length || 4,
               isChiefJudge: Boolean(a.is_chief_judge),
+              roundType,
             };
           });
 
@@ -1384,6 +1466,14 @@ export async function getJudgeDashboardData(): Promise<{
             stage = sch?.stage?.trim() || "";
           }
 
+          const roundType: "single_round" | "multi_stage" =
+            roundTypesMap[comp.id] ||
+            roundTypesMap[comp.slug] ||
+            roundTypesMap[comp.name?.toLowerCase()] ||
+            ((comp.slug === "pidato" || comp.slug === "duta-bahasa" || comp.name?.toLowerCase().includes("duta"))
+              ? "multi_stage"
+              : "single_round");
+
           return {
             id: comp.id,
             slug: comp.slug,
@@ -1395,6 +1485,7 @@ export async function getJudgeDashboardData(): Promise<{
             status: comp.status || "pendaftaran",
             criteriaCount: comp.competition_criteria?.length || 4,
             isChiefJudge: Boolean(a.is_chief_judge),
+            roundType,
           };
         });
 

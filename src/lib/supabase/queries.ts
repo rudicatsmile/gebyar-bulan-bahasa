@@ -76,7 +76,8 @@ function formatCompetition(
     requireDocument: boolean;
     uploadMode: "single" | "multi";
     documentList: Array<string | CompetitionDocumentItem>;
-  }>
+  }>,
+  roundTypesMap?: Record<string, "single_round" | "multi_stage">
 ): Competition {
   const criteria = (row.competition_criteria || [])
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -160,6 +161,12 @@ function formatCompetition(
       : { name: item.name, required: item.required !== false }
   );
 
+  const roundType: "single_round" | "multi_stage" =
+    roundTypesMap?.[row.id] ??
+    (row.slug ? roundTypesMap?.[row.slug] : undefined) ??
+    fallbackComp?.roundType ??
+    (row.name?.toLowerCase().includes("duta") || row.slug === "pidato" ? "multi_stage" : "single_round");
+
   return {
     id: row.id,
     slug: row.slug,
@@ -190,6 +197,8 @@ function formatCompetition(
     requireDocument,
     documentUploadMode,
     requiredDocumentList,
+    roundType,
+    stageType: roundType,
   };
 }
 
@@ -426,6 +435,24 @@ async function fetchDocumentConfigsMap(): Promise<Record<string, {
   return {};
 }
 
+async function fetchRoundTypesMap(): Promise<Record<string, "single_round" | "multi_stage">> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("event_settings")
+      .select("value")
+      .eq("key", "competition_round_types")
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object" && !Array.isArray(data.value)) {
+      return data.value as Record<string, "single_round" | "multi_stage">;
+    }
+  } catch (err) {
+    console.error("fetchRoundTypesMap error:", err);
+  }
+  return {};
+}
+
 async function fetchRegistrationCountsMap(): Promise<Record<string, number>> {
   try {
     const admin = createAdminClient();
@@ -463,7 +490,7 @@ async function fetchRegistrationCountsMap(): Promise<Record<string, number>> {
 
 export async function getCompetitions(): Promise<Competition[]> {
   try {
-    const [compResult, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap] = await Promise.all([
+    const [compResult, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap, roundTypesMap] = await Promise.all([
       publicClient
         .from("competitions")
         .select("*, competition_criteria(*)")
@@ -473,13 +500,14 @@ export async function getCompetitions(): Promise<Competition[]> {
       fetchRegistrationCountsMap(),
       fetchRequireDocumentsMap(),
       fetchDocumentConfigsMap(),
+      fetchRoundTypesMap(),
     ]);
 
     if (compResult.error || !compResult.data || compResult.data.length === 0) {
       return COMPETITIONS;
     }
     return (compResult.data as unknown as DbCompetitionWithCriteria[]).map((row) =>
-      formatCompetition(row, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap)
+      formatCompetition(row, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap, roundTypesMap)
     );
   } catch (err) {
     console.error("Supabase getCompetitions fallback:", err);
@@ -493,7 +521,7 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
     const resolvedSlug = compIdToSlug[slug] || slug;
 
     const query = publicClient.from("competitions").select("*, competition_criteria(*)");
-    const [compResult, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap] = await Promise.all([
+    const [compResult, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap, roundTypesMap] = await Promise.all([
       isUuid
         ? query.eq("id", slug).maybeSingle()
         : query.eq("slug", resolvedSlug).maybeSingle(),
@@ -502,6 +530,7 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
       fetchRegistrationCountsMap(),
       fetchRequireDocumentsMap(),
       fetchDocumentConfigsMap(),
+      fetchRoundTypesMap(),
     ]);
 
     if (compResult.error || !compResult.data) {
@@ -517,7 +546,8 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
       eventFormatsMap,
       countsMap,
       requireDocsMap,
-      docConfigsMap
+      docConfigsMap,
+      roundTypesMap
     );
   } catch (err) {
     console.error("Supabase getCompetitionBySlug fallback:", err);

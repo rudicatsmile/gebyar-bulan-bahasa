@@ -40,6 +40,8 @@ export interface Competition {
   requireDocument?: boolean;
   documentUploadMode?: "single" | "multi";
   requiredDocumentList?: Array<string | CompetitionDocumentItem>;
+  roundType?: "single_round" | "multi_stage";
+  stageType?: "single_round" | "multi_stage";
 }
 
 export interface Participant {
@@ -370,6 +372,7 @@ export const COMPETITIONS: Competition[] = [
       "Refleksi Semangat Kongres Pemuda 1928 bagi Kemajuan Pendidikan Nasional",
       "Menyikapi Keberagaman Budaya Nusantara dengan Nilai Toleransi dan Budi Pekerti",
     ],
+    roundType: "multi_stage",
   },
   {
     id: "comp-4",

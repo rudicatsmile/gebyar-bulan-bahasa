@@ -43,6 +43,7 @@ import {
   Bell,
   Search,
   MoreHorizontal,
+  ShieldAlert,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -89,6 +90,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Template Twibbon", href: "/dashboard/twibbon/template", icon: LayoutTemplate },
   { title: "Kelola Pengguna", href: "/dashboard/pengguna", icon: Users },
   { title: "Pengaturan Acara", href: "/dashboard/pengaturan", icon: Settings },
+  { title: "Reset Data Acara", href: "/dashboard/pengaturan/reset-data", icon: ShieldAlert },
 ];
 
 const JURI_NAV: NavItem[] = [

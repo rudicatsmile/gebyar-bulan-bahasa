@@ -43,6 +43,7 @@ import {
   Award,
   FileText,
   X,
+  Layers,
 } from "lucide-react";
 
 /**
@@ -324,6 +325,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   ]);
   const [addDocInput, setAddDocInput] = React.useState("");
   const [addDocIsRequired, setAddDocIsRequired] = React.useState(true);
+  const [addRoundType, setAddRoundType] = React.useState<"single_round" | "multi_stage">("single_round");
   const [addStatus, setAddStatus] = React.useState<"draft" | "pendaftaran">("pendaftaran");
   const [isSubmittingAdd, setIsSubmittingAdd] = React.useState(false);
 
@@ -354,6 +356,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   ]);
   const [editDocInput, setEditDocInput] = React.useState("");
   const [editDocIsRequired, setEditDocIsRequired] = React.useState(true);
+  const [editRoundType, setEditRoundType] = React.useState<"single_round" | "multi_stage">("single_round");
   const [editStatus, setEditStatus] = React.useState<"draft" | "pendaftaran" | "berlangsung" | "selesai" | "dibatalkan">("pendaftaran");
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
 
@@ -369,6 +372,12 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
       setAddNeedsEventFormats(true);
     }
   }, [addName, addOpen, addNeedsEventFormats]);
+
+  React.useEffect(() => {
+    if (addOpen && addName.toLowerCase().includes("duta")) {
+      setAddRoundType("multi_stage");
+    }
+  }, [addName, addOpen]);
 
   // Modal Hapus / Arsip
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -495,6 +504,11 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
     );
     setEditDocInput("");
     setEditDocIsRequired(true);
+    setEditRoundType(
+      comp.roundType ||
+      comp.stageType ||
+      (comp.slug === "pidato" || comp.name.toLowerCase().includes("duta") ? "multi_stage" : "single_round")
+    );
     setEditStatus(mappedStatus);
     setEditOpen(true);
   };
@@ -531,6 +545,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
           editRequireDocument && editUploadMode === "single"
             ? editDocumentList.filter((d) => d.name.trim().length > 0)
             : [],
+        roundType: editRoundType,
         status: editStatus,
       });
 
@@ -578,6 +593,8 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                     editRequireDocument && editUploadMode === "single"
                       ? editDocumentList.filter((d) => d.name.trim().length > 0)
                       : [],
+                  roundType: editRoundType,
+                  stageType: editRoundType,
                   status: editStatus,
                 }
               : c
@@ -627,6 +644,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
           addRequireDocument && addUploadMode === "single"
             ? addDocumentList.filter((d) => d.name.trim().length > 0)
             : [],
+        roundType: addRoundType,
         status: addStatus,
       });
 
@@ -642,6 +660,7 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         setAddNeedsEventFormats(false);
         setAddRequireDocument(true);
         setAddUploadMode("single");
+        setAddRoundType("single_round");
         setAddDocumentList([
           { name: "Biodata", required: true },
           { name: "CV", required: true },
@@ -782,6 +801,22 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                   <Badge variant={comp.category === "kelompok" ? "warning" : "default"} className="text-[10px] uppercase font-mono font-bold">
                     {comp.category}
                   </Badge>
+                  {comp.roundType === "multi_stage" || comp.stageType === "multi_stage" ? (
+                    <span
+                      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-500/20"
+                      title="Lomba Bertingkat (Menggunakan Timeline Tahapan)"
+                    >
+                      <Layers className="h-2.5 w-2.5" />
+                      <span>Multi Stage</span>
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-600 dark:text-slate-400 font-normal border border-slate-500/15"
+                      title="Single Round (Penilaian Sekali Babak)"
+                    >
+                      <span>Single Round</span>
+                    </span>
+                  )}
                   <span className="text-muted-foreground font-mono">{comp.criteria.length} kriteria</span>
                   {comp.category === "kelompok" && (
                     <span className="text-muted-foreground">{comp.minMembers}-{comp.maxMembers} org</span>
@@ -848,6 +883,22 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                     <TableCell>
                       <div className="font-semibold text-foreground text-sm flex items-center gap-2 flex-wrap">
                         <span>{comp.name}</span>
+                        {comp.roundType === "multi_stage" || comp.stageType === "multi_stage" ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-500/20"
+                            title="Lomba Bertingkat (Menggunakan Timeline Tahapan)"
+                          >
+                            <Layers className="h-3 w-3" />
+                            <span>Multi Stage</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-600 dark:text-slate-400 font-normal border border-slate-500/15"
+                            title="Single Round (Penilaian Sekali Babak)"
+                          >
+                            <span>Single Round</span>
+                          </span>
+                        )}
                         {comp.manuscripts && comp.manuscripts.length > 0 && (
                           <span
                             className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-normal"
@@ -1185,6 +1236,76 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 </button>
               </div>
             )}
+
+            {/* Pemilihan Model / Struktur Babak Lomba */}
+            <div className="space-y-2 text-left p-3.5 rounded-xl border border-border bg-muted/20">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-foreground flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-accent" />
+                  <span>Model / Sistem Babak Lomba *</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  Pola penjurian & eliminasi
+                </span>
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div
+                  onClick={() => setAddRoundType("single_round")}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    addRoundType === "single_round"
+                      ? "border-accent bg-accent/10 shadow-xs"
+                      : "border-border/80 bg-background hover:border-accent/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      id="add-round-single"
+                      name="addRoundType"
+                      checked={addRoundType === "single_round"}
+                      onChange={() => setAddRoundType("single_round")}
+                      className="text-accent cursor-pointer"
+                    />
+                    <label htmlFor="add-round-single" className="text-xs font-bold text-foreground cursor-pointer">
+                      Single Round
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1.5 pl-5 leading-relaxed">
+                    Penilaian satu babak langsung. Seluruh peserta resmi dinilai, dan juara ditentukan dari akumulasi skor tertinggi.
+                  </p>
+                </div>
+
+                <div
+                  onClick={() => setAddRoundType("multi_stage")}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    addRoundType === "multi_stage"
+                      ? "border-indigo-500 bg-indigo-500/10 shadow-xs"
+                      : "border-border/80 bg-background hover:border-indigo-500/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      id="add-round-multi"
+                      name="addRoundType"
+                      checked={addRoundType === "multi_stage"}
+                      onChange={() => setAddRoundType("multi_stage")}
+                      className="text-indigo-600 cursor-pointer"
+                    />
+                    <label htmlFor="add-round-multi" className="text-xs font-bold text-foreground cursor-pointer flex items-center gap-1">
+                      <span>Multi Stage</span>
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold">
+                        Bertingkat
+                      </span>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1.5 pl-5 leading-relaxed">
+                    Memakai Timeline Tahapan. Peserta naik/gugur bertahap, dan juri hanya menilai tahapan aktif yang memerlukan juri.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
               <div className="space-y-1.5">
@@ -1711,6 +1832,76 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 </button>
               </div>
             )}
+
+            {/* Pemilihan Model / Struktur Babak Lomba */}
+            <div className="space-y-2 text-left p-3.5 rounded-xl border border-border bg-muted/20">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-foreground flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-accent" />
+                  <span>Model / Sistem Babak Lomba *</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  Pola penjurian & eliminasi
+                </span>
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div
+                  onClick={() => setEditRoundType("single_round")}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    editRoundType === "single_round"
+                      ? "border-accent bg-accent/10 shadow-xs"
+                      : "border-border/80 bg-background hover:border-accent/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      id="edit-round-single"
+                      name="editRoundType"
+                      checked={editRoundType === "single_round"}
+                      onChange={() => setEditRoundType("single_round")}
+                      className="text-accent cursor-pointer"
+                    />
+                    <label htmlFor="edit-round-single" className="text-xs font-bold text-foreground cursor-pointer">
+                      Single Round
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1.5 pl-5 leading-relaxed">
+                    Penilaian satu babak langsung. Seluruh peserta resmi dinilai, dan juara ditentukan dari akumulasi skor tertinggi.
+                  </p>
+                </div>
+
+                <div
+                  onClick={() => setEditRoundType("multi_stage")}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    editRoundType === "multi_stage"
+                      ? "border-indigo-500 bg-indigo-500/10 shadow-xs"
+                      : "border-border/80 bg-background hover:border-indigo-500/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      id="edit-round-multi"
+                      name="editRoundType"
+                      checked={editRoundType === "multi_stage"}
+                      onChange={() => setEditRoundType("multi_stage")}
+                      className="text-indigo-600 cursor-pointer"
+                    />
+                    <label htmlFor="edit-round-multi" className="text-xs font-bold text-foreground cursor-pointer flex items-center gap-1">
+                      <span>Multi Stage</span>
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-semibold">
+                        Bertingkat
+                      </span>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1.5 pl-5 leading-relaxed">
+                    Memakai Timeline Tahapan. Peserta naik/gugur bertahap, dan juri hanya menilai tahapan aktif yang memerlukan juri.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
               <div className="space-y-1.5">
