@@ -45,6 +45,8 @@ import {
   Paperclip,
   ExternalLink,
   FileText,
+  Gavel,
+  Layers,
 } from "lucide-react";
 import type {
   DutaBahasaStage,
@@ -583,6 +585,22 @@ export default function DashboardDutaBahasaPage() {
                               >
                                 {stageStatusLabel[stage.status]}
                               </Badge>
+                              {stage.requiresJudge !== false ? (
+                                <Badge
+                                  variant="default"
+                                  className="text-[10px] bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 font-semibold gap-1"
+                                >
+                                  <Gavel className="h-3 w-3" />
+                                  <span>Perlu Juri</span>
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="default"
+                                  className="text-[10px] bg-muted/40 text-muted-foreground border-border/80"
+                                >
+                                  <span>Tidak Perlu Juri</span>
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
                               <span className="flex items-center gap-1">
@@ -1389,7 +1407,75 @@ export default function DashboardDutaBahasaPage() {
                         <option value="active">Sedang Berlangsung (Aktif)</option>
                         <option value="completed">Selesai (Completed)</option>
                       </select>
+
+                      {editingStages.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Apakah Anda yakin ingin menghapus "${stage.title}"?`)) {
+                              setEditingStages((prev) =>
+                                prev
+                                  .filter((_, i) => i !== idx)
+                                  .map((s, newIdx) => ({
+                                    ...s,
+                                    stageOrder: newIdx + 1,
+                                  }))
+                              );
+                            }
+                          }}
+                          className="h-7 w-7 p-0 text-red-500 hover:bg-red-500/10 cursor-pointer"
+                          title="Hapus tahapan ini"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
+                  </div>
+
+                  {/* KEBUTUHAN DEWAN JURI (PERLU JURI: YA / TIDAK) */}
+                  <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/20">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Gavel className="h-3.5 w-3.5 text-accent" />
+                        <span>Kebutuhan Dewan Juri *</span>
+                      </label>
+                      <span className="text-[10px] text-muted-foreground font-normal">
+                        Apakah tahap ini dinilai dewan juri?
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStageFieldChange(idx, "requiresJudge", true)}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                          stage.requiresJudge !== false
+                            ? "border-indigo-500 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-bold shadow-xs"
+                            : "border-border bg-background text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        <Gavel className="h-3.5 w-3.5" />
+                        <span>Perlu Juri (Ya)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStageFieldChange(idx, "requiresJudge", false)}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                          stage.requiresJudge === false
+                            ? "border-slate-500 bg-slate-500/20 text-slate-800 dark:text-slate-200 font-bold shadow-xs"
+                            : "border-border bg-background text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        <span>Tidak Perlu Juri (Tidak)</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic pt-0.5">
+                      {stage.requiresJudge !== false
+                        ? "Tahap ini akan muncul di dashboard dewan juri saat berstatus 'Aktif'."
+                        : "Tahap ini ditangani oleh panitia (verifikasi berkas/administrasi) dan tidak muncul untuk dinilai juri."}
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -1449,6 +1535,32 @@ export default function DashboardDutaBahasaPage() {
                   </div>
                 </div>
               ))}
+
+              {/* TOMBOL TAMBAH TAHAPAN BARU */}
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const newOrder = editingStages.length + 1;
+                    const newStage: DutaBahasaStage = {
+                      id: `stage-${Date.now()}`,
+                      stageOrder: newOrder,
+                      title: `Tahap ${newOrder}: Seleksi Lanjutan`,
+                      description: "Deskripsi tahapan seleksi lanjutan perlombaan...",
+                      stageDate: new Date().toISOString().split("T")[0],
+                      stageDayLabel: "Jadwal Menyusul",
+                      status: "upcoming",
+                      requiresJudge: true,
+                    };
+                    setEditingStages((prev) => [...prev, newStage]);
+                  }}
+                  className="w-full border-dashed border-2 text-xs py-2.5 font-semibold text-accent hover:bg-accent/5 gap-1.5 cursor-pointer"
+                >
+                  <span>+ Tambah Tahapan Baru</span>
+                </Button>
+              </div>
             </div>
 
             <DialogFooter className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-border pt-3">

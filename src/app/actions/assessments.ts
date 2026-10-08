@@ -4,6 +4,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getMultiStageCompetitionState } from "@/app/actions/duta-bahasa";
+import { getCompetitionRoundTypesMap } from "@/app/actions/competitions";
 
 const SCORE_GAP_ALERT = Number(process.env.NEXT_PUBLIC_SCORE_GAP_ALERT || 20);
 
@@ -704,6 +706,10 @@ export interface JudgeRosterParticipant {
   status: "draft" | "terkirim" | "final" | "belum_dinilai";
   weightedScore: number | null;
   performanceOrder: number | null;
+  stageStatus?: "terdaftar" | "menunggu" | "lolos" | "tidak_lolos";
+  stageStatusLabel?: string;
+  stageScore?: number | null;
+  activeStageName?: string;
 }
 
 export interface JudgeCompetitionRosterResult {
@@ -716,12 +722,21 @@ export interface JudgeCompetitionRosterResult {
     stageName?: string | null;
     status: string;
     rules?: string | null;
+    roundType?: "single_round" | "multi_stage";
+    activeStage?: {
+      id: string;
+      stageOrder: number;
+      title: string;
+      status: string;
+      requiresJudge: boolean;
+    } | null;
   };
   judge?: {
     id: string;
     name: string;
   };
   participants: JudgeRosterParticipant[];
+  notice?: string;
   error?: string;
 }
 
@@ -753,7 +768,16 @@ export async function getJudgeCompetitionRoster(
       };
     }
 
-    // 2. Ambil profil juri yang sedang login, atau fallback ke juri aktif cabang lomba
+    // 2. Ambil model babak lomba: single_round vs multi_stage
+    const roundTypesMap = await getCompetitionRoundTypesMap();
+    const roundType: "single_round" | "multi_stage" =
+      roundTypesMap[comp.id] ||
+      roundTypesMap[comp.slug] ||
+      ((comp.slug === "pidato" || comp.name.toLowerCase().includes("duta"))
+        ? "multi_stage"
+        : "single_round");
+
+    // 3. Ambil profil juri yang sedang login, atau fallback ke juri aktif cabang lomba
     const {
       data: { user },
     } = await serverSupabase.auth.getUser();
@@ -786,7 +810,7 @@ export async function getJudgeCompetitionRoster(
       }
     }
 
-    // 3. Ambil seluruh data pendaftaran peserta lomba ini dari Supabase
+    // 4. Ambil seluruh data pendaftaran peserta lomba ini dari Supabase
     const { data: registrations, error: regErr } = await adminSupabase
       .from("registrations")
       .select(`
@@ -805,7 +829,7 @@ export async function getJudgeCompetitionRoster(
 
     if (regErr) throw regErr;
 
-    // 4. Ambil penilaian oleh juri ini jika sudah ada
+    // 5. Ambil riwayat penilaian oleh juri ini jika sudah ada
     let assessments: any[] = [];
     if (targetJudgeId) {
       const { data: assessList } = await adminSupabase
@@ -816,6 +840,148 @@ export async function getJudgeCompetitionRoster(
       assessments = assessList || [];
     }
 
+    const baseCompInfo = {
+      id: comp.id,
+      name: comp.name,
+      slug: comp.slug,
+      category: comp.type === "kelompok" ? "Kelompok" : "Individu",
+      stageName: comp.theme_link || "Panggung Utama",
+      status: comp.status,
+      rules: comp.rules,
+      roundType,
+    };
+
+    // =========================================================================
+    // LOGIKA MULTI-STAGE: Filter tahap aktif & hanya tampilkan jika Perlu Juri
+    // =========================================================================
+    if (roundType === "multi_stage") {
+      const multiRes = await getMultiStageCompetitionState(comp.slug);
+      const activeStage = multiRes.activeStage;
+
+      // Kasus B1: Belum ada tahap yang aktif
+      if (!activeStage) {
+        return {
+          success: true,
+          competition: {
+            ...baseCompInfo,
+            activeStage: null,
+          },
+          judge: {
+            id: targetJudgeId || "",
+            name: judgeProfile?.full_name || "Dewan Juri",
+          },
+          participants: [],
+          notice: "Belum ada tahapan perlombaan yang sedang berlangsung (aktif) untuk cabang lomba ini.",
+        };
+      }
+
+      // Kasus B2: Tahap aktif TIDAK PERLU JURI (requiresJudge === false)
+      if (activeStage.requiresJudge === false) {
+        return {
+          success: true,
+          competition: {
+            ...baseCompInfo,
+            activeStage: {
+              id: activeStage.id,
+              stageOrder: activeStage.stageOrder,
+              title: activeStage.title,
+              status: activeStage.status,
+              requiresJudge: false,
+            },
+          },
+          judge: {
+            id: targetJudgeId || "",
+            name: judgeProfile?.full_name || "Dewan Juri",
+          },
+          participants: [],
+          notice: `Tahap yang sedang aktif saat ini (${activeStage.title}) tidak memerlukan penilaian dewan juri (merupakan tahap administrasi panitia). Dewan juri akan mulai bertugas pada tahapan berikutnya yang memerlukan penilaian juri.`,
+        };
+      }
+
+      // Kasus B3: Tahap aktif PERLU JURI (requiresJudge === true)
+      // Filter peserta:
+      // - Harus berada di activeStage
+      // - Bukan peserta yang statusnya "tidak_lolos"
+      // - Tampilkan terutama "menunggu" (Menunggu Penilaian), "terdaftar", atau "lolos"
+      const eligibleStageParticipants = (multiRes.participants || []).filter((p) => {
+        const stageProg = p.progress[activeStage.id];
+        if (!stageProg) return false;
+        if (stageProg.status === "tidak_lolos" || p.overallStatus === "tereliminasi") {
+          return false;
+        }
+        return ["menunggu", "terdaftar", "lolos"].includes(stageProg.status);
+      });
+
+      const regMapByPartId = new Map(
+        (registrations || []).map((r) => [r.participant_id, r])
+      );
+      const regMapByRegNum = new Map(
+        (registrations || []).map((r) => [(r.participant as any)?.registration_number, r])
+      );
+
+      const stageRosterParticipants: JudgeRosterParticipant[] = eligibleStageParticipants.map((p, index) => {
+        const matchedReg =
+          regMapByPartId.get(p.participantId) || regMapByRegNum.get(p.registrationNumber);
+        const registrationId = matchedReg?.id || p.participantId;
+        const myAssessment = assessments.find((a) => a.registration_id === registrationId);
+
+        let assessStatus: "draft" | "terkirim" | "final" | "belum_dinilai" = "belum_dinilai";
+        if (myAssessment?.status === "terkirim" || myAssessment?.status === "final") {
+          assessStatus = "terkirim";
+        } else if (myAssessment?.status === "draft") {
+          assessStatus = "draft";
+        }
+
+        const stageProg = p.progress[activeStage.id];
+        const rawStageStatus = stageProg?.status || "menunggu";
+
+        let stageStatusLabel = "Menunggu Penilaian";
+        if (rawStageStatus === "terdaftar") {
+          stageStatusLabel = "Terdaftar";
+        } else if (rawStageStatus === "lolos") {
+          stageStatusLabel = "Lolos ke tahap berikutnya";
+        }
+
+        return {
+          registrationId,
+          participantId: p.participantId,
+          registrationNumber: p.registrationNumber || `REG-${(index + 1).toString().padStart(3, "0")}`,
+          fullName: p.fullName || "Peserta",
+          teamName: matchedReg?.team_name || null,
+          institution: p.institution || "Umum",
+          status: assessStatus,
+          weightedScore: myAssessment?.weighted_total ? Number(myAssessment.weighted_total) : null,
+          performanceOrder: matchedReg?.performance_order || null,
+          stageStatus: rawStageStatus as "terdaftar" | "menunggu" | "lolos" | "tidak_lolos",
+          stageStatusLabel,
+          stageScore: stageProg?.score ?? null,
+          activeStageName: activeStage.title,
+        };
+      });
+
+      return {
+        success: true,
+        competition: {
+          ...baseCompInfo,
+          activeStage: {
+            id: activeStage.id,
+            stageOrder: activeStage.stageOrder,
+            title: activeStage.title,
+            status: activeStage.status,
+            requiresJudge: true,
+          },
+        },
+        judge: {
+          id: targetJudgeId || "",
+          name: judgeProfile?.full_name || "Dewan Juri",
+        },
+        participants: stageRosterParticipants,
+      };
+    }
+
+    // =========================================================================
+    // LOGIKA SINGLE ROUND (EXISTING FLOW): Tampilkan semua peserta lomba
+    // =========================================================================
     const participants: JudgeRosterParticipant[] = (registrations || []).map((r, index) => {
       const part = r.participant as any;
       const myAssessment = assessments.find((a) => a.registration_id === r.id);
@@ -843,13 +1009,8 @@ export async function getJudgeCompetitionRoster(
     return {
       success: true,
       competition: {
-        id: comp.id,
-        name: comp.name,
-        slug: comp.slug,
-        category: comp.type === "kelompok" ? "Kelompok" : "Individu",
-        stageName: comp.theme_link || "Panggung Utama",
-        status: comp.status,
-        rules: comp.rules,
+        ...baseCompInfo,
+        activeStage: null,
       },
       judge: {
         id: targetJudgeId || "",

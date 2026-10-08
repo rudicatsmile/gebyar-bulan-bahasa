@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { JUDGES } from "@/lib/dummy-data";
-import { Trophy, ArrowRight, UserCheck, CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { Trophy, ArrowRight, UserCheck, CheckCircle2, Clock, Loader2, Layers } from "lucide-react";
 import { getJudgeDashboardData } from "@/app/actions/competitions";
 
 function getStatusBadge(status: string) {
@@ -45,6 +45,7 @@ export default function DashboardJuriPage() {
       status: string;
       criteriaCount: number;
       isChiefJudge: boolean;
+      roundType?: "single_round" | "multi_stage";
     }>
   >([]);
 
@@ -133,12 +134,30 @@ export default function DashboardJuriPage() {
               {assignedComps.map((comp) => {
                 const statusInfo = getStatusBadge(comp.status);
 
+                const isMultiStage =
+                  comp.roundType === "multi_stage" ||
+                  comp.slug === "pidato" ||
+                  comp.slug === "duta-bahasa" ||
+                  comp.name?.toLowerCase().includes("duta");
+
                 return (
                   <Card key={comp.id} className="p-6 space-y-4 border-accent/40 bg-accent/5">
-                    <div className="flex items-center justify-between">
-                      <Badge variant={statusInfo.variant} className="text-xs">
-                        {statusInfo.label}
-                      </Badge>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant={statusInfo.variant} className="text-xs">
+                          {statusInfo.label}
+                        </Badge>
+                        {isMultiStage ? (
+                          <Badge variant="default" className="text-[10px] bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 font-semibold gap-1">
+                            <Layers className="h-3 w-3" />
+                            <span>MULTI STAGE</span>
+                          </Badge>
+                        ) : (
+                          <Badge variant="default" className="text-[10px] bg-muted/40 text-muted-foreground border-border gap-1">
+                            <span>SINGLE ROUND</span>
+                          </Badge>
+                        )}
+                      </div>
                       <span className="text-xs font-mono uppercase text-muted-foreground font-semibold">
                         {comp.category}
                       </span>

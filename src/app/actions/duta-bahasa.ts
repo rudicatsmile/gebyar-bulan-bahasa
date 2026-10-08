@@ -15,6 +15,7 @@ export interface DutaBahasaStage {
   stageDate: string; // ISO date string "2026-10-10"
   stageDayLabel: string; // "Sabtu, 10 Oktober 2026"
   status: "upcoming" | "active" | "completed";
+  requiresJudge?: boolean; // NEW: Apakah tahapan ini memerlukan penilaian juri
 }
 
 export type DutaBahasaParticipantStatus =
@@ -68,6 +69,7 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
     stageDate: "2026-10-10",
     stageDayLabel: "Sabtu, 10 Oktober 2026",
     status: "upcoming",
+    requiresJudge: false, // Berkas administrasi tidak perlu juri
   },
   {
     id: "db-stage-2",
@@ -78,6 +80,7 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
     stageDate: "2026-10-17",
     stageDayLabel: "Sabtu, 17 Oktober 2026",
     status: "upcoming",
+    requiresJudge: true, // Wawancara perlu juri
   },
   {
     id: "db-stage-3",
@@ -88,6 +91,7 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
     stageDate: "2026-10-24",
     stageDayLabel: "Sabtu, 24 Oktober 2026",
     status: "upcoming",
+    requiresJudge: true, // Unjuk bakat perlu juri
   },
   {
     id: "db-stage-4",
@@ -98,6 +102,7 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
     stageDate: "2026-10-31",
     stageDayLabel: "Sabtu, 31 Oktober 2026",
     status: "upcoming",
+    requiresJudge: true, // Semifinal perlu juri
   },
   {
     id: "db-stage-5",
@@ -108,6 +113,7 @@ const DEFAULT_STAGES: DutaBahasaStage[] = [
     stageDate: "2026-11-11",
     stageDayLabel: "Rabu, 11 November 2026",
     status: "upcoming",
+    requiresJudge: true, // Grand final perlu juri
   },
 ];
 
@@ -143,7 +149,11 @@ export async function getDutaBahasaStages(): Promise<{
     }
 
     const val = (data.value as unknown) as Record<string, unknown>;
-    const stages = (val?.stages as DutaBahasaStage[]) || DEFAULT_STAGES;
+    const rawStages = (val?.stages as DutaBahasaStage[]) || DEFAULT_STAGES;
+    const stages: DutaBahasaStage[] = rawStages.map((s) => ({
+      ...s,
+      requiresJudge: s.requiresJudge !== undefined ? Boolean(s.requiresJudge) : (s.stageOrder !== 1),
+    }));
     return { success: true, stages };
   } catch (err: unknown) {
     console.error("getDutaBahasaStages error:", err);
@@ -151,6 +161,124 @@ export async function getDutaBahasaStages(): Promise<{
       success: true,
       stages: DEFAULT_STAGES,
       error: err instanceof Error ? err.message : "Gagal memuat tahapan.",
+    };
+  }
+}
+
+// ======================================================================
+// GENERIC GET & SAVE STAGES FOR ANY MULTI-STAGE COMPETITION
+// ======================================================================
+
+export async function getCompetitionStages(
+  competitionSlugOrId: string
+): Promise<{ success: boolean; stages: DutaBahasaStage[]; error?: string }> {
+  const isDuta =
+    competitionSlugOrId === "duta-bahasa" ||
+    competitionSlugOrId === "pidato" ||
+    competitionSlugOrId.toLowerCase().includes("duta");
+
+  if (isDuta) {
+    return getDutaBahasaStages();
+  }
+
+  try {
+    const supabase = createAdminClient();
+    const key = `stages_${competitionSlugOrId.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`;
+    const { data } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", key)
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object" && "stages" in (data.value as any)) {
+      const rawStages = (data.value as any).stages as DutaBahasaStage[];
+      const stages: DutaBahasaStage[] = rawStages.map((s) => ({
+        ...s,
+        requiresJudge: s.requiresJudge !== undefined ? Boolean(s.requiresJudge) : (s.stageOrder !== 1),
+      }));
+      return { success: true, stages };
+    }
+
+    // Default template for a new multi-stage competition
+    const defaultMultiStages: DutaBahasaStage[] = [
+      {
+        id: `stage-1-${competitionSlugOrId}`,
+        stageOrder: 1,
+        title: "Pendaftaran dan Seleksi Berkas",
+        description: "Pengumpulan berkas pendaftaran dan verifikasi administrasi.",
+        stageDate: "2026-10-15",
+        stageDayLabel: "Kamis, 15 Oktober 2026",
+        status: "active",
+        requiresJudge: false,
+      },
+      {
+        id: `stage-2-${competitionSlugOrId}`,
+        stageOrder: 2,
+        title: "Babak Penyisihan",
+        description: "Penilaian penampilan atau karya oleh dewan juri.",
+        stageDate: "2026-10-25",
+        stageDayLabel: "Minggu, 25 Oktober 2026",
+        status: "upcoming",
+        requiresJudge: true,
+      },
+      {
+        id: `stage-3-${competitionSlugOrId}`,
+        stageOrder: 3,
+        title: "Grand Final",
+        description: "Babak final penentuan pemenang dan juara kompetisi.",
+        stageDate: "2026-11-10",
+        stageDayLabel: "Selasa, 10 November 2026",
+        status: "upcoming",
+        requiresJudge: true,
+      },
+    ];
+
+    return { success: true, stages: defaultMultiStages };
+  } catch (err: unknown) {
+    return {
+      success: true,
+      stages: DEFAULT_STAGES,
+      error: err instanceof Error ? err.message : "Gagal memuat tahapan.",
+    };
+  }
+}
+
+export async function saveCompetitionStages(
+  competitionSlugOrId: string,
+  stages: DutaBahasaStage[]
+): Promise<{ success: boolean; error?: string }> {
+  const isDuta =
+    competitionSlugOrId === "duta-bahasa" ||
+    competitionSlugOrId === "pidato" ||
+    competitionSlugOrId.toLowerCase().includes("duta");
+
+  if (isDuta) {
+    return saveDutaBahasaStages(stages);
+  }
+
+  try {
+    const supabase = createAdminClient();
+    const key = `stages_${competitionSlugOrId.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`;
+    const { error } = await supabase.from("event_settings").upsert(
+      {
+        key,
+        value: { stages } as any,
+        description: `Konfigurasi tahapan lomba ${competitionSlugOrId}`,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" }
+    );
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/dashboard/lomba");
+    revalidatePath(`/dashboard/lomba/${competitionSlugOrId}`);
+    revalidatePath(`/juri/lomba/${competitionSlugOrId}`);
+    return { success: true };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal menyimpan tahapan lomba.",
     };
   }
 }
@@ -180,6 +308,9 @@ export async function saveDutaBahasaStages(
 
     revalidatePath("/dashboard/lomba/duta-bahasa");
     revalidatePath("/lomba/duta-bahasa");
+    revalidatePath("/juri");
+    revalidatePath("/juri/lomba/pidato");
+    revalidatePath("/juri/lomba/duta-bahasa");
     return { success: true };
   } catch (err: unknown) {
     return {
@@ -216,6 +347,9 @@ export async function resetDutaBahasaStagesToDefault(): Promise<{
 
     revalidatePath("/dashboard/lomba/duta-bahasa");
     revalidatePath("/lomba/duta-bahasa");
+    revalidatePath("/juri");
+    revalidatePath("/juri/lomba/pidato");
+    revalidatePath("/juri/lomba/duta-bahasa");
     return { success: true, stages: DEFAULT_STAGES };
   } catch (err: unknown) {
     return {
@@ -754,3 +888,170 @@ export async function searchDutaBahasaRegistrationCandidates(
     };
   }
 }
+
+// ======================================================================
+// GET MULTI-STAGE COMPETITION STATE & ACTIVE STAGE (GENERIC HELPER)
+// ======================================================================
+
+export async function getMultiStageCompetitionState(
+  competitionSlugOrId: string
+): Promise<{
+  success: boolean;
+  stages: DutaBahasaStage[];
+  activeStage: DutaBahasaStage | null;
+  participants: DutaBahasaParticipantInfo[];
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Ambil tahapan untuk kompetisi ini
+    const stagesRes = await getCompetitionStages(competitionSlugOrId);
+    const stages = stagesRes.stages || [];
+
+    // 2. Deteksi tahap yang berstatus "active"
+    let activeStage = stages.find((s) => s.status === "active") || null;
+    // Fallback jika belum ada yang diset active: cari tahap pertama yang bukan completed, atau tahap 1
+    if (!activeStage && stages.length > 0) {
+      activeStage = stages.find((s) => s.status !== "completed") || stages[0];
+    }
+
+    // 3. Cek apakah ini Duta Bahasa / Pidato
+    const isDuta =
+      competitionSlugOrId === "duta-bahasa" ||
+      competitionSlugOrId === "pidato" ||
+      competitionSlugOrId.toLowerCase().includes("duta");
+
+    if (isDuta) {
+      const progressRes = await getDutaBahasaProgress();
+      return {
+        success: true,
+        stages,
+        activeStage,
+        participants: progressRes.participants || [],
+      };
+    }
+
+    // Generic multi-stage competition
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      competitionSlugOrId
+    );
+    let compQuery = supabase.from("competitions").select("id, slug, name");
+    if (isUuid) compQuery = compQuery.eq("id", competitionSlugOrId);
+    else compQuery = compQuery.eq("slug", competitionSlugOrId);
+    const { data: comp } = await compQuery.maybeSingle();
+
+    if (!comp) {
+      return {
+        success: false,
+        stages,
+        activeStage,
+        participants: [],
+        error: "Cabang lomba tidak ditemukan",
+      };
+    }
+
+    // Ambil progress dari event_settings key `progress_${comp.slug}`
+    const progressKey = `progress_${comp.slug.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`;
+    const { data: progressSetting } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", progressKey)
+      .maybeSingle();
+
+    const progressMap: Record<string, Record<string, DutaBahasaParticipantProgress>> =
+      (progressSetting?.value as any) || {};
+
+    // Ambil registrasi lomba ini
+    const { data: regs } = await supabase
+      .from("registrations")
+      .select("participant_id, id, team_name")
+      .eq("competition_id", comp.id);
+
+    const participantIds = (regs || []).map((r) => r.participant_id).filter(Boolean);
+    const allParticipantIds = Array.from(new Set([...Object.keys(progressMap), ...participantIds]));
+
+    if (allParticipantIds.length === 0) {
+      return { success: true, stages, activeStage, participants: [] };
+    }
+
+    const { data: parts } = await supabase
+      .from("participants")
+      .select("id, full_name, institution, registration_number")
+      .in("id", allParticipantIds);
+
+    const firstStageId = stages[0]?.id || "stage-1";
+    const mappedParticipants: DutaBahasaParticipantInfo[] = (parts || []).map((p) => {
+      const pProgress = { ...(progressMap[p.id] || {}) };
+      if (!pProgress[firstStageId]) {
+        pProgress[firstStageId] = {
+          participantId: p.id,
+          stageId: firstStageId,
+          status: "menunggu",
+          score: null,
+          notes: "Terdaftar pada babak awal",
+          reviewedAt: new Date().toISOString(),
+        };
+      }
+
+      // Propagate lolos
+      for (let i = 0; i < stages.length - 1; i++) {
+        const cur = stages[i];
+        const nxt = stages[i + 1];
+        if (pProgress[cur.id]?.status === "lolos" && !pProgress[nxt.id]) {
+          pProgress[nxt.id] = {
+            participantId: p.id,
+            stageId: nxt.id,
+            status: "menunggu",
+            score: null,
+            notes: `Lolos dari ${cur.title}`,
+            reviewedAt: new Date().toISOString(),
+          };
+        }
+      }
+
+      let curStageId = firstStageId;
+      let curStageOrder = 1;
+      let overallStatus: DutaBahasaParticipantInfo["overallStatus"] = "aktif";
+
+      for (const stg of stages) {
+        if (pProgress[stg.id]) {
+          curStageId = stg.id;
+          curStageOrder = stg.stageOrder;
+          if (pProgress[stg.id].status === "tidak_lolos") {
+            overallStatus = "tereliminasi";
+            break;
+          }
+        }
+      }
+
+      return {
+        participantId: p.id,
+        fullName: p.full_name,
+        institution: p.institution || "",
+        registrationNumber: p.registration_number,
+        currentStageId: curStageId,
+        currentStageOrder: curStageOrder,
+        overallStatus,
+        progress: pProgress,
+      };
+    });
+
+    return {
+      success: true,
+      stages,
+      activeStage,
+      participants: mappedParticipants,
+    };
+  } catch (err: unknown) {
+    console.error("getMultiStageCompetitionState error:", err);
+    return {
+      success: false,
+      stages: [],
+      activeStage: null,
+      participants: [],
+      error: err instanceof Error ? err.message : "Gagal memuat status multi-stage.",
+    };
+  }
+}
+
