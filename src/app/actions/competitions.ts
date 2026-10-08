@@ -785,6 +785,100 @@ export async function getCompetitionRequireDocumentsMap(): Promise<Record<string
   }
 }
 
+export interface CompetitionDocumentItem {
+  name: string;
+  required: boolean;
+}
+
+export interface CompetitionDocumentConfig {
+  requireDocument: boolean;
+  uploadMode: "single" | "multi";
+  documentList: Array<string | CompetitionDocumentItem>;
+}
+
+function parseDocumentListInput(
+  input?: Array<string | CompetitionDocumentItem> | string
+): CompetitionDocumentItem[] {
+  if (!input) return [];
+  if (Array.isArray(input)) {
+    return input
+      .map((item) => {
+        if (typeof item === "string") {
+          return { name: item.trim(), required: true };
+        }
+        return {
+          name: (item.name || "").trim(),
+          required: item.required !== false,
+        };
+      })
+      .filter((item) => item.name.length > 0);
+  }
+  if (typeof input === "string") {
+    return input
+      .split("\n")
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .map((name) => ({ name, required: true }));
+  }
+  return [];
+}
+
+/**
+ * Helper to fetch competition document detailed configs (mode & document list)
+ */
+export async function getCompetitionDocumentConfigsMap(): Promise<Record<string, CompetitionDocumentConfig>> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "competition_document_configs")
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object" && !Array.isArray(data.value)) {
+      return (data.value as unknown) as Record<string, CompetitionDocumentConfig>;
+    }
+    return {};
+  } catch (err) {
+    console.error("Error getCompetitionDocumentConfigsMap:", err);
+    return {};
+  }
+}
+
+/**
+ * Helper to update a competition's document configuration in event_settings
+ */
+export async function saveCompetitionDocumentConfigEntry(
+  competitionId: string,
+  slug: string,
+  config: CompetitionDocumentConfig
+): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+    const currentMap = await getCompetitionDocumentConfigsMap();
+    const nextMap = {
+      ...currentMap,
+      [competitionId]: config,
+      [slug]: config,
+    };
+
+    await Promise.all([
+      supabase.from("event_settings").upsert(
+        {
+          key: "competition_document_configs",
+          value: nextMap as any,
+          description: "Pengaturan mode upload berkas dan daftar berkas persyaratan per cabang lomba",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" }
+      ),
+      saveCompetitionRequireDocumentEntry(competitionId, slug, config.requireDocument),
+    ]);
+  } catch (err) {
+    console.error("Error saveCompetitionDocumentConfigEntry:", err);
+  }
+}
+
 /**
  * Helper to update a competition's document requirement setting in event_settings
  */
@@ -826,6 +920,8 @@ export async function createCompetitionAdmin(data: {
   manuscripts?: string[] | string;
   eventFormats?: string[] | string;
   requireDocument?: boolean;
+  documentUploadMode?: "single" | "multi";
+  requiredDocumentList?: Array<string | CompetitionDocumentItem> | string;
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -900,8 +996,17 @@ export async function createCompetitionAdmin(data: {
     }
 
     // Simpan pengaturan wajib upload berkas
-    if (data.requireDocument !== undefined) {
-      await saveCompetitionRequireDocumentEntry(inserted.id, finalSlug, data.requireDocument);
+    if (
+      data.requireDocument !== undefined ||
+      data.documentUploadMode !== undefined ||
+      data.requiredDocumentList !== undefined
+    ) {
+      const docList = parseDocumentListInput(data.requiredDocumentList);
+      await saveCompetitionDocumentConfigEntry(inserted.id, finalSlug, {
+        requireDocument: data.requireDocument ?? true,
+        uploadMode: data.documentUploadMode || "single",
+        documentList: docList,
+      });
     }
 
     // Pasang 1 kriteria default berbobot 100% agar perhitungan penilaian langsung berfungsi
@@ -950,6 +1055,8 @@ export async function updateCompetitionAdmin(data: {
   manuscripts?: string[] | string;
   eventFormats?: string[] | string;
   requireDocument?: boolean;
+  documentUploadMode?: "single" | "multi";
+  requiredDocumentList?: Array<string | CompetitionDocumentItem> | string;
   venue?: string;
   aggregation: "rata_rata" | "total" | "rata_rata_buang_ekstrem";
   minMembers?: number;
@@ -1007,8 +1114,17 @@ export async function updateCompetitionAdmin(data: {
     }
 
     // Simpan pengaturan wajib upload berkas
-    if (data.requireDocument !== undefined) {
-      await saveCompetitionRequireDocumentEntry(data.id, data.slug, data.requireDocument);
+    if (
+      data.requireDocument !== undefined ||
+      data.documentUploadMode !== undefined ||
+      data.requiredDocumentList !== undefined
+    ) {
+      const docList = parseDocumentListInput(data.requiredDocumentList);
+      await saveCompetitionDocumentConfigEntry(data.id, data.slug, {
+        requireDocument: data.requireDocument ?? true,
+        uploadMode: data.documentUploadMode || "single",
+        documentList: docList,
+      });
     }
 
     try {

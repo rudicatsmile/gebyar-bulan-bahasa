@@ -12,6 +12,7 @@ import {
   CHALLENGES,
   REWARDS,
   type Competition,
+  type CompetitionDocumentItem,
   type ScheduleItem,
   type Announcement,
   type Winner,
@@ -70,7 +71,12 @@ function formatCompetition(
   manuscriptsMap?: Record<string, string[]>,
   eventFormatsMap?: Record<string, string[]>,
   countsMap?: Record<string, number>,
-  requireDocsMap?: Record<string, boolean>
+  requireDocsMap?: Record<string, boolean>,
+  docConfigsMap?: Record<string, {
+    requireDocument: boolean;
+    uploadMode: "single" | "multi";
+    documentList: Array<string | CompetitionDocumentItem>;
+  }>
 ): Competition {
   const criteria = (row.competition_criteria || [])
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -124,10 +130,35 @@ function formatCompetition(
       ? countsMap[row.id] ?? (row.slug ? countsMap[row.slug] : undefined) ?? 0
       : fallbackCount;
 
+  const docConfig = docConfigsMap && (docConfigsMap[row.id] || (row.slug && docConfigsMap[row.slug]));
+
   const requireDocument =
-    requireDocsMap && (requireDocsMap[row.id] !== undefined || (row.slug && requireDocsMap[row.slug] !== undefined))
+    docConfig?.requireDocument ??
+    (requireDocsMap && (requireDocsMap[row.id] !== undefined || (row.slug && requireDocsMap[row.slug] !== undefined))
       ? requireDocsMap[row.id] ?? requireDocsMap[row.slug] ?? true
-      : fallbackComp?.requireDocument ?? true;
+      : fallbackComp?.requireDocument ?? true);
+
+  const documentUploadMode: "single" | "multi" =
+    docConfig?.uploadMode ?? fallbackComp?.documentUploadMode ?? "single";
+
+  const defaultSingleDocList: CompetitionDocumentItem[] = [
+    { name: "Kartu Pelajar / Mahasiswa / KTP", required: true },
+    { name: "Surat Rekomendasi / Izin Sekolah", required: true },
+    { name: "Naskah Karya / Dokumen Pendukung", required: false },
+  ];
+
+  const rawDocList =
+    docConfig?.documentList && docConfig.documentList.length > 0
+      ? docConfig.documentList
+      : fallbackComp?.requiredDocumentList && fallbackComp.requiredDocumentList.length > 0
+      ? fallbackComp.requiredDocumentList
+      : defaultSingleDocList;
+
+  const requiredDocumentList: CompetitionDocumentItem[] = rawDocList.map((item) =>
+    typeof item === "string"
+      ? { name: item, required: true }
+      : { name: item.name, required: item.required !== false }
+  );
 
   return {
     id: row.id,
@@ -157,6 +188,8 @@ function formatCompetition(
     manuscripts,
     eventFormats,
     requireDocument,
+    documentUploadMode,
+    requiredDocumentList,
   };
 }
 
@@ -367,6 +400,32 @@ async function fetchRequireDocumentsMap(): Promise<Record<string, boolean>> {
   return {};
 }
 
+async function fetchDocumentConfigsMap(): Promise<Record<string, {
+  requireDocument: boolean;
+  uploadMode: "single" | "multi";
+  documentList: Array<string | CompetitionDocumentItem>;
+}>> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("event_settings")
+      .select("value")
+      .eq("key", "competition_document_configs")
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object" && !Array.isArray(data.value)) {
+      return data.value as Record<string, {
+        requireDocument: boolean;
+        uploadMode: "single" | "multi";
+        documentList: Array<string | CompetitionDocumentItem>;
+      }>;
+    }
+  } catch (err) {
+    console.error("fetchDocumentConfigsMap error:", err);
+  }
+  return {};
+}
+
 async function fetchRegistrationCountsMap(): Promise<Record<string, number>> {
   try {
     const admin = createAdminClient();
@@ -404,7 +463,7 @@ async function fetchRegistrationCountsMap(): Promise<Record<string, number>> {
 
 export async function getCompetitions(): Promise<Competition[]> {
   try {
-    const [compResult, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap] = await Promise.all([
+    const [compResult, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap] = await Promise.all([
       publicClient
         .from("competitions")
         .select("*, competition_criteria(*)")
@@ -413,13 +472,14 @@ export async function getCompetitions(): Promise<Competition[]> {
       fetchEventFormatsMap(),
       fetchRegistrationCountsMap(),
       fetchRequireDocumentsMap(),
+      fetchDocumentConfigsMap(),
     ]);
 
     if (compResult.error || !compResult.data || compResult.data.length === 0) {
       return COMPETITIONS;
     }
     return (compResult.data as unknown as DbCompetitionWithCriteria[]).map((row) =>
-      formatCompetition(row, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap)
+      formatCompetition(row, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap)
     );
   } catch (err) {
     console.error("Supabase getCompetitions fallback:", err);
@@ -433,7 +493,7 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
     const resolvedSlug = compIdToSlug[slug] || slug;
 
     const query = publicClient.from("competitions").select("*, competition_criteria(*)");
-    const [compResult, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap] = await Promise.all([
+    const [compResult, manuscriptsMap, eventFormatsMap, countsMap, requireDocsMap, docConfigsMap] = await Promise.all([
       isUuid
         ? query.eq("id", slug).maybeSingle()
         : query.eq("slug", resolvedSlug).maybeSingle(),
@@ -441,6 +501,7 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
       fetchEventFormatsMap(),
       fetchRegistrationCountsMap(),
       fetchRequireDocumentsMap(),
+      fetchDocumentConfigsMap(),
     ]);
 
     if (compResult.error || !compResult.data) {
@@ -455,7 +516,8 @@ export async function getCompetitionBySlug(slug: string): Promise<Competition | 
       manuscriptsMap,
       eventFormatsMap,
       countsMap,
-      requireDocsMap
+      requireDocsMap,
+      docConfigsMap
     );
   } catch (err) {
     console.error("Supabase getCompetitionBySlug fallback:", err);

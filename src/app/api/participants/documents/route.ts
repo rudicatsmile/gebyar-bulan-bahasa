@@ -46,7 +46,11 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const participantId = formData.get("participantId") as string | null;
-    const docType = (formData.get("docType") as string | null) || "kartu_pelajar";
+    const isMulti = formData.get("isMulti") === "true";
+    const rawDocType = (formData.get("docType") as string | null) || "kartu_pelajar";
+    const docType = isMulti
+      ? (rawDocType.startsWith("multi_") ? rawDocType : `multi_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`)
+      : rawDocType;
 
     if (!file || !participantId) {
       return NextResponse.json(
@@ -105,13 +109,15 @@ export async function POST(req: NextRequest) {
       .from(BUCKET_NAME)
       .getPublicUrl(storagePath);
 
-    // Cek apakah dokumen dengan doc_type ini sudah pernah ada untuk peserta ini
-    const { data: existingDoc } = await supabase
-      .from("participant_documents")
-      .select("id")
-      .eq("participant_id", participantId)
-      .eq("doc_type", docType)
-      .maybeSingle();
+    // Cek apakah dokumen dengan doc_type ini sudah pernah ada untuk peserta ini (hanya jika bukan multi-upload)
+    const { data: existingDoc } = isMulti
+      ? { data: null }
+      : await supabase
+          .from("participant_documents")
+          .select("id")
+          .eq("participant_id", participantId)
+          .eq("doc_type", docType)
+          .maybeSingle();
 
     let savedDoc;
     if (existingDoc) {
@@ -162,6 +168,7 @@ export async function POST(req: NextRequest) {
     revalidatePath("/dashboard/peserta");
     revalidatePath(`/dashboard/peserta/${participantId}`);
     revalidatePath("/peserta/pendaftaran");
+    revalidatePath("/dashboard/lomba/duta-bahasa");
 
     return NextResponse.json({
       success: true,

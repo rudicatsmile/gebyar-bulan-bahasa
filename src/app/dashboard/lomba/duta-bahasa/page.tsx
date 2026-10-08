@@ -42,6 +42,9 @@ import {
   Clock,
   Star,
   Edit2,
+  Paperclip,
+  ExternalLink,
+  FileText,
 } from "lucide-react";
 import type {
   DutaBahasaStage,
@@ -372,6 +375,35 @@ export default function DashboardDutaBahasaPage() {
     setTimeout(() => setFeedback(null), 4000);
   };
 
+  const handleQuickSetStatus = async (
+    participantId: string,
+    stageId: string,
+    status: DutaBahasaParticipantStatus,
+    participantName: string
+  ) => {
+    setSaving(true);
+    const res = await updateParticipantStageStatus({
+      participantId,
+      stageId,
+      status,
+      notes:
+        status === "lolos"
+          ? "Lolos verifikasi berkas persyaratan tahap 1"
+          : "Berkas persyaratan tidak memenuhi kriteria",
+    });
+    setSaving(false);
+    if (res.success) {
+      setFeedback({
+        type: "success",
+        message: `Peserta "${participantName}" berhasil ditandai ${status === "lolos" ? "LOLOS" : "TIDAK LOLOS"}!`,
+      });
+      loadData();
+    } else {
+      setFeedback({ type: "error", message: res.error || "Gagal mengubah status peserta." });
+    }
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
   // ======================================================================
   // STATS
   // ======================================================================
@@ -650,6 +682,68 @@ export default function DashboardDutaBahasaPage() {
                                         </Badge>
                                       </div>
 
+                                      {/* Tampilkan berkas khusus Tahapan 1 di tampilan mobile */}
+                                      {stage.stageOrder === 1 && (
+                                        <div className="p-2.5 rounded-lg border border-border/70 bg-muted/20 space-y-1.5">
+                                          <div className="flex items-center justify-between text-[11px] font-semibold text-foreground">
+                                            <span className="flex items-center gap-1">
+                                              <Paperclip className="h-3 w-3 text-accent" />
+                                              <span>Berkas Persyaratan ({p.documents?.length || 0}):</span>
+                                            </span>
+                                            {p.documents && p.documents.length > 0 ? (
+                                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Ada Berkas</span>
+                                            ) : (
+                                              <span className="text-[10px] text-amber-600 italic">Belum Ada</span>
+                                            )}
+                                          </div>
+                                          {p.documents && p.documents.length > 0 ? (
+                                            <div className="flex flex-col gap-1">
+                                              {p.documents.map((doc) => (
+                                                <button
+                                                  key={doc.id}
+                                                  type="button"
+                                                  onClick={() => window.open(doc.fileUrl, "_blank")}
+                                                  className="inline-flex items-center gap-1.5 text-[11px] text-accent hover:underline truncate text-left cursor-pointer"
+                                                  title={`Buka file ${doc.fileName}`}
+                                                >
+                                                  <Paperclip className="h-3 w-3 shrink-0" />
+                                                  <span className="truncate">{doc.fileName}</span>
+                                                  <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-70" />
+                                                </button>
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                          <div className="flex items-center gap-1.5 pt-1">
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => handleQuickSetStatus(p.participantId, stage.id, "lolos", p.fullName)}
+                                              className={`text-[10px] h-6 flex-1 cursor-pointer ${
+                                                progress?.status === "lolos"
+                                                  ? "bg-emerald-500/20 text-emerald-700 border-emerald-500 font-bold"
+                                                  : "text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10"
+                                              }`}
+                                            >
+                                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                                              <span>Loloskan</span>
+                                            </Button>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => handleQuickSetStatus(p.participantId, stage.id, "tidak_lolos", p.fullName)}
+                                              className={`text-[10px] h-6 flex-1 cursor-pointer ${
+                                                progress?.status === "tidak_lolos"
+                                                  ? "bg-red-500/20 text-red-700 border-red-500 font-bold"
+                                                  : "text-red-600 border-red-500/30 hover:bg-red-500/10"
+                                              }`}
+                                            >
+                                              <XCircle className="h-3 w-3 mr-1" />
+                                              <span>Tolak</span>
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )}
+
                                       {(progress?.score != null || progress?.notes) && (
                                         <div className="pt-1.5 border-t border-border/40 text-[11px] flex items-center justify-between text-muted-foreground">
                                           <span>
@@ -703,10 +797,13 @@ export default function DashboardDutaBahasaPage() {
                                       <TableHead className="text-[10px] w-8">#</TableHead>
                                       <TableHead className="text-[10px]">Peserta</TableHead>
                                       <TableHead className="text-[10px]">Institusi</TableHead>
+                                      {stage.stageOrder === 1 && (
+                                        <TableHead className="text-[10px]">Berkas Diunggah</TableHead>
+                                      )}
                                       <TableHead className="text-[10px]">Status Tahap</TableHead>
                                       <TableHead className="text-[10px]">Skor</TableHead>
                                       <TableHead className="text-[10px]">Catatan</TableHead>
-                                      <TableHead className="text-[10px] text-right">Aksi</TableHead>
+                                      <TableHead className="text-[10px] text-right">Aksi Review</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
@@ -730,6 +827,34 @@ export default function DashboardDutaBahasaPage() {
                                           <TableCell className="text-xs text-muted-foreground">
                                             {p.institution || "-"}
                                           </TableCell>
+
+                                          {/* Kolom Berkas Diunggah khusus Tahap 1 */}
+                                          {stage.stageOrder === 1 && (
+                                            <TableCell>
+                                              {p.documents && p.documents.length > 0 ? (
+                                                <div className="flex flex-col gap-1 max-w-[190px]">
+                                                  {p.documents.map((doc) => (
+                                                    <button
+                                                      key={doc.id}
+                                                      type="button"
+                                                      onClick={() => window.open(doc.fileUrl, "_blank")}
+                                                      className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline truncate text-left cursor-pointer font-medium"
+                                                      title={`Buka file ${doc.fileName}`}
+                                                    >
+                                                      <Paperclip className="h-3 w-3 shrink-0 text-accent/80" />
+                                                      <span className="truncate">{doc.fileName}</span>
+                                                      <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-70" />
+                                                    </button>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <span className="text-[10px] text-amber-600 dark:text-amber-400 italic">
+                                                  Belum ada berkas
+                                                </span>
+                                              )}
+                                            </TableCell>
+                                          )}
+
                                           <TableCell>
                                             <Badge
                                               className={`text-[10px] border ${
@@ -746,7 +871,40 @@ export default function DashboardDutaBahasaPage() {
                                             {progress?.notes || "-"}
                                           </TableCell>
                                           <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-1">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                              {stage.stageOrder === 1 && (
+                                                <>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleQuickSetStatus(p.participantId, stage.id, "lolos", p.fullName)}
+                                                    className={`text-[10px] h-7 px-2 cursor-pointer ${
+                                                      progress?.status === "lolos"
+                                                        ? "bg-emerald-500/20 text-emerald-700 border-emerald-500 font-bold"
+                                                        : "text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10"
+                                                    }`}
+                                                    title="Tandai Lolos Berkas"
+                                                  >
+                                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                                    <span>Lolos</span>
+                                                  </Button>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleQuickSetStatus(p.participantId, stage.id, "tidak_lolos", p.fullName)}
+                                                    className={`text-[10px] h-7 px-2 cursor-pointer ${
+                                                      progress?.status === "tidak_lolos"
+                                                        ? "bg-red-500/20 text-red-700 border-red-500 font-bold"
+                                                        : "text-red-600 border-red-500/30 hover:bg-red-500/10"
+                                                    }`}
+                                                    title="Tandai Berkas Tidak Lolos"
+                                                  >
+                                                    <XCircle className="h-3 w-3 mr-1" />
+                                                    <span>Tolak</span>
+                                                  </Button>
+                                                </>
+                                              )}
+
                                               <Button
                                                 variant="outline"
                                                 size="sm"
@@ -1016,6 +1174,103 @@ export default function DashboardDutaBahasaPage() {
             </DialogHeader>
 
             <div className="space-y-3">
+              {/* Berkas Persyaratan Peserta */}
+              {(() => {
+                const selectedParticipant = participants.find(
+                  (p) => p.participantId === updateDialog?.participantId
+                );
+                const docs = selectedParticipant?.documents || [];
+                return (
+                  <div className="p-3 rounded-xl border border-border bg-muted/20 space-y-2 text-left">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Paperclip className="h-3.5 w-3.5 text-accent" />
+                        <span>Berkas yang Diunggah Peserta ({docs.length})</span>
+                      </span>
+                      {docs.length > 0 ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-medium">
+                          {docs.length} Berkas
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 font-medium">
+                          Belum Ada Berkas
+                        </span>
+                      )}
+                    </div>
+
+                    {docs.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground italic">
+                        Peserta belum mengunggah dokumen persyaratan ke sistem.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-36 overflow-y-auto pr-0.5">
+                        {docs.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between gap-2 p-1.5 px-2 rounded-lg bg-background border border-border text-xs"
+                          >
+                            <div className="min-w-0 flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5 text-accent shrink-0" />
+                              <span className="font-medium text-foreground truncate max-w-[200px]" title={doc.fileName}>
+                                {doc.fileName}
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(doc.fileUrl, "_blank")}
+                              className="text-[10px] h-6 px-2 gap-1 shrink-0 cursor-pointer"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              <span>Lihat Berkas</span>
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Tombol aksi cepat untuk lolos / tidak lolos berkas */}
+                    <div className="pt-1.5 border-t border-border/60 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-muted-foreground">Keputusan Berkas:</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setUpdateStatus("lolos");
+                          if (!updateNotes) setUpdateNotes("Berkas persyaratan lengkap dan sah");
+                        }}
+                        className={`text-[10px] h-6 px-2 gap-1 cursor-pointer ${
+                          updateStatus === "lolos"
+                            ? "bg-emerald-500/20 text-emerald-700 border-emerald-500 font-bold"
+                            : "text-emerald-600 hover:bg-emerald-500/10"
+                        }`}
+                      >
+                        <CheckCircle2 className="h-2.5 w-2.5" />
+                        <span>Loloskan Berkas</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setUpdateStatus("tidak_lolos");
+                          if (!updateNotes) setUpdateNotes("Berkas persyaratan tidak memenuhi kriteria");
+                        }}
+                        className={`text-[10px] h-6 px-2 gap-1 cursor-pointer ${
+                          updateStatus === "tidak_lolos"
+                            ? "bg-red-500/20 text-red-700 border-red-500 font-bold"
+                            : "text-red-600 hover:bg-red-500/10"
+                        }`}
+                      >
+                        <XCircle className="h-2.5 w-2.5" />
+                        <span>Tolak Berkas</span>
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
                   Status Tahapan *

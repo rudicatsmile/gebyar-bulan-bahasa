@@ -11,6 +11,11 @@ export interface CompetitionCriterion {
   maxScore: number;
 }
 
+export interface CompetitionDocumentItem {
+  name: string;
+  required: boolean;
+}
+
 export interface Competition {
   id: string;
   slug: string;
@@ -33,6 +38,8 @@ export interface Competition {
   manuscripts?: string[];
   eventFormats?: string[];
   requireDocument?: boolean;
+  documentUploadMode?: "single" | "multi";
+  requiredDocumentList?: Array<string | CompetitionDocumentItem>;
 }
 
 export interface Participant {

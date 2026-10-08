@@ -32,6 +32,16 @@ export interface DutaBahasaParticipantProgress {
   reviewedAt?: string;
 }
 
+export interface DutaBahasaUploadedDoc {
+  id: string;
+  docType: string;
+  fileName: string;
+  fileUrl: string;
+  status: "menunggu" | "valid" | "tidak_valid" | string;
+  note?: string | null;
+  uploadedAt: string;
+}
+
 export interface DutaBahasaParticipantInfo {
   participantId: string;
   fullName: string;
@@ -41,6 +51,7 @@ export interface DutaBahasaParticipantInfo {
   currentStageOrder: number;
   overallStatus: "aktif" | "tereliminasi" | "finalis" | "pemenang";
   progress: Record<string, DutaBahasaParticipantProgress>; // stageId -> progress
+  documents?: DutaBahasaUploadedDoc[];
 }
 
 // ======================================================================
@@ -277,23 +288,46 @@ export async function getDutaBahasaProgress(): Promise<{
       return { success: true, participants: [] };
     }
 
-    // 5. Fetch participant details
-    const { data: participantsData } = await supabase
-      .from("participants")
-      .select("id, full_name, institution, registration_number")
-      .in("id", allParticipantIds);
+    // 5. Fetch participant details & documents in parallel
+    const [participantsDataRes, docsDataRes] = await Promise.all([
+      supabase
+        .from("participants")
+        .select("id, full_name, institution, registration_number")
+        .in("id", allParticipantIds),
+      supabase
+        .from("participant_documents")
+        .select("id, participant_id, doc_type, file_name, file_url, status, note, uploaded_at")
+        .in("participant_id", allParticipantIds)
+        .order("uploaded_at", { ascending: false }),
+    ]);
 
     const participantLookup: Record<
       string,
       { fullName: string; institution: string; registrationNumber: string }
     > = {};
 
-    (participantsData || []).forEach((p) => {
+    (participantsDataRes.data || []).forEach((p) => {
       participantLookup[p.id] = {
         fullName: p.full_name,
         institution: p.institution || "",
         registrationNumber: p.registration_number,
       };
+    });
+
+    const docsByParticipant: Record<string, DutaBahasaUploadedDoc[]> = {};
+    (docsDataRes.data || []).forEach((d) => {
+      if (!docsByParticipant[d.participant_id]) {
+        docsByParticipant[d.participant_id] = [];
+      }
+      docsByParticipant[d.participant_id].push({
+        id: d.id,
+        docType: d.doc_type || "berkas",
+        fileName: d.file_name || "Dokumen",
+        fileUrl: d.file_url || "#",
+        status: d.status || "menunggu",
+        note: d.note,
+        uploadedAt: d.uploaded_at || new Date().toISOString(),
+      });
     });
 
     // 6. Build participant info & progress per stage
@@ -368,6 +402,7 @@ export async function getDutaBahasaProgress(): Promise<{
           currentStageOrder,
           overallStatus,
           progress,
+          documents: docsByParticipant[pid] || [],
         };
       });
 

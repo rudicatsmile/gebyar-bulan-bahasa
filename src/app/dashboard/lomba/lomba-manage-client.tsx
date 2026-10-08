@@ -41,6 +41,8 @@ import {
   BookOpen,
   Mic,
   Award,
+  FileText,
+  X,
 } from "lucide-react";
 
 /**
@@ -314,6 +316,14 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [addNeedsEventFormats, setAddNeedsEventFormats] = React.useState(false);
   const [addEventFormats, setAddEventFormats] = React.useState("");
   const [addRequireDocument, setAddRequireDocument] = React.useState(true);
+  const [addUploadMode, setAddUploadMode] = React.useState<"single" | "multi">("single");
+  const [addDocumentList, setAddDocumentList] = React.useState<Array<{ name: string; required: boolean }>>([
+    { name: "Biodata", required: true },
+    { name: "CV", required: true },
+    { name: "Raport", required: false },
+  ]);
+  const [addDocInput, setAddDocInput] = React.useState("");
+  const [addDocIsRequired, setAddDocIsRequired] = React.useState(true);
   const [addStatus, setAddStatus] = React.useState<"draft" | "pendaftaran">("pendaftaran");
   const [isSubmittingAdd, setIsSubmittingAdd] = React.useState(false);
 
@@ -336,6 +346,14 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
   const [editNeedsEventFormats, setEditNeedsEventFormats] = React.useState(false);
   const [editEventFormats, setEditEventFormats] = React.useState("");
   const [editRequireDocument, setEditRequireDocument] = React.useState(true);
+  const [editUploadMode, setEditUploadMode] = React.useState<"single" | "multi">("single");
+  const [editDocumentList, setEditDocumentList] = React.useState<Array<{ name: string; required: boolean }>>([
+    { name: "Biodata", required: true },
+    { name: "CV", required: true },
+    { name: "Raport", required: false },
+  ]);
+  const [editDocInput, setEditDocInput] = React.useState("");
+  const [editDocIsRequired, setEditDocIsRequired] = React.useState(true);
   const [editStatus, setEditStatus] = React.useState<"draft" | "pendaftaran" | "berlangsung" | "selesai" | "dibatalkan">("pendaftaran");
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
 
@@ -463,6 +481,20 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
 
     const mappedStatus = comp.status === "terjadwal" ? "pendaftaran" : comp.status;
     setEditRequireDocument(comp.requireDocument ?? true);
+    setEditUploadMode(comp.documentUploadMode || "single");
+    const rawList =
+      comp.requiredDocumentList && comp.requiredDocumentList.length > 0
+        ? comp.requiredDocumentList
+        : ["Biodata", "CV", "Raport"];
+    setEditDocumentList(
+      rawList.map((item) =>
+        typeof item === "string"
+          ? { name: item, required: true }
+          : { name: item.name, required: item.required !== false }
+      )
+    );
+    setEditDocInput("");
+    setEditDocIsRequired(true);
     setEditStatus(mappedStatus);
     setEditOpen(true);
   };
@@ -494,6 +526,11 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         manuscripts: editNeedsManuscripts ? editManuscripts : "",
         eventFormats: editNeedsEventFormats ? editEventFormats : "",
         requireDocument: editRequireDocument,
+        documentUploadMode: editRequireDocument ? editUploadMode : "single",
+        requiredDocumentList:
+          editRequireDocument && editUploadMode === "single"
+            ? editDocumentList.filter((d) => d.name.trim().length > 0)
+            : [],
         status: editStatus,
       });
 
@@ -505,16 +542,16 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
 
         const updatedManuscripts = editNeedsManuscripts
           ? editManuscripts
-              .split("\n")
-              .map((m) => m.trim())
-              .filter(Boolean)
+          .split("\n")
+          .map((m) => m.trim())
+          .filter(Boolean)
           : [];
 
         const updatedEventFormats = editNeedsEventFormats
           ? editEventFormats
-              .split("\n")
-              .map((ef) => ef.trim())
-              .filter(Boolean)
+          .split("\n")
+          .map((ef) => ef.trim())
+          .filter(Boolean)
           : [];
 
         setCompetitions((prev) =>
@@ -536,6 +573,11 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                   manuscripts: updatedManuscripts,
                   eventFormats: updatedEventFormats,
                   requireDocument: editRequireDocument,
+                  documentUploadMode: editRequireDocument ? editUploadMode : "single",
+                  requiredDocumentList:
+                    editRequireDocument && editUploadMode === "single"
+                      ? editDocumentList.filter((d) => d.name.trim().length > 0)
+                      : [],
                   status: editStatus,
                 }
               : c
@@ -580,6 +622,11 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         manuscripts: addNeedsManuscripts ? addManuscripts : "",
         eventFormats: addNeedsEventFormats ? addEventFormats : "",
         requireDocument: addRequireDocument,
+        documentUploadMode: addRequireDocument ? addUploadMode : "single",
+        requiredDocumentList:
+          addRequireDocument && addUploadMode === "single"
+            ? addDocumentList.filter((d) => d.name.trim().length > 0)
+            : [],
         status: addStatus,
       });
 
@@ -594,6 +641,14 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
         setAddEventFormats("");
         setAddNeedsEventFormats(false);
         setAddRequireDocument(true);
+        setAddUploadMode("single");
+        setAddDocumentList([
+          { name: "Biodata", required: true },
+          { name: "CV", required: true },
+          { name: "Raport", required: false },
+        ]);
+        setAddDocInput("");
+        setAddDocIsRequired(true);
         setNotification({
           type: "success",
           message: `Cabang lomba baru "${addName}" berhasil ditambahkan ke database!`,
@@ -817,7 +872,14 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 font-normal">
-                            Wajib Berkas
+                            {comp.documentUploadMode === "multi"
+                              ? "Wajib Berkas (Multi)"
+                              : (() => {
+                                  const docs = comp.requiredDocumentList || [];
+                                  const reqCount = docs.filter((d) => (typeof d === "string" ? true : d.required !== false)).length;
+                                  const optCount = docs.length - reqCount;
+                                  return `Wajib Berkas (${reqCount} Wajib${optCount > 0 ? `, ${optCount} Ops` : ""})`;
+                                })()}
                           </span>
                         )}
                       </div>
@@ -1124,19 +1186,276 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
               </div>
             )}
 
-            <div className="space-y-1.5 text-left">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Status Awal Lomba *
-              </label>
-              <select
-                value={addStatus}
-                onChange={(e) => setAddStatus(e.target.value as any)}
-                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
-              >
-                <option value="pendaftaran">Pendaftaran Dibuka</option>
-                <option value="draft">Draft (Disembunyikan)</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Ketentuan Berkas Persyaratan *
+                </label>
+                <select
+                  value={addRequireDocument ? "true" : "false"}
+                  onChange={(e) => setAddRequireDocument(e.target.value === "true")}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none font-medium"
+                >
+                  <option value="true">Wajib Upload Berkas Persyaratan</option>
+                  <option value="false">Tidak Wajib Upload Berkas</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Status Awal Lomba *
+                </label>
+                <select
+                  value={addStatus}
+                  onChange={(e) => setAddStatus(e.target.value as any)}
+                  className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none"
+                >
+                  <option value="pendaftaran">Pendaftaran Dibuka</option>
+                  <option value="draft">Draft (Disembunyikan)</option>
+                </select>
+              </div>
             </div>
+
+            {/* Opsi Mode Upload jika Wajib Upload Berkas (Modal Tambah) */}
+            {addRequireDocument && (
+              <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-3 text-left animate-in fade-in-50">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <FileText className="h-4 w-4" />
+                    <span>Mode Upload Berkas Persyaratan</span>
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 font-medium">
+                    Ketentuan Upload
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div
+                    onClick={() => setAddUploadMode("single")}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      addUploadMode === "single"
+                        ? "border-blue-500 bg-blue-500/10 shadow-xs"
+                        : "border-border/80 bg-background hover:border-blue-500/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        id="add-mode-single"
+                        name="addUploadMode"
+                        checked={addUploadMode === "single"}
+                        onChange={() => setAddUploadMode("single")}
+                        className="text-blue-600 cursor-pointer"
+                      />
+                      <label htmlFor="add-mode-single" className="text-xs font-bold text-foreground cursor-pointer">
+                        1. Satu per satu upload
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1.5 pl-5 leading-relaxed">
+                      Admin menentukan daftar berkas (Biodata, CV, Raport, dll). Peserta mengunggah file sesuai daftar tersebut satu per satu.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setAddUploadMode("multi")}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      addUploadMode === "multi"
+                        ? "border-blue-500 bg-blue-500/10 shadow-xs"
+                        : "border-border/80 bg-background hover:border-blue-500/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        id="add-mode-multi"
+                        name="addUploadMode"
+                        checked={addUploadMode === "multi"}
+                        onChange={() => setAddUploadMode("multi")}
+                        className="text-blue-600 cursor-pointer"
+                      />
+                      <label htmlFor="add-mode-multi" className="text-xs font-bold text-foreground cursor-pointer">
+                        2. Multi upload
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1.5 pl-5 leading-relaxed">
+                      Peserta bisa mengunggah beberapa file sekaligus dalam satu kali upload (dropzone multi-file).
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sub-konfigurasi untuk mode "satu per satu" */}
+                {addUploadMode === "single" && (
+                  <div className="pt-2 border-t border-blue-500/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <span>Daftar Berkas Persyaratan ({addDocumentList.length} berkas)</span>
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">
+                          Tandai masing-masing berkas sebagai <strong>Wajib</strong> atau <strong>Opsional</strong>.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold border border-rose-500/20">
+                          {addDocumentList.filter((d) => d.required).length} Wajib
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-400 font-medium border border-slate-500/20">
+                          {addDocumentList.filter((d) => !d.required).length} Opsional
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Daftar Card Berkas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {addDocumentList.map((docItem, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background border border-border shadow-2xs hover:border-blue-500/40 transition-colors"
+                        >
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span className="text-xs font-medium text-foreground truncate" title={docItem.name}>
+                              {docItem.name}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Toggle Wajib / Opsional Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAddDocumentList((prev) =>
+                                  prev.map((item, i) =>
+                                    i === idx ? { ...item, required: !item.required } : item
+                                  )
+                                );
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all border ${
+                                docItem.required
+                                  ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25"
+                                  : "bg-muted text-muted-foreground border-border hover:bg-muted/80 hover:text-foreground"
+                              }`}
+                              title="Klik untuk beralih status Wajib / Opsional"
+                            >
+                              {docItem.required ? "WAJIB" : "OPSIONAL"}
+                            </button>
+
+                            {/* Tombol Hapus */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAddDocumentList((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                              className="text-muted-foreground hover:text-destructive cursor-pointer p-1 rounded hover:bg-destructive/10 transition-colors"
+                              title="Hapus berkas ini"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Form Tambah Berkas Baru */}
+                    <div className="p-2.5 rounded-lg border border-border/80 bg-background/50 space-y-2">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Tulis nama berkas baru (contoh: Sertifikat, Portofolio)..."
+                          value={addDocInput}
+                          onChange={(e) => setAddDocInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              if (addDocInput.trim()) {
+                                setAddDocumentList((prev) => [
+                                  ...prev,
+                                  { name: addDocInput.trim(), required: addDocIsRequired },
+                                ]);
+                                setAddDocInput("");
+                              }
+                            }
+                          }}
+                          className="flex-1 h-9 rounded-lg border border-border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+
+                        {/* Pilihan Wajib / Opsional */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <select
+                            value={addDocIsRequired ? "wajib" : "opsional"}
+                            onChange={(e) => setAddDocIsRequired(e.target.value === "wajib")}
+                            className="h-9 px-2.5 rounded-lg border border-border bg-background text-xs font-semibold focus:outline-none cursor-pointer"
+                          >
+                            <option value="wajib">Wajib</option>
+                            <option value="opsional">Opsional</option>
+                          </select>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              if (addDocInput.trim()) {
+                                setAddDocumentList((prev) => [
+                                  ...prev,
+                                  { name: addDocInput.trim(), required: addDocIsRequired },
+                                ]);
+                                setAddDocInput("");
+                              }
+                            }}
+                            disabled={!addDocInput.trim()}
+                            className="h-9 text-xs gap-1 cursor-pointer"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Tambah</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Saran Cepat */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] text-muted-foreground">
+                        <span className="text-[10px]">Saran cepat:</span>
+                        {[
+                          { name: "Biodata", req: true },
+                          { name: "CV", req: true },
+                          { name: "Raport", req: false },
+                          { name: "Kartu Pelajar / KTP", req: true },
+                          { name: "Surat Rekomendasi", req: true },
+                          { name: "Pas Foto", req: true },
+                          { name: "Sertifikat Prestasi", req: false },
+                        ].map((sug) => {
+                          const exists = addDocumentList.some(
+                            (d) => d.name.toLowerCase() === sug.name.toLowerCase()
+                          );
+                          if (exists) return null;
+                          return (
+                            <button
+                              key={sug.name}
+                              type="button"
+                              onClick={() =>
+                                setAddDocumentList((prev) => [
+                                  ...prev,
+                                  { name: sug.name, required: sug.req },
+                                ])
+                              }
+                              className="px-2 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground text-[10px] border border-border/60 cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <span>+ {sug.name}</span>
+                              <span
+                                className={`text-[8px] font-bold ${
+                                  sug.req ? "text-rose-500" : "text-muted-foreground"
+                                }`}
+                              >
+                                ({sug.req ? "Wajib" : "Opsional"})
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
@@ -1425,6 +1744,247 @@ export function LombaManageClient({ initialCompetitions }: LombaManageClientProp
                 </select>
               </div>
             </div>
+
+            {/* Opsi Mode Upload jika Wajib Upload Berkas (Modal Edit) */}
+            {editRequireDocument && (
+              <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-3 text-left animate-in fade-in-50">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <FileText className="h-4 w-4" />
+                    <span>Mode Upload Berkas Persyaratan</span>
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 font-medium">
+                    Ketentuan Upload
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div
+                    onClick={() => setEditUploadMode("single")}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      editUploadMode === "single"
+                        ? "border-blue-500 bg-blue-500/10 shadow-xs"
+                        : "border-border/80 bg-background hover:border-blue-500/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        id="edit-mode-single"
+                        name="editUploadMode"
+                        checked={editUploadMode === "single"}
+                        onChange={() => setEditUploadMode("single")}
+                        className="text-blue-600 cursor-pointer"
+                      />
+                      <label htmlFor="edit-mode-single" className="text-xs font-bold text-foreground cursor-pointer">
+                        1. Satu per satu upload
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1.5 pl-5 leading-relaxed">
+                      Admin menentukan daftar berkas (Biodata, CV, Raport, dll). Peserta mengunggah file sesuai daftar tersebut satu per satu.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setEditUploadMode("multi")}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      editUploadMode === "multi"
+                        ? "border-blue-500 bg-blue-500/10 shadow-xs"
+                        : "border-border/80 bg-background hover:border-blue-500/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        id="edit-mode-multi"
+                        name="editUploadMode"
+                        checked={editUploadMode === "multi"}
+                        onChange={() => setEditUploadMode("multi")}
+                        className="text-blue-600 cursor-pointer"
+                      />
+                      <label htmlFor="edit-mode-multi" className="text-xs font-bold text-foreground cursor-pointer">
+                        2. Multi upload
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1.5 pl-5 leading-relaxed">
+                      Peserta bisa mengunggah beberapa file sekaligus dalam satu kali upload (dropzone multi-file).
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sub-konfigurasi untuk mode "satu per satu" */}
+                {editUploadMode === "single" && (
+                  <div className="pt-2 border-t border-blue-500/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <span>Daftar Berkas Persyaratan ({editDocumentList.length} berkas)</span>
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">
+                          Tandai masing-masing berkas sebagai <strong>Wajib</strong> atau <strong>Opsional</strong>.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold border border-rose-500/20">
+                          {editDocumentList.filter((d) => d.required).length} Wajib
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-400 font-medium border border-slate-500/20">
+                          {editDocumentList.filter((d) => !d.required).length} Opsional
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Daftar Card Berkas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {editDocumentList.map((docItem, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background border border-border shadow-2xs hover:border-blue-500/40 transition-colors"
+                        >
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span className="text-xs font-medium text-foreground truncate" title={docItem.name}>
+                              {docItem.name}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Toggle Wajib / Opsional Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditDocumentList((prev) =>
+                                  prev.map((item, i) =>
+                                    i === idx ? { ...item, required: !item.required } : item
+                                  )
+                                );
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all border ${
+                                docItem.required
+                                  ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25"
+                                  : "bg-muted text-muted-foreground border-border hover:bg-muted/80 hover:text-foreground"
+                              }`}
+                              title="Klik untuk beralih status Wajib / Opsional"
+                            >
+                              {docItem.required ? "WAJIB" : "OPSIONAL"}
+                            </button>
+
+                            {/* Tombol Hapus */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditDocumentList((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                              className="text-muted-foreground hover:text-destructive cursor-pointer p-1 rounded hover:bg-destructive/10 transition-colors"
+                              title="Hapus berkas ini"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Form Tambah Berkas Baru */}
+                    <div className="p-2.5 rounded-lg border border-border/80 bg-background/50 space-y-2">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Tulis nama berkas baru (contoh: Sertifikat, Portofolio)..."
+                          value={editDocInput}
+                          onChange={(e) => setEditDocInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              if (editDocInput.trim()) {
+                                setEditDocumentList((prev) => [
+                                  ...prev,
+                                  { name: editDocInput.trim(), required: editDocIsRequired },
+                                ]);
+                                setEditDocInput("");
+                              }
+                            }
+                          }}
+                          className="flex-1 h-9 rounded-lg border border-border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+
+                        {/* Pilihan Wajib / Opsional */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <select
+                            value={editDocIsRequired ? "wajib" : "opsional"}
+                            onChange={(e) => setEditDocIsRequired(e.target.value === "wajib")}
+                            className="h-9 px-2.5 rounded-lg border border-border bg-background text-xs font-semibold focus:outline-none cursor-pointer"
+                          >
+                            <option value="wajib">Wajib</option>
+                            <option value="opsional">Opsional</option>
+                          </select>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              if (editDocInput.trim()) {
+                                setEditDocumentList((prev) => [
+                                  ...prev,
+                                  { name: editDocInput.trim(), required: editDocIsRequired },
+                                ]);
+                                setEditDocInput("");
+                              }
+                            }}
+                            disabled={!editDocInput.trim()}
+                            className="h-9 text-xs gap-1 cursor-pointer"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Tambah</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Saran Cepat */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] text-muted-foreground">
+                        <span className="text-[10px]">Saran cepat:</span>
+                        {[
+                          { name: "Biodata", req: true },
+                          { name: "CV", req: true },
+                          { name: "Raport", req: false },
+                          { name: "Kartu Pelajar / KTP", req: true },
+                          { name: "Surat Rekomendasi", req: true },
+                          { name: "Pas Foto", req: true },
+                          { name: "Sertifikat Prestasi", req: false },
+                        ].map((sug) => {
+                          const exists = editDocumentList.some(
+                            (d) => d.name.toLowerCase() === sug.name.toLowerCase()
+                          );
+                          if (exists) return null;
+                          return (
+                            <button
+                              key={sug.name}
+                              type="button"
+                              onClick={() =>
+                                setEditDocumentList((prev) => [
+                                  ...prev,
+                                  { name: sug.name, required: sug.req },
+                                ])
+                              }
+                              className="px-2 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground text-[10px] border border-border/60 cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <span>+ {sug.name}</span>
+                              <span
+                                className={`text-[8px] font-bold ${
+                                  sug.req ? "text-rose-500" : "text-muted-foreground"
+                                }`}
+                              >
+                                ({sug.req ? "Wajib" : "Opsional"})
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>

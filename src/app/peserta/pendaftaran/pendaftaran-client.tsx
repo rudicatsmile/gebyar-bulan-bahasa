@@ -58,6 +58,15 @@ interface TargetCompetition {
   max_team_members: number;
   max_participants: number | null;
   requireDocument?: boolean;
+  documentUploadMode?: "single" | "multi";
+  requiredDocumentList?: Array<string | { name: string; required: boolean }>;
+}
+
+interface UploadedDocRow {
+  id: string;
+  doc_type: string;
+  file_name: string;
+  status: string;
 }
 
 interface TeamMemberRow {
@@ -147,6 +156,8 @@ export function PesertaPendaftaranClient() {
               max_team_members: comp.maxMembers,
               max_participants: comp.maxParticipants,
               requireDocument: comp.requireDocument ?? true,
+              documentUploadMode: comp.documentUploadMode,
+              requiredDocumentList: comp.requiredDocumentList,
             },
             error: null,
             loading: false,
@@ -170,17 +181,90 @@ export function PesertaPendaftaranClient() {
     };
   }, [lombaSlug]);
 
-  React.useEffect(() => {
+  const [userDocuments, setUserDocuments] = React.useState<UploadedDocRow[]>([]);
+
+  const fetchUserDocuments = React.useCallback(async () => {
     if (!participant?.participantRowId) return;
-    fetch(`/api/participants/documents?participantId=${participant.participantRowId}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.documents)) {
-          setUserDocCount(data.documents.length);
-        }
-      })
-      .catch((err) => console.error("Error fetching doc count:", err));
+    try {
+      const res = await fetch(`/api/participants/documents?participantId=${participant.participantRowId}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.documents)) {
+        setUserDocuments(data.documents);
+        setUserDocCount(data.documents.length);
+      }
+    } catch (err) {
+      console.error("Error fetching doc count:", err);
+    }
   }, [participant?.participantRowId]);
+
+  React.useEffect(() => {
+    fetchUserDocuments();
+  }, [fetchUserDocuments]);
+
+  // Validasi apakah berkas wajib terpenuhi (berkas opsional boleh dikosongkan)
+  const checkDocumentRequirement = React.useCallback(
+    (targetComp: TargetCompetition | null): { isValid: boolean; message?: string } => {
+      if (participant?.isDemoFallback) return { isValid: true };
+      if (!targetComp || targetComp.requireDocument === false) return { isValid: true };
+
+      const validDocs = userDocuments.filter((d) => d.status !== "tidak_valid");
+
+      if (targetComp.documentUploadMode === "multi") {
+        if (validDocs.length === 0) {
+          return {
+            isValid: false,
+            message: `Cabang lomba "${targetComp.name}" mewajibkan unggah berkas persyaratan. Silakan unggah minimal 1 berkas pada area Berkas Persyaratan terlebih dahulu.`,
+          };
+        }
+        return { isValid: true };
+      }
+
+      // Mode Single: Hanya cek berkas yang bertanda wajib (required !== false)
+      const rawList =
+        targetComp.requiredDocumentList && targetComp.requiredDocumentList.length > 0
+          ? targetComp.requiredDocumentList
+          : [
+              { name: "Kartu Pelajar / Mahasiswa / KTP", required: true },
+              { name: "Surat Rekomendasi / Izin Sekolah", required: true },
+              { name: "Naskah Karya / Dokumen Pendukung", required: false },
+            ];
+
+      const requiredItems = rawList
+        .map((item) => (typeof item === "string" ? { name: item, required: true } : item))
+        .filter((item) => item.required !== false);
+
+      if (requiredItems.length === 0) return { isValid: true };
+
+      const missing: string[] = [];
+      for (const reqItem of requiredItems) {
+        const key = reqItem.name.toLowerCase().replace(/[^a-z0-9]/g, "_");
+        const found = validDocs.find(
+          (d) =>
+            d.doc_type === key ||
+            d.doc_type.includes(key) ||
+            key.includes(d.doc_type) ||
+            (d.file_name && d.file_name.toLowerCase().includes(reqItem.name.toLowerCase()))
+        );
+        if (!found) {
+          missing.push(reqItem.name);
+        }
+      }
+
+      if (missing.length > 0) {
+        return {
+          isValid: false,
+          message: `Pendaftaran belum dapat diproses: Anda belum mengunggah berkas wajib: ${missing.join(
+            ", "
+          )}. Berkas bertanda "Opsional" boleh dikosongkan.`,
+        };
+      }
+
+      return { isValid: true };
+    },
+    [userDocuments, participant?.isDemoFallback]
+  );
 
   const resetForm = React.useCallback(() => {
     setTeamName("");
@@ -190,10 +274,9 @@ export function PesertaPendaftaranClient() {
   }, [participant?.institution]);
 
   const handleOpenForm = () => {
-    if (target?.requireDocument !== false && userDocCount === 0 && !participant?.isDemoFallback) {
-      setErrorMsg(
-        `Cabang lomba "${target?.name || "ini"}" mewajibkan unggah berkas persyaratan. Silakan unggah berkas Anda pada bagian Berkas Persyaratan terlebih dahulu.`
-      );
+    const check = checkDocumentRequirement(target);
+    if (!check.isValid) {
+      setErrorMsg(check.message || "Harap lengkapi berkas persyaratan wajib terlebih dahulu.");
       const el = document.getElementById("berkas-upload-section");
       if (el) el.scrollIntoView({ behavior: "smooth" });
       return;
@@ -213,10 +296,11 @@ export function PesertaPendaftaranClient() {
       return;
     }
 
-    if (target.requireDocument !== false && userDocCount === 0 && !participant?.isDemoFallback) {
-      setErrorMsg(
-        `Pendaftaran ditolak: Cabang lomba "${target.name}" mewajibkan unggah berkas persyaratan. Silakan unggah berkas persyaratan Anda terlebih dahulu.`
-      );
+    const check = checkDocumentRequirement(target);
+    if (!check.isValid) {
+      setErrorMsg(check.message || "Pendaftaran ditolak karena berkas wajib belum lengkap.");
+      const el = document.getElementById("berkas-upload-section");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
       return;
     }
 
@@ -502,9 +586,13 @@ export function PesertaPendaftaranClient() {
               <div id="berkas-upload-section" className="pt-2">
                 <BerkasUploadSection
                   participantId={participant.participantRowId}
+                  competitionName={target?.name}
+                  requireDocument={target ? target.requireDocument : true}
+                  uploadMode={target?.documentUploadMode || "single"}
+                  requiredDocumentList={target?.requiredDocumentList}
                   onUploadSuccess={() => {
                     refetch();
-                    setUserDocCount((prev) => prev + 1);
+                    fetchUserDocuments();
                   }}
                 />
               </div>
