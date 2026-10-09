@@ -33,6 +33,7 @@ import {
   DbRewardItem,
   RedemptionQueueItem,
 } from "@/app/actions/rewards";
+import { createClient } from "@/lib/supabase/client";
 import {
   Gift,
   ArrowLeft,
@@ -45,12 +46,14 @@ import {
   Package,
   Layers,
   Sparkles,
+  Radio,
 } from "lucide-react";
 
 export default function DashboardKelolaRewardPage() {
   const [rewards, setRewards] = React.useState<DbRewardItem[]>([]);
   const [queue, setQueue] = React.useState<RedemptionQueueItem[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [isRealtimeConnected, setIsRealtimeConnected] = React.useState(true);
   const [feedback, setFeedback] = React.useState<{
     type: "success" | "error";
     message: string;
@@ -80,23 +83,80 @@ export default function DashboardKelolaRewardPage() {
   // Modal State Hapus Reward
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
-  // Load Data
-  const loadData = React.useCallback(async () => {
+  // Load Data dengan opsi silent refresh agar tidak berkedip saat update realtime
+  const loadData = React.useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const [rRes, qRes] = await Promise.all([getAdminRewards(), getRedemptionQueue()]);
       if (rRes.success) setRewards(rRes.rewards);
       if (qRes.success) setQueue(qRes.queue);
     } catch (err) {
       console.error("Gagal load data reward:", err);
-      setFeedback({ type: "error", message: "Gagal memuat data reward dari database." });
+      if (showLoading) {
+        setFeedback({ type: "error", message: "Gagal memuat data reward dari database." });
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
+  // Initial load
   React.useEffect(() => {
-    loadData();
+    loadData(true);
+  }, [loadData]);
+
+  // Listener Realtime untuk Antrean Penyerahan Hadiah & Stok Reward
+  React.useEffect(() => {
+    let isMounted = true;
+    const supabase = createClient();
+
+    // 1. Channel Supabase Realtime (Broadcast dari Server Action + PostgreSQL CDC)
+    const channel = supabase
+      .channel("reward-redemptions-channel")
+      .on("broadcast", { event: "queue_updated" }, () => {
+        if (isMounted) {
+          loadData(false);
+        }
+      })
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "reward_redemptions" },
+        () => {
+          if (isMounted) {
+            loadData(false);
+          }
+        }
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "rewards" },
+        () => {
+          if (isMounted) {
+            loadData(false);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (!isMounted) return;
+        if (status === "SUBSCRIBED") {
+          setIsRealtimeConnected(true);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setIsRealtimeConnected(false);
+        }
+      });
+
+    // 2. Polling cadangan (setiap 5 detik) saat tab browser aktif untuk ketahanan koneksi
+    const pollInterval = setInterval(() => {
+      if (isMounted && typeof document !== "undefined" && document.visibilityState === "visible") {
+        loadData(false);
+      }
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
   }, [loadData]);
 
   // Handle Create Reward
@@ -208,6 +268,7 @@ export default function DashboardKelolaRewardPage() {
           prev.map((q) => (q.id === id ? { ...q, status: "diserahkan" } : q))
         );
         setFeedback({ type: "success", message: "Status klaim hadiah berhasil ditandai sebagai diserahkan!" });
+        loadData(false);
       } else {
         setFeedback({ type: "error", message: res.error || "Gagal mengubah status penyerahan." });
       }
@@ -294,14 +355,35 @@ export default function DashboardKelolaRewardPage() {
 
         {/* Antrean Penyerahan Hadiah di Meja Panitia */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 className="font-heading text-lg font-bold text-foreground flex items-center gap-2">
               <Package className="h-5 w-5 text-accent" />
               <span>Antrean Penyerahan Hadiah di Lokasi</span>
             </h2>
-            <Badge variant={pendingQueueCount > 0 ? "warning" : "success"} className="text-xs font-mono">
-              {pendingQueueCount} Menunggu Pengambilan
-            </Badge>
+            <div className="flex items-center gap-2">
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${
+                  isRealtimeConnected
+                    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+                    : "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                }`}
+              >
+                <span className="relative flex h-2 w-2">
+                  {isRealtimeConnected && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  )}
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                      isRealtimeConnected ? "bg-emerald-500" : "bg-amber-500"
+                    }`}
+                  ></span>
+                </span>
+                <span>{isRealtimeConnected ? "Realtime Aktif" : "Sinkronisasi Aktif"}</span>
+              </div>
+              <Badge variant={pendingQueueCount > 0 ? "warning" : "success"} className="text-xs font-mono">
+                {pendingQueueCount} Menunggu Pengambilan
+              </Badge>
+            </div>
           </div>
 
           <div className="rounded-xl border border-border bg-card overflow-hidden">

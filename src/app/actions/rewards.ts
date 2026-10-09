@@ -199,12 +199,32 @@ export async function handoverRedemption(id: string) {
 
   try {
     const supabase = createAdminClient();
+    const userClient = await createClient();
+    const { data: { user } } = await userClient.auth.getUser();
+
     const { error } = await supabase
       .from("reward_redemptions")
-      .update({ status: "diserahkan" })
+      .update({
+        status: "diserahkan",
+        processed_by: user?.id || null,
+        processed_at: new Date().toISOString(),
+      })
       .eq("id", id);
 
     if (error) return { success: false, error: error.message };
+
+    // Siarkan broadcast realtime ke channel antrean
+    try {
+      const channel = supabase.channel("reward-redemptions-channel");
+      await channel.send({
+        type: "broadcast",
+        event: "queue_updated",
+        payload: { action: "handover", id, timestamp: new Date().toISOString() },
+      });
+      supabase.removeChannel(channel);
+    } catch (realtimeErr) {
+      console.warn("Realtime broadcast handover error:", realtimeErr);
+    }
 
     revalidatePath("/dashboard/challenge/reward");
     return { success: true };

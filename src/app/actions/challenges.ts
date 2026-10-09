@@ -529,6 +529,24 @@ export async function redeemReward(data: RedeemRewardInput) {
       },
     });
 
+    // Siarkan pembaruan antrean realtime ke dashboard panitia
+    try {
+      const channel = adminSupabase.channel("reward-redemptions-channel");
+      await channel.send({
+        type: "broadcast",
+        event: "queue_updated",
+        payload: {
+          action: "created",
+          redemptionId: redemption.id,
+          pickupCode,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      adminSupabase.removeChannel(channel);
+    } catch (realtimeErr) {
+      console.warn("Realtime broadcast redeemReward error:", realtimeErr);
+    }
+
     revalidatePath("/peserta/reward");
     revalidatePath("/peserta");
     revalidatePath("/dashboard/challenge/reward");
