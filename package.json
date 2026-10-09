@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "node scripts/seed.mjs",
+    "db:seed-users": "node scripts/seed-users.mjs",
+    "db:seed-simulation": "node scripts/seed-simulation.mjs",
     "db:backfill-peserta": "node scripts/backfill-participants.mjs"
   },
   "dependencies": {

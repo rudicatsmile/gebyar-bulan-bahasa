@@ -21,6 +21,7 @@ docs/
 ├── user-guide-media.md             # Panduan Pengoperasian: Tim Media Center & Monitor Venue
 ├── user-guide-peserta.md           # Panduan Interaktif: Peserta Acara & Gamifikasi Stand
 ├── reward-khusus-stand-lomba.md    # Dokumentasi & Panduan Fitur Reward Khusus Challenge QR Stand
+├── panduan-seed-dan-data-percobaan.md # Panduan Perintah Terminal & Pembuatan Data Uji Coba (Seed)
 ├── developer-guide.md              # Panduan Teknis Arsitektur & Pengembangan Developer
 └── migrasi-vps-supabase.md         # Panduan Teknis Migrasi Database Supabase Cloud ke VPS
 ```

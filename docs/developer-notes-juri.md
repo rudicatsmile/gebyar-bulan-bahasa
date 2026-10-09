@@ -127,3 +127,12 @@ Jangan tertukar saat menulis query/manual.
 - Perubahan peran/penugasan wajib `revalidatePath` halaman terkait agar UI sinkron.
 - Lint repo menyetop `setState` sinkron di body `useEffect` (`react-hooks/set-state-in-effect`);
   gunakan callback `.then()/.finally()` atau microtask untuk flag seperti `mounted`.
+
+## 9. Penjurian Lomba Multi-Stage vs Single-Round
+
+Per pembaruan sistem penjurian multi-stage:
+- **Tipe Lomba**: Dideteksi dari `event_settings` (`competition_round_types`), membedakan `single_round` vs `multi_stage`.
+- **Deteksi Tahap Aktif**: Pada lomba `multi_stage`, juri hanya disuguhkan peserta pada tahap yang `status === 'berlangsung'` dan `requiresJudge === true`.
+- **Filter Peserta**: Peserta berstatus `tidak_lolos` pada tahap aktif atau `tereliminasi` disaring otomatis agar juri fokus pada peserta aktif.
+- **Isolasi Nilai per Tahap**: Data penilaian disimpan di `event_settings` (`stage_assessments`) dengan key unik `${registrationId}_${judgeId}_${stageId}`, sehingga nilai antar-tahap tidak saling menimpa. Form input juri menerima parameter `?stageId=...` dan riwayat juri di `/juri/riwayat` mengelompokkan penilaian berdasarkan tahap lomba.
+

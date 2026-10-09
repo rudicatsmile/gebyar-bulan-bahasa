@@ -1,4 +1,23 @@
 import { createClient } from "@supabase/supabase-js";
+import { readFileSync, existsSync } from "node:fs";
+
+// Auto-load .env.production, .env.local, atau .env
+const envFiles = [".env.production", ".env.local", ".env"];
+for (const f of envFiles) {
+  if (existsSync(f)) {
+    const content = readFileSync(f, "utf-8");
+    for (const line of content.split("\n")) {
+      const eq = line.indexOf("=");
+      if (eq > 0) {
+        const k = line.slice(0, eq).trim();
+        const v = line.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
+        if (!process.env[k]) {
+          process.env[k] = v;
+        }
+      }
+    }
+  }
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
