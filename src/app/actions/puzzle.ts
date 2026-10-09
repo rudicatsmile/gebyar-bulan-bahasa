@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { Database } from "@/types/database.types";
 
 function safeRevalidate(path: string) {
@@ -768,6 +769,7 @@ export async function submitPuzzleAnswers(
       });
 
       if (score > 0) {
+        await ensureParticipantLedgerSynced(supabase, parsed.data.participantId);
         await supabase.from("point_transactions").insert({
           participant_id: parsed.data.participantId,
           points: score,

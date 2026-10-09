@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { ChallengeType } from "@/types/database.types";
 import { STANDS } from "@/lib/dummy-data";
 import { checkAndProcessStandCompletionReward } from "./stand-rewards";
@@ -341,6 +342,7 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
     }
 
     // 3. Masukkan transaksi poin (ledger)
+    await ensureParticipantLedgerSynced(supabase, parsed.data.participantId);
     const { error: pErr } = await supabase.from("point_transactions").insert({
       participant_id: parsed.data.participantId,
       stand_id: stand.id,
@@ -693,6 +695,9 @@ export async function adjustPointsByCommittee(data: z.infer<typeof AdjustPointsS
       data: { user },
     } = await supabase.auth.getUser();
 
+    // Pastikan ledger peserta tersinkron sebelum mutasi
+    await ensureParticipantLedgerSynced(supabase, parsed.data.participantId);
+
     const { error } = await supabase.from("point_transactions").insert({
       participant_id: parsed.data.participantId,
       points: parsed.data.points,
@@ -917,6 +922,7 @@ export async function verifyChallengeSubmissionAction(data: {
       if (uErr) throw uErr;
 
       // 3a. Berikan poin ke peserta via point_transactions
+      await ensureParticipantLedgerSynced(supabase, submission.participant_id);
       const { error: pErr } = await supabase.from("point_transactions").insert({
         participant_id: submission.participant_id,
         challenge_id: submission.challenge_id,

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { TwibbonItem } from "@/lib/dummy-data";
 
 const UploadTwibbonSchema = z.object({
@@ -485,7 +486,11 @@ export async function moderateTwibbon(data: z.infer<typeof ModerateTwibbonSchema
         .maybeSingle();
 
       if (!existingTx) {
-        // Catat transaksi poin
+        // Pastikan saldo awal peserta di ledger sinkron sebelum mutasi baru dicatat
+        await ensureParticipantLedgerSynced(admin, participantId);
+
+        // Catat transaksi poin twibbon (+20) di ledger.
+        // Trigger PostgreSQL trg_sync_points akan otomatis meng-update total_points peserta.
         await admin.from("point_transactions").insert({
           participant_id: participantId,
           challenge_id: "d0000000-0000-0000-0000-000000000004",
@@ -494,19 +499,6 @@ export async function moderateTwibbon(data: z.infer<typeof ModerateTwibbonSchema
           note: "Tantangan Twibbon: Unggahan Foto Twibbon Disetujui Media Center",
           granted_by: user?.id || null,
         });
-
-        // Tambahkan total poin peserta
-        const { data: currentP } = await admin
-          .from("participants")
-          .select("total_points")
-          .eq("id", participantId)
-          .single();
-
-        const newTotal = (Number(currentP?.total_points) || 0) + 20;
-        await admin
-          .from("participants")
-          .update({ total_points: newTotal })
-          .eq("id", participantId);
       }
     }
 
@@ -538,19 +530,8 @@ export async function moderateTwibbon(data: z.infer<typeof ModerateTwibbonSchema
           .maybeSingle();
 
         if (txToDelete) {
+          // Trigger trg_sync_points otomatis menghitung ulang dan mengurangi poin dari total_points.
           await admin.from("point_transactions").delete().eq("id", txToDelete.id);
-
-          const { data: currentP } = await admin
-            .from("participants")
-            .select("total_points")
-            .eq("id", participantId)
-            .single();
-
-          const newTotal = Math.max(0, (Number(currentP?.total_points) || 0) - txToDelete.points);
-          await admin
-            .from("participants")
-            .update({ total_points: newTotal })
-            .eq("id", participantId);
         }
       }
     }

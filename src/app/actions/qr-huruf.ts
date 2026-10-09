@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { Database } from "@/types/database.types";
 
 // =============================================================================
@@ -843,6 +844,7 @@ export async function submitWordArrangement(
 
       // Tambahkan poin jika benar
       if (isCorrect && score > 0) {
+        await ensureParticipantLedgerSynced(supabase, parsed.data.participantId);
         await supabase.from("point_transactions").insert({
           participant_id: parsed.data.participantId,
           points: score,
