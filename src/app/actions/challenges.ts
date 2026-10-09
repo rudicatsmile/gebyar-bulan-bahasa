@@ -1038,6 +1038,8 @@ export async function getParticipantPointLedger(participantId?: string): Promise
       if (n.includes("puzzle")) return "Challenge Puzzle";
       if (n.includes("twibbon")) return "Tantangan Twibbon";
       if (n.includes("qr huruf") || n.includes("susun kata")) return "Challenge QR Huruf";
+      if (n.includes("pembatalan") || n.includes("pengembalian")) return "Pengembalian Poin";
+      if (n.includes("penukaran reward")) return "Penukaran Reward";
       if (src === "scan_qr") return "Scan QR Stand";
       if (src === "kode_unik") return "Kode Stand";
       if (src === "verifikasi_bukti") return "Misi Challenge";

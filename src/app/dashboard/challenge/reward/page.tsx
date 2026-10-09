@@ -47,6 +47,7 @@ import {
   Layers,
   Sparkles,
   Radio,
+  XCircle,
 } from "lucide-react";
 
 export default function DashboardKelolaRewardPage() {
@@ -433,10 +434,16 @@ export default function DashboardKelolaRewardPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge
-                          variant={item.status === "diserahkan" ? "success" : "warning"}
+                          variant={
+                            item.status === "diserahkan"
+                              ? "success"
+                              : item.status === "ditolak"
+                              ? "default"
+                              : "warning"
+                          }
                           className="text-[10px]"
                         >
-                          {item.status.toUpperCase()}
+                          {item.status === "ditolak" ? "DIBATALKAN" : item.status.toUpperCase()}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -449,9 +456,13 @@ export default function DashboardKelolaRewardPage() {
                           >
                             Tandai Diserahkan
                           </Button>
-                        ) : (
+                        ) : item.status === "diserahkan" ? (
                           <span className="text-[11px] text-success font-medium flex items-center justify-end gap-1">
                             <CheckCircle2 className="h-3.5 w-3.5" /> Selesai
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground font-medium flex items-center justify-end gap-1">
+                            <XCircle className="h-3.5 w-3.5 text-muted-foreground" /> Dibatalkan
                           </span>
                         )}
                       </TableCell>
