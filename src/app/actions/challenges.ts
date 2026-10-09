@@ -235,9 +235,11 @@ const AdjustPointsSchema = z.object({
 });
 
 const RedeemRewardSchema = z.object({
-  participantId: z.string().uuid("ID Peserta tidak valid"),
+  participantId: z.string().uuid("ID Peserta tidak valid").optional(),
   rewardId: z.string().uuid("ID Reward tidak valid"),
 });
+
+export type RedeemRewardInput = z.infer<typeof RedeemRewardSchema>;
 
 // Aksi: Scan QR / Input Kode Unik Stand Budaya
 export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
@@ -376,61 +378,112 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
 }
 
 // Aksi: Penukaran Reward
-export async function redeemReward(data: z.infer<typeof RedeemRewardSchema>) {
+export async function redeemReward(data: RedeemRewardInput) {
   const parsed = RedeemRewardSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message };
   }
 
   try {
-    const supabase = createAdminClient();
+    const adminSupabase = createAdminClient();
+    const userSupabase = await createClient();
+    const {
+      data: { user },
+    } = await userSupabase.auth.getUser();
+
+    let targetParticipantId = parsed.data.participantId;
+
+    if (!targetParticipantId && user) {
+      const userEmail = (user.email || "").toLowerCase().trim();
+      const { data: pRow } = await adminSupabase
+        .from("participants")
+        .select("id")
+        .or(`user_id.eq.${user.id},email.eq.${userEmail}`)
+        .maybeSingle();
+
+      if (pRow) {
+        targetParticipantId = pRow.id;
+      }
+    }
+
+    if (!targetParticipantId) {
+      return {
+        success: false,
+        error: "Data peserta tidak ditemukan. Pastikan Anda telah terdaftar dan login sebagai peserta.",
+      };
+    }
 
     // 1. Cek saldo poin peserta
-    const { data: participant } = await supabase
+    const { data: participant } = await adminSupabase
       .from("participants")
-      .select("id, total_points")
-      .eq("id", parsed.data.participantId)
-      .single();
+      .select("id, total_points, full_name")
+      .eq("id", targetParticipantId)
+      .maybeSingle();
 
     if (!participant) {
-      return { success: false, error: "Data peserta tidak ditemukan." };
+      return { success: false, error: "Data peserta tidak ditemukan di sistem." };
     }
 
     // 2. Cek reward dan kuota
-    const { data: reward } = await supabase
+    const { data: reward } = await adminSupabase
       .from("rewards")
       .select("id, name, points_required, quota, claimed_count, is_active")
       .eq("id", parsed.data.rewardId)
-      .single();
+      .maybeSingle();
 
     if (!reward || !reward.is_active) {
       return { success: false, error: "Reward tidak aktif atau tidak ditemukan." };
     }
 
-    if (reward.quota !== null && reward.claimed_count >= reward.quota) {
-      return { success: false, error: "Mohon maaf, kuota reward ini telah habis." };
+    if (reward.quota !== null && (reward.claimed_count || 0) >= reward.quota) {
+      return {
+        success: false,
+        error: `Mohon maaf, kuota penukaran reward "${reward.name}" telah habis.`,
+      };
     }
 
     if (participant.total_points < reward.points_required) {
       return {
         success: false,
-        error: `Poin Anda tidak mencukupi (${participant.total_points}/${reward.points_required} Poin).`,
+        error: `Poin Anda tidak mencukupi (Saldo: ${participant.total_points} Poin, Dibutuhkan: ${reward.points_required} Poin).`,
       };
     }
 
     // 3. Generate pickup code unik: RW-{4 digit acak}
     const pickupCode = `RW-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // 4. Catat transaksi pengurangan poin di ledger
-    await supabase.from("point_transactions").insert({
+    // 4. Pastikan ledger sinkron dengan total_points peserta sebelum debit
+    const { data: existingLedger } = await adminSupabase
+      .from("point_transactions")
+      .select("points")
+      .eq("participant_id", participant.id);
+
+    const currentLedgerSum = (existingLedger || []).reduce((acc, t) => acc + (t.points || 0), 0);
+    const ledgerDiscrepancy = participant.total_points - currentLedgerSum;
+
+    if (ledgerDiscrepancy > 0) {
+      await adminSupabase.from("point_transactions").insert({
+        participant_id: participant.id,
+        points: ledgerDiscrepancy,
+        source: "penyesuaian",
+        note: "Sinkronisasi saldo awal poin peserta",
+      });
+    }
+
+    // 5. Catat transaksi pengurangan poin di ledger
+    const { error: ptError } = await adminSupabase.from("point_transactions").insert({
       participant_id: participant.id,
       points: -reward.points_required,
       source: "penyesuaian",
       note: `Penukaran reward: ${reward.name} (Kode: ${pickupCode})`,
     });
 
-    // 5. Catat data penukaran
-    const { data: redemption, error: rErr } = await supabase
+    if (ptError) {
+      return { success: false, error: `Gagal mencatat mutasi pengurangan poin: ${ptError.message}` };
+    }
+
+    // 6. Catat data penukaran di reward_redemptions
+    const { data: redemption, error: rErr } = await adminSupabase
       .from("reward_redemptions")
       .insert({
         reward_id: reward.id,
@@ -442,18 +495,55 @@ export async function redeemReward(data: z.infer<typeof RedeemRewardSchema>) {
       .select()
       .single();
 
-    if (rErr) return { success: false, error: rErr.message };
+    if (rErr) {
+      return { success: false, error: `Gagal menyimpan riwayat penukaran: ${rErr.message}` };
+    }
 
-    // 6. Update claimed_count reward
-    await supabase
+    // 7. Update claimed_count reward
+    await adminSupabase
       .from("rewards")
-      .update({ claimed_count: reward.claimed_count + 1 })
+      .update({ claimed_count: (reward.claimed_count || 0) + 1 })
       .eq("id", reward.id);
+
+    // 8. Update eksplisit total_points di participants
+    const newTotalPoints = Math.max(0, participant.total_points - reward.points_required);
+    await adminSupabase
+      .from("participants")
+      .update({ total_points: newTotalPoints, updated_at: new Date().toISOString() })
+      .eq("id", participant.id);
+
+    // 9. Catat di activity_logs
+    await adminSupabase.from("activity_logs").insert({
+      actor_id: user?.id || null,
+      actor_role: "peserta",
+      action: "penukaran_reward",
+      entity: "reward_redemptions",
+      entity_id: redemption.id,
+      description: `${participant.full_name} menukarkan ${reward.points_required} poin untuk ${reward.name} (Kode: ${pickupCode})`,
+      metadata: {
+        reward_id: reward.id,
+        reward_name: reward.name,
+        pickup_code: pickupCode,
+        points_spent: reward.points_required,
+        remaining_points: newTotalPoints,
+      },
+    });
 
     revalidatePath("/peserta/reward");
     revalidatePath("/peserta");
     revalidatePath("/dashboard/challenge/reward");
-    return { success: true, data: { pickupCode, rewardName: reward.name } };
+    revalidatePath("/dashboard/challenge/leaderboard");
+    revalidatePath("/leaderboard");
+
+    return {
+      success: true,
+      data: {
+        pickupCode,
+        rewardName: reward.name,
+        remainingPoints: newTotalPoints,
+        pointsSpent: reward.points_required,
+      },
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal memproses penukaran reward.";
     return { success: false, error: message };

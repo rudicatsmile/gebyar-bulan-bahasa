@@ -10,35 +10,39 @@ import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } fr
 import { REWARDS, Reward } from "@/lib/dummy-data";
 import { getRewards } from "@/lib/supabase/queries";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
+import { redeemReward } from "@/app/actions/challenges";
 import { Gift, ArrowLeft, CheckCircle2, AlertCircle, Coins, Loader2, Sparkles } from "lucide-react";
 
 export default function PesertaRewardPage() {
-  const { participant, loading: participantLoading } = useCurrentParticipant();
+  const { participant, loading: participantLoading, refetch: refetchParticipant } = useCurrentParticipant();
   const [balance, setBalance] = React.useState<number>(0);
   const [rewards, setRewards] = React.useState<Reward[]>(REWARDS);
   const [loadingRewards, setLoadingRewards] = React.useState(true);
   const [selectedReward, setSelectedReward] = React.useState<Reward | null>(null);
   const [claimSuccess, setClaimSuccess] = React.useState<string | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
+  const [dialogError, setDialogError] = React.useState("");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const loadRewardCatalog = React.useCallback(async () => {
+    try {
+      setLoadingRewards(true);
+      const data = await getRewards();
+      if (data && data.length > 0) {
+        setRewards(data);
+      } else {
+        setRewards(REWARDS);
+      }
+    } catch (err) {
+      console.error("Gagal memuat katalog reward:", err);
+    } finally {
+      setLoadingRewards(false);
+    }
+  }, []);
 
   React.useEffect(() => {
-    async function loadRewardCatalog() {
-      try {
-        setLoadingRewards(true);
-        const data = await getRewards();
-        if (data && data.length > 0) {
-          setRewards(data);
-        } else {
-          setRewards(REWARDS);
-        }
-      } catch (err) {
-        console.error("Gagal memuat katalog reward:", err);
-      } finally {
-        setLoadingRewards(false);
-      }
-    }
     loadRewardCatalog();
-  }, []);
+  }, [loadRewardCatalog]);
 
   // Sync balance when participant loads
   React.useEffect(() => {
@@ -53,15 +57,51 @@ export default function PesertaRewardPage() {
       return;
     }
     setErrorMsg("");
+    setDialogError("");
     setSelectedReward(r);
   };
 
-  const handleConfirmClaim = () => {
+  const handleConfirmClaim = async () => {
     if (!selectedReward) return;
-    setBalance((prev) => Math.max(0, prev - selectedReward.pointsRequired));
-    const code = `KLAIM-${Math.floor(1000 + Math.random() * 9000)}`;
-    setClaimSuccess(code);
-    setSelectedReward(null);
+
+    try {
+      setIsSubmitting(true);
+      setDialogError("");
+      setErrorMsg("");
+
+      const res = await redeemReward({
+        participantId: participant?.id,
+        rewardId: selectedReward.id,
+      });
+
+      if (!res.success) {
+        setDialogError(res.error || "Gagal memproses penukaran reward.");
+        return;
+      }
+
+      // Berhasil
+      const pickupCode = res.data?.pickupCode || `RW-${Math.floor(1000 + Math.random() * 9000)}`;
+      setClaimSuccess(pickupCode);
+
+      if (res.data?.remainingPoints !== undefined) {
+        setBalance(res.data.remainingPoints);
+      } else {
+        setBalance((prev) => Math.max(0, prev - selectedReward.pointsRequired));
+      }
+
+      setSelectedReward(null);
+
+      // Sinkronkan data peserta & stok reward secara aktual dari database
+      if (refetchParticipant) {
+        await refetchParticipant();
+      }
+      await loadRewardCatalog();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Terjadi kesalahan koneksi saat memproses penukaran.";
+      setDialogError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -211,12 +251,34 @@ export default function PesertaRewardPage() {
                 </div>
               </div>
 
+              {dialogError && (
+                <div className="p-3 rounded-xl border border-danger/40 bg-danger/10 text-danger text-xs flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{dialogError}</span>
+                </div>
+              )}
+
               <DialogFooter>
-                <Button variant="outline" onClick={() => setSelectedReward(null)}>
+                <Button
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={() => setSelectedReward(null)}
+                >
                   Batal
                 </Button>
-                <Button onClick={handleConfirmClaim}>
-                  Ya, Tukar Sekarang
+                <Button
+                  disabled={isSubmitting}
+                  onClick={handleConfirmClaim}
+                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Memproses...
+                    </>
+                  ) : (
+                    "Ya, Tukar Sekarang"
+                  )}
                 </Button>
               </DialogFooter>
             </div>
