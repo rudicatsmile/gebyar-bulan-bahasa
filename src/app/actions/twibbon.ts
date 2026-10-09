@@ -396,7 +396,38 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
         .eq("user_id", user.id)
         .maybeSingle();
       if (p) participantId = p.id;
+
+      if (!participantId && user.email) {
+        const { data: pByEmail } = await adminClient
+          .from("participants")
+          .select("id")
+          .eq("email", user.email.toLowerCase().trim())
+          .maybeSingle();
+        if (pByEmail) participantId = pByEmail.id;
+      }
     }
+
+    // Cek pengaturan auto-approve twibbon dari event_settings
+    let isAutoApprove = false;
+    try {
+      const { data: settingRows } = await adminClient
+        .from("event_settings")
+        .select("key, value")
+        .or("key.eq.auto_approve_twibbon,key.eq.general");
+
+      (settingRows || []).forEach((r: any) => {
+        if (r.key === "auto_approve_twibbon" && r.value !== undefined) {
+          isAutoApprove = Boolean(r.value);
+        } else if (r.key === "general" && r.value?.autoApproveTwibbon !== undefined) {
+          if (!isAutoApprove) isAutoApprove = Boolean(r.value.autoApproveTwibbon);
+        }
+      });
+    } catch (settingErr) {
+      console.warn("Gagal membaca setting auto_approve_twibbon:", settingErr);
+    }
+
+    const nowIso = new Date().toISOString();
+    const twibbonStatus = isAutoApprove ? "disetujui" : "menunggu";
 
     const { data: twibbon, error } = await (adminClient
       .from("twibbons") as any)
@@ -408,22 +439,64 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
         user_id: user?.id || null,
         participant_id: participantId,
         uploader_ip: clientIp,
-        status: "menunggu",
+        status: twibbonStatus,
         is_featured: false,
+        moderated_at: isAutoApprove ? nowIso : null,
       })
       .select()
       .single();
 
     if (error) return { success: false, error: error.message };
 
+    // ── Jika Auto-Approve aktif dan peserta teridentifikasi: beri +20 poin (maks 1 kali) ──
+    let pointsAwarded = false;
+    if (isAutoApprove && participantId) {
+      const { data: existingTx } = await adminClient
+        .from("point_transactions")
+        .select("id")
+        .eq("participant_id", participantId)
+        .or("note.ilike.%Tantangan Twibbon%,challenge_id.eq.d0000000-0000-0000-0000-000000000004")
+        .maybeSingle();
+
+      if (!existingTx) {
+        // Pastikan saldo awal peserta di ledger sinkron sebelum mutasi baru dicatat
+        await ensureParticipantLedgerSynced(adminClient, participantId);
+
+        // Catat transaksi poin twibbon (+20) di ledger.
+        // Trigger PostgreSQL trg_sync_points otomatis meng-update total_points peserta.
+        await adminClient.from("point_transactions").insert({
+          participant_id: participantId,
+          challenge_id: "d0000000-0000-0000-0000-000000000004",
+          points: 20,
+          source: "verifikasi_bukti",
+          note: "Tantangan Twibbon: Unggahan Foto Twibbon (Auto-Approve)",
+          granted_by: user?.id || null,
+        });
+        pointsAwarded = true;
+      }
+    }
+
     revalidatePath("/galeri/twibbon");
     revalidatePath("/dashboard/twibbon");
     revalidatePath("/media/twibbon");
     // Halaman "Twibbon Saya" milik peserta yang mengirim
     revalidatePath("/peserta/twibbon");
+    revalidatePath("/peserta/challenge");
+    revalidatePath("/peserta/riwayat-poin");
     revalidatePath("/peserta");
+    revalidatePath("/leaderboard");
+    revalidatePath("/monitor");
+    revalidatePath("/monitor/twibbon");
+    revalidatePath("/twibbon/unggah");
+
     // Sisa kuota setelah kiriman ini tersimpan (untuk memperbarui UI tanpa fetch lagi).
-    return { success: true, data: twibbon, remaining: Math.max(0, quota.remaining - 1) };
+    return {
+      success: true,
+      data: twibbon,
+      isAutoApproved: isAutoApprove,
+      pointsAwarded,
+      remaining: Math.max(0, quota.remaining - 1),
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal mengunggah twibbon.";
     return { success: false, error: message };

@@ -22,6 +22,12 @@ export async function GET() {
     const monitor = map["monitor"] || {};
     const contact = map["contact"] || {};
 
+    const autoApproveTwibbon = Boolean(
+      map["auto_approve_twibbon"] !== undefined
+        ? map["auto_approve_twibbon"]
+        : general.autoApproveTwibbon ?? false
+    );
+
     const settings = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
       eventShortName: general.shortName || "GebyarBulanBahasa",
@@ -34,6 +40,7 @@ export async function GET() {
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
+      autoApproveTwibbon,
       contactLocation: contact.location || "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A.",
       contactHours: contact.hours || "07.30 - 21.00 WIB (Selama Acara Berlangsung)",
       contactEmail: contact.email || "panitia@gebyarbulanbahasa.id",
@@ -66,6 +73,7 @@ export async function POST(request: Request) {
       scoreGapThreshold,
       maxCompetitions,
       rotationInterval,
+      autoApproveTwibbon,
       contactLocation,
       contactHours,
       contactEmail,
@@ -107,6 +115,7 @@ export async function POST(request: Request) {
       year: Number(eventYear) || 2026,
       heroImageUrl: String(heroImageUrl || "").trim(),
       logoImageUrl: String(logoImageUrl || "").trim(),
+      autoApproveTwibbon: Boolean(autoApproveTwibbon),
     };
 
     const { error: errGeneral } = await supabase.from("event_settings").upsert(
@@ -126,6 +135,17 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Simpan key 'auto_approve_twibbon'
+    await supabase.from("event_settings").upsert(
+      {
+        key: "auto_approve_twibbon",
+        value: Boolean(autoApproveTwibbon),
+        description: "Pengaturan auto-approve twibbon tanpa moderasi manual",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
 
     // 3. Simpan key 'registration'
     const updatedRegistration = {
@@ -223,6 +243,10 @@ export async function POST(request: Request) {
     try {
       revalidatePath("/dashboard/pengaturan");
       revalidatePath("/dashboard");
+      revalidatePath("/dashboard/twibbon");
+      revalidatePath("/media/twibbon");
+      revalidatePath("/twibbon/unggah");
+      revalidatePath("/galeri/twibbon");
       revalidatePath("/monitor");
       revalidatePath("/media/monitor");
       revalidatePath("/kontak");

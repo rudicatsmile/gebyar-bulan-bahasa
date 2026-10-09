@@ -134,6 +134,8 @@ export default function UnggahTwibbonPage() {
   // Submit
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [isAutoApproved, setIsAutoApproved] = React.useState(false);
+  const [pointsAwarded, setPointsAwarded] = React.useState(false);
 
   // Kuota unggah harian (dibatasi server: maks N per user/IP per hari)
   const [quota, setQuota] = React.useState<TwibbonUploadQuota | null>(null);
@@ -506,6 +508,8 @@ export default function UnggahTwibbonPage() {
             }
           : q
       );
+      setIsAutoApproved(Boolean((result as any).isAutoApproved || (result.data as any)?.status === "disetujui"));
+      setPointsAwarded(Boolean((result as any).pointsAwarded));
       setStep("done");
     } catch {
       setError("Terjadi kesalahan. Silakan coba lagi.");
@@ -522,6 +526,8 @@ export default function UnggahTwibbonPage() {
     setZoom(1);
     setOffsetX(0);
     setOffsetY(0);
+    setIsAutoApproved(false);
+    setPointsAwarded(false);
     if (!userProfile) {
       setFullName("");
       setInstitution("");
@@ -639,17 +645,44 @@ export default function UnggahTwibbonPage() {
             <Card className="border-success/40 bg-success/5 p-8 text-center space-y-4">
               <CheckCircle2 className="h-12 w-12 text-success mx-auto" />
               <div className="space-y-1">
+                {isAutoApproved && (
+                  <Badge variant="success" className="text-[10px] mb-2 font-bold">
+                    Otomatis Disetujui
+                  </Badge>
+                )}
                 <h3 className="font-heading text-xl font-bold text-foreground">
-                  Twibbon Berhasil Diajukan!
+                  {isAutoApproved ? "Twibbon Berhasil Diterbitkan!" : "Twibbon Berhasil Diajukan!"}
                 </h3>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Terima kasih, <strong>{fullName}</strong>. Foto twibbon Anda saat ini berada dalam antrean moderasi Media Center. Estimasi waktu moderasi &lt; 30 menit.
+                  {isAutoApproved ? (
+                    <>
+                      Terima kasih, <strong>{fullName}</strong>. Foto twibbon Anda telah disetujui otomatis oleh sistem dan langsung tayang di galeri serta layar monitor publik.
+                    </>
+                  ) : (
+                    <>
+                      Terima kasih, <strong>{fullName}</strong>. Foto twibbon Anda saat ini berada dalam antrean moderasi Media Center. Estimasi waktu moderasi &lt; 30 menit.
+                    </>
+                  )}
                 </p>
                 {userProfile && (
                   <div className="mt-2.5 p-3 rounded-lg border border-accent/30 bg-accent/10 text-xs text-accent max-w-md mx-auto flex items-center justify-center gap-2">
                     <Sparkles className="h-4 w-4 shrink-0 text-accent" />
                     <span>
-                      Poin reward tantangan <strong>(+20 Poin)</strong> akan otomatis masuk ke akun Anda setelah foto disetujui oleh tim Media Center.
+                      {isAutoApproved ? (
+                        pointsAwarded ? (
+                          <>
+                            Selamat! Poin reward tantangan <strong>(+20 Poin)</strong> telah langsung ditambahkan ke saldo akun Anda.
+                          </>
+                        ) : (
+                          <>
+                            Twibbon Anda telah terbit. Poin reward tantangan (+20 Poin) sudah pernah diklaim sebelumnya.
+                          </>
+                        )
+                      ) : (
+                        <>
+                          Poin reward tantangan <strong>(+20 Poin)</strong> akan otomatis masuk ke akun Anda setelah foto disetujui oleh tim Media Center.
+                        </>
+                      )}
                     </span>
                   </div>
                 )}

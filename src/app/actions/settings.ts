@@ -18,6 +18,7 @@ export interface EventSettingsMap {
   scoreGapThreshold: string;
   maxCompetitions: string;
   rotationInterval: string;
+  autoApproveTwibbon: boolean;
   contactLocation: string;
   contactHours: string;
   contactEmail: string;
@@ -37,6 +38,7 @@ const SaveEventSettingsSchema = z.object({
   scoreGapThreshold: z.coerce.number().min(1, "Ambang selisih skor minimal 1").max(100, "Ambang selisih skor maksimal 100"),
   maxCompetitions: z.coerce.number().min(1, "Batas maksimal lomba minimal 1").max(10, "Batas maksimal lomba maksimal 10"),
   rotationInterval: z.coerce.number().min(5, "Durasi rotasi monitor minimal 5 detik").max(120, "Durasi rotasi monitor maksimal 120 detik"),
+  autoApproveTwibbon: z.boolean().optional().default(false),
   contactLocation: z.string().optional().default("Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A."),
   contactHours: z.string().optional().default("07.30 - 21.00 WIB (Selama Acara Berlangsung)"),
   contactEmail: z.string().optional().default("panitia@gebyarbulanbahasa.id"),
@@ -69,6 +71,11 @@ export async function getEventSettings(): Promise<{
     const registration = map["registration"] || {};
     const monitor = map["monitor"] || {};
     const contact = map["contact"] || {};
+    const autoApproveTwibbon = Boolean(
+      map["auto_approve_twibbon"] !== undefined
+        ? map["auto_approve_twibbon"]
+        : general.autoApproveTwibbon ?? false
+    );
 
     const settings: EventSettingsMap = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
@@ -82,6 +89,7 @@ export async function getEventSettings(): Promise<{
       scoreGapThreshold: String(registration.scoreGapThreshold ?? 20),
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
+      autoApproveTwibbon,
       contactLocation: contact.location || "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A.",
       contactHours: contact.hours || "07.30 - 21.00 WIB (Selama Acara Berlangsung)",
       contactEmail: contact.email || "panitia@gebyarbulanbahasa.id",
@@ -125,6 +133,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
     scoreGapThreshold,
     maxCompetitions,
     rotationInterval,
+    autoApproveTwibbon,
     contactLocation,
     contactHours,
     contactEmail,
@@ -160,6 +169,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       year: Number(eventYear),
       heroImageUrl: (heroImageUrl || "").trim(),
       logoImageUrl: (logoImageUrl || "").trim(),
+      autoApproveTwibbon: Boolean(autoApproveTwibbon),
     };
 
     const { error: errGeneral } = await supabase
@@ -178,6 +188,17 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       console.error("Gagal update general settings:", errGeneral);
       return { success: false, error: "Gagal menyimpan identitas acara: " + errGeneral.message };
     }
+
+    // Update key 'auto_approve_twibbon'
+    await supabase.from("event_settings").upsert(
+      {
+        key: "auto_approve_twibbon",
+        value: Boolean(autoApproveTwibbon),
+        description: "Pengaturan auto-approve twibbon tanpa moderasi manual",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
 
     // 3. Update key 'registration'
     const updatedRegistration = {
@@ -271,6 +292,10 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
     try {
       revalidatePath("/dashboard/pengaturan");
       revalidatePath("/dashboard");
+      revalidatePath("/dashboard/twibbon");
+      revalidatePath("/media/twibbon");
+      revalidatePath("/twibbon/unggah");
+      revalidatePath("/galeri/twibbon");
       revalidatePath("/monitor");
       revalidatePath("/media/monitor");
       revalidatePath("/kontak");

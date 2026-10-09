@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import {
   ImageIcon,
   Upload,
   Trash2,
+  Camera,
 } from "lucide-react";
 
 export default function DashboardPengaturanPage() {
@@ -39,6 +41,7 @@ export default function DashboardPengaturanPage() {
   const [scoreGapThreshold, setScoreGapThreshold] = React.useState("20");
   const [maxCompetitions, setMaxCompetitions] = React.useState("3");
   const [rotationInterval, setRotationInterval] = React.useState("15");
+  const [autoApproveTwibbon, setAutoApproveTwibbon] = React.useState(false);
 
   // Kontak & Sekretariat Panitia
   const [contactLocation, setContactLocation] = React.useState(
@@ -85,6 +88,7 @@ export default function DashboardPengaturanPage() {
           setScoreGapThreshold(String(data.settings.scoreGapThreshold));
           setMaxCompetitions(String(data.settings.maxCompetitions));
           setRotationInterval(String(data.settings.rotationInterval));
+          if (data.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(data.settings.autoApproveTwibbon));
           if (data.settings.contactLocation) setContactLocation(data.settings.contactLocation);
           if (data.settings.contactHours) setContactHours(data.settings.contactHours);
           if (data.settings.contactEmail) setContactEmail(data.settings.contactEmail);
@@ -109,6 +113,7 @@ export default function DashboardPengaturanPage() {
         setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
         setMaxCompetitions(String(actionRes.settings.maxCompetitions));
         setRotationInterval(String(actionRes.settings.rotationInterval));
+        if (actionRes.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(actionRes.settings.autoApproveTwibbon));
         if (actionRes.settings.contactLocation) setContactLocation(actionRes.settings.contactLocation);
         if (actionRes.settings.contactHours) setContactHours(actionRes.settings.contactHours);
         if (actionRes.settings.contactEmail) setContactEmail(actionRes.settings.contactEmail);
@@ -131,6 +136,7 @@ export default function DashboardPengaturanPage() {
           setScoreGapThreshold(String(actionRes.settings.scoreGapThreshold));
           setMaxCompetitions(String(actionRes.settings.maxCompetitions));
           setRotationInterval(String(actionRes.settings.rotationInterval));
+          if (actionRes.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(actionRes.settings.autoApproveTwibbon));
           if (actionRes.settings.contactLocation) setContactLocation(actionRes.settings.contactLocation);
           if (actionRes.settings.contactHours) setContactHours(actionRes.settings.contactHours);
           if (actionRes.settings.contactEmail) setContactEmail(actionRes.settings.contactEmail);
@@ -263,6 +269,7 @@ export default function DashboardPengaturanPage() {
       scoreGapThreshold: Number(scoreGapThreshold) || 20,
       maxCompetitions: Number(maxCompetitions) || 3,
       rotationInterval: Number(rotationInterval) || 15,
+      autoApproveTwibbon: Boolean(autoApproveTwibbon),
       contactLocation: contactLocation.trim(),
       contactHours: contactHours.trim(),
       contactEmail: contactEmail.trim(),
@@ -649,7 +656,67 @@ export default function DashboardPengaturanPage() {
               {/* Bagian 3 */}
               <div className="space-y-4 pt-4 border-t border-border">
                 <h3 className="font-heading text-base font-bold text-foreground border-b border-border pb-2 flex items-center justify-between">
-                  <span>3. Layar Monitor Lapangan Venue</span>
+                  <span>3. Moderasi & Persetujuan Twibbon Publik</span>
+                  <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings (key: auto_approve_twibbon)</span>
+                </h3>
+
+                <div className="p-4 sm:p-5 rounded-xl border border-border bg-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1.5 max-w-xl">
+                    <div className="flex items-center gap-2">
+                      <Camera className="h-4 w-4 text-accent" />
+                      <span className="font-heading text-sm sm:text-base font-bold text-foreground">
+                        Auto Approve Twibbon
+                      </span>
+                      <Badge
+                        variant={autoApproveTwibbon ? "success" : "warning"}
+                        className="text-[10px]"
+                      >
+                        {autoApproveTwibbon ? "AKTIF (Otomatis)" : "NONAKTIF (Moderasi Manual)"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {autoApproveTwibbon ? (
+                        <>
+                          <strong className="text-foreground">Mode Auto Approve:</strong> Setiap unggahan twibbon baru langsung disetujui otomatis oleh sistem, langsung tayang di galeri serta layar monitor publik, dan peserta yang mengunggah pertama kali langsung memperoleh reward <strong>+20 Poin</strong> tanpa menunggu review panitia.
+                        </>
+                      ) : (
+                        <>
+                          <strong className="text-foreground">Mode Moderasi Manual:</strong> Setiap unggahan twibbon baru masuk ke antrean moderasi (<span className="font-mono text-[11px]">/dashboard/twibbon</span>). Poin dan penayangan di monitor publik hanya diberikan setelah tim panitia menekan tombol <strong>Setujui</strong>.
+                        </>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+                    <span className="text-xs font-semibold text-muted-foreground hidden sm:inline">
+                      {autoApproveTwibbon ? "Otomatis" : "Manual"}
+                    </span>
+                    <button
+                      id="toggle-auto-approve-twibbon"
+                      type="button"
+                      role="switch"
+                      aria-checked={autoApproveTwibbon}
+                      onClick={() => setAutoApproveTwibbon(!autoApproveTwibbon)}
+                      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
+                        autoApproveTwibbon ? "bg-accent" : "bg-muted-foreground/30"
+                      }`}
+                    >
+                      <span className="sr-only">Toggle Auto Approve Twibbon</span>
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          autoApproveTwibbon ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bagian 4 */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <h3 className="font-heading text-base font-bold text-foreground border-b border-border pb-2 flex items-center justify-between">
+                  <span>4. Layar Monitor Lapangan Venue</span>
                   <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings & monitor_displays (key: monitor)</span>
                 </h3>
                 <Input
@@ -665,10 +732,10 @@ export default function DashboardPengaturanPage() {
                 />
               </div>
 
-              {/* Bagian 4 */}
+              {/* Bagian 5 */}
               <div className="space-y-4 pt-4 border-t border-border">
                 <h3 className="font-heading text-base font-bold text-foreground border-b border-border pb-2 flex items-center justify-between">
-                  <span>4. Informasi Kontak, Sekretariat & Denah Lomba</span>
+                  <span>5. Informasi Kontak, Sekretariat & Denah Lomba</span>
                   <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings (key: contact)</span>
                 </h3>
 
