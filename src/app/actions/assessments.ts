@@ -696,12 +696,20 @@ export async function getJudgeEvaluationHistory(): Promise<{
   }
 }
 
+export interface JudgeRosterMember {
+  id?: string;
+  name: string;
+  role?: string | null;
+  isLeader?: boolean;
+}
+
 export interface JudgeRosterParticipant {
   registrationId: string;
   participantId: string;
   registrationNumber: string;
   fullName: string;
   teamName: string | null;
+  members?: JudgeRosterMember[];
   institution: string;
   status: "draft" | "terkirim" | "final" | "belum_dinilai";
   weightedScore: number | null;
@@ -821,7 +829,13 @@ export async function getJudgeCompetitionRoster(
         performance_order,
         is_confirmed,
         created_at,
-        participant:participants(*)
+        participant:participants(*),
+        registration_members (
+          id,
+          member_name,
+          member_role,
+          is_leader
+        )
       `)
       .eq("competition_id", comp.id)
       .order("performance_order", { ascending: true, nullsFirst: false })
@@ -952,6 +966,12 @@ export async function getJudgeCompetitionRoster(
           status: assessStatus,
           weightedScore: myAssessment?.weighted_total ? Number(myAssessment.weighted_total) : null,
           performanceOrder: matchedReg?.performance_order || null,
+          members: ((matchedReg as any)?.registration_members || []).map((m: any) => ({
+            id: m.id,
+            name: m.member_name,
+            role: m.member_role,
+            isLeader: m.is_leader,
+          })),
           stageStatus: rawStageStatus as "terdaftar" | "menunggu" | "lolos" | "tidak_lolos",
           stageStatusLabel,
           stageScore: stageProg?.score ?? null,
@@ -1003,6 +1023,12 @@ export async function getJudgeCompetitionRoster(
         status,
         weightedScore: myAssessment?.weighted_total ? Number(myAssessment.weighted_total) : null,
         performanceOrder: r.performance_order,
+        members: ((r as any).registration_members || []).map((m: any) => ({
+          id: m.id,
+          name: m.member_name,
+          role: m.member_role,
+          isLeader: m.is_leader,
+        })),
       };
     });
 
@@ -1045,6 +1071,7 @@ export interface ParticipantGradingSheetResult {
     registrationNumber: string;
     fullName: string;
     teamName: string | null;
+    members?: JudgeRosterMember[];
     institution: string;
   };
   competition?: {
@@ -1052,6 +1079,7 @@ export interface ParticipantGradingSheetResult {
     name: string;
     slug: string;
     category: string;
+    type?: string;
     stageName?: string | null;
     status?: string;
   };
@@ -1080,7 +1108,13 @@ export async function getParticipantGradingSheet(
         competition_id,
         team_name,
         participant:participants(*),
-        competition:competitions(*)
+        competition:competitions(*),
+        registration_members (
+          id,
+          member_name,
+          member_role,
+          is_leader
+        )
       `)
       .eq("id", registrationId)
       .maybeSingle();
@@ -1196,6 +1230,12 @@ export async function getParticipantGradingSheet(
         registrationNumber: part?.registration_number || `REG-${reg.id.slice(0, 6)}`,
         fullName: part?.full_name || reg.team_name || "Peserta",
         teamName: reg.team_name,
+        members: ((reg as any)?.registration_members || []).map((m: any) => ({
+          id: m.id,
+          name: m.member_name,
+          role: m.member_role,
+          isLeader: m.is_leader,
+        })),
         institution: part?.institution || "Umum",
       },
       competition: {
@@ -1203,6 +1243,7 @@ export async function getParticipantGradingSheet(
         name: comp.name,
         slug: comp.slug,
         category: comp.type === "kelompok" ? "Kelompok" : "Individu",
+        type: comp.type,
         stageName: comp.theme_link || "Panggung Utama",
         status: comp.status || "berlangsung",
       },

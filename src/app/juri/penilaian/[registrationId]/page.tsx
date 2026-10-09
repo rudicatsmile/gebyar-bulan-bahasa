@@ -21,6 +21,7 @@ import {
   Sliders,
   AlertCircle,
   Loader2,
+  User,
   UserCheck,
   Lock,
 } from "lucide-react";
@@ -39,6 +40,7 @@ export default function FormPenilaianDigitalPage() {
     registrationNumber: string;
     fullName: string;
     teamName: string | null;
+    members?: { id?: string; name: string; role?: string | null; isLeader?: boolean }[];
     institution: string;
   } | null>(null);
 
@@ -47,6 +49,7 @@ export default function FormPenilaianDigitalPage() {
     name: string;
     slug: string;
     category: string;
+    type?: string;
     stageName?: string | null;
     status?: string;
   } | null>(null);
@@ -255,8 +258,47 @@ export default function FormPenilaianDigitalPage() {
                 )}
               </div>
               <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                {participant.fullName}
+                {competition.category?.toLowerCase() === "kelompok" ||
+                competition.type === "kelompok" ||
+                Boolean(participant.teamName)
+                  ? (participant.teamName || participant.fullName)
+                  : participant.fullName}
               </h1>
+              {(competition.category?.toLowerCase() === "kelompok" ||
+                competition.type === "kelompok" ||
+                Boolean(participant.teamName)) &&
+              participant.members &&
+              participant.members.length > 0 ? (
+                <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
+                  {participant.members.map((m, mIdx) => (
+                    <span
+                      key={m.id || mIdx}
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border ${
+                        m.isLeader || m.role?.toLowerCase() === "ketua"
+                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 font-semibold"
+                          : "bg-muted/70 text-foreground border-border/60"
+                      }`}
+                    >
+                      <User className="h-3 w-3 opacity-70" />
+                      <span>{m.name}</span>
+                      {m.role && (
+                        <span className="text-[9px] opacity-80">
+                          ({m.role})
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              ) : (competition.category?.toLowerCase() === "kelompok" ||
+                  competition.type === "kelompok" ||
+                  Boolean(participant.teamName)) &&
+                participant.teamName &&
+                participant.fullName &&
+                participant.fullName !== participant.teamName ? (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Ketua / Perwakilan: <span className="font-medium text-foreground">{participant.fullName}</span>
+                </p>
+              ) : null}
               <p className="text-xs text-muted-foreground">
                 {participant.institution} • Cabang: <strong>{competition.name}</strong>{" "}
                 {competition.stageName ? `(${competition.stageName})` : ""}
@@ -290,11 +332,10 @@ export default function FormPenilaianDigitalPage() {
 
         {feedbackNotice && (
           <div
-            className={`p-4 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${
-              feedbackNotice.type === "success"
+            className={`p-4 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in-50 ${feedbackNotice.type === "success"
                 ? "border-success/40 bg-success/10 text-success"
                 : "border-destructive/40 bg-destructive/10 text-destructive"
-            }`}
+              }`}
           >
             {feedbackNotice.type === "success" ? (
               <CheckCircle2 className="h-5 w-5 shrink-0" />
@@ -403,16 +444,16 @@ export default function FormPenilaianDigitalPage() {
                 status === "terkirim" || status === "final"
                   ? "success"
                   : status === "draft"
-                  ? "warning"
-                  : "default"
+                    ? "warning"
+                    : "default"
               }
               className="text-[10px]"
             >
               {status === "terkirim" || status === "final"
                 ? "TERKIRIM FINAL"
                 : status === "draft"
-                ? "DRAFT (TERSEMBUNYI)"
-                : "BELUM DINILAI"}
+                  ? "DRAFT (TERSEMBUNYI)"
+                  : "BELUM DINILAI"}
             </Badge>
           </div>
 

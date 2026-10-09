@@ -23,6 +23,7 @@ import {
   Edit3,
   Loader2,
   MapPin,
+  User,
   UserCheck,
   Layers,
   Trophy,
@@ -226,7 +227,7 @@ export default function JuriLombaPesertaPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-28">No. Registrasi</TableHead>
-                <TableHead>Nama Peserta</TableHead>
+                <TableHead>Nama</TableHead>
                 <TableHead>Sekolah / Instansi</TableHead>
                 {competition?.roundType === "multi_stage" && (
                   <TableHead className="text-center">Status Tahap Ini</TableHead>
@@ -271,10 +272,34 @@ export default function JuriLombaPesertaPage() {
                       </TableCell>
                       <TableCell>
                         <strong className="text-foreground text-xs sm:text-sm block">
-                          {p.fullName}
+                          {p.teamName || p.fullName}
                         </strong>
-                        {p.teamName && (
-                          <span className="text-[11px] text-muted-foreground">{p.teamName}</span>
+                        {p.members && p.members.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 pt-1 max-w-sm">
+                            {p.members.map((m, mIdx) => (
+                              <span
+                                key={m.id || mIdx}
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${m.isLeader || m.role?.toLowerCase() === "ketua"
+                                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 font-semibold"
+                                    : "bg-muted/70 text-foreground border-border/60"
+                                  }`}
+                              >
+                                <User className="h-2.5 w-2.5 opacity-70" />
+                                <span>{m.name}</span>
+                                {m.role && (
+                                  <span className="text-[8px] opacity-80">
+                                    ({m.role})
+                                  </span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          p.teamName && (
+                            <span className="text-[11px] text-muted-foreground block mt-0.5">
+                              {p.fullName}
+                            </span>
+                          )
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
@@ -328,8 +353,8 @@ export default function JuriLombaPesertaPage() {
                               {isSent
                                 ? "Lihat / Ubah Nilai"
                                 : isDraft
-                                ? "Lanjutkan Menilai"
-                                : "Buka Form Nilai"}
+                                  ? "Lanjutkan Menilai"
+                                  : "Buka Form Nilai"}
                             </span>
                           </Button>
                         </Link>
@@ -406,12 +431,34 @@ export default function JuriLombaPesertaPage() {
 
                   <div>
                     <h3 className="font-heading text-sm font-bold text-foreground">
-                      {p.fullName}
+                      {p.teamName || p.fullName}
                     </h3>
-                    {p.teamName && (
-                      <p className="text-xs text-accent">{p.teamName}</p>
+                    {p.members && p.members.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {p.members.map((m, mIdx) => (
+                          <span
+                            key={m.id || mIdx}
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${m.isLeader || m.role?.toLowerCase() === "ketua"
+                                ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 font-semibold"
+                                : "bg-muted/70 text-foreground border-border/60"
+                              }`}
+                          >
+                            <User className="h-2.5 w-2.5 opacity-70" />
+                            <span>{m.name}</span>
+                            {m.role && (
+                              <span className="text-[8px] opacity-80">
+                                ({m.role})
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      p.teamName && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{p.fullName}</p>
+                      )
                     )}
-                    <p className="text-xs text-muted-foreground mt-0.5">{p.institution}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{p.institution}</p>
                   </div>
 
                   <Link href={`/juri/penilaian/${p.registrationId}`} className="block">
@@ -425,8 +472,8 @@ export default function JuriLombaPesertaPage() {
                         {isSent
                           ? "Lihat / Ubah Nilai"
                           : isDraft
-                          ? "Lanjutkan Menilai"
-                          : "Buka Form Nilai"}
+                            ? "Lanjutkan Menilai"
+                            : "Buka Form Nilai"}
                       </span>
                     </Button>
                   </Link>

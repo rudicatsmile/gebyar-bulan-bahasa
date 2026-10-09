@@ -26,6 +26,7 @@ import {
 import {
   ArrowLeft,
   Crown,
+  User,
   Users,
   CheckCircle2,
   AlertCircle,
@@ -680,16 +681,44 @@ export default function DashboardDutaBahasaPage() {
                                       className="p-3 rounded-lg border border-border bg-card space-y-2 text-xs"
                                     >
                                       <div className="flex items-start justify-between gap-2">
-                                        <div>
-                                          <div className="flex items-center gap-1.5">
+                                        <div className="space-y-1 min-w-0 flex-1">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
                                             <span className="font-mono text-[10px] font-bold text-muted-foreground">
                                               #{pIdx + 1}
                                             </span>
-                                            <p className="font-bold text-foreground">{p.fullName}</p>
+                                            <div className="h-5 w-5 rounded bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                              <Users className="h-3 w-3" />
+                                            </div>
+                                            <p className="font-bold text-foreground text-xs">{p.teamName || p.fullName}</p>
                                           </div>
                                           <p className="text-[10px] text-muted-foreground font-mono">
                                             {p.registrationNumber} • {p.institution || "-"}
                                           </p>
+                                          {/* Anggota Kelompok */}
+                                          <div className="flex flex-wrap gap-1 pt-1">
+                                            {p.members && p.members.length > 0 ? (
+                                              p.members.map((m, mIdx) => (
+                                                <span
+                                                  key={m.id || mIdx}
+                                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${
+                                                    m.isLeader
+                                                      ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                                                      : "bg-muted/70 text-foreground border-border/60"
+                                                  }`}
+                                                >
+                                                  <User className="h-2.5 w-2.5 opacity-70" />
+                                                  <span>{m.name}</span>
+                                                  {m.role && (
+                                                    <span className="text-[8px] opacity-80">
+                                                      ({m.role})
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              ))
+                                            ) : (
+                                              <span className="text-[10px] text-foreground font-medium">{p.fullName}</span>
+                                            )}
+                                          </div>
                                         </div>
                                         <Badge
                                           className={`text-[9px] border shrink-0 ${
@@ -735,7 +764,7 @@ export default function DashboardDutaBahasaPage() {
                                             <Button
                                               variant="outline"
                                               size="sm"
-                                              onClick={() => handleQuickSetStatus(p.participantId, stage.id, "lolos", p.fullName)}
+                                              onClick={() => handleQuickSetStatus(p.participantId, stage.id, "lolos", p.teamName || p.fullName)}
                                               className={`text-[10px] h-6 flex-1 cursor-pointer ${
                                                 progress?.status === "lolos"
                                                   ? "bg-emerald-500/20 text-emerald-700 border-emerald-500 font-bold"
@@ -748,7 +777,7 @@ export default function DashboardDutaBahasaPage() {
                                             <Button
                                               variant="outline"
                                               size="sm"
-                                              onClick={() => handleQuickSetStatus(p.participantId, stage.id, "tidak_lolos", p.fullName)}
+                                              onClick={() => handleQuickSetStatus(p.participantId, stage.id, "tidak_lolos", p.teamName || p.fullName)}
                                               className={`text-[10px] h-6 flex-1 cursor-pointer ${
                                                 progress?.status === "tidak_lolos"
                                                   ? "bg-red-500/20 text-red-700 border-red-500 font-bold"
@@ -786,7 +815,7 @@ export default function DashboardDutaBahasaPage() {
                                           onClick={() => {
                                             setUpdateDialog({
                                               participantId: p.participantId,
-                                              participantName: p.fullName,
+                                              participantName: p.teamName || p.fullName,
                                               stageId: stage.id,
                                               stageTitle: stage.title,
                                             });
@@ -813,7 +842,7 @@ export default function DashboardDutaBahasaPage() {
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead className="text-[10px] w-8">#</TableHead>
-                                      <TableHead className="text-[10px]">Peserta</TableHead>
+                                      <TableHead className="text-[10px] min-w-[220px]">Kelompok</TableHead>
                                       <TableHead className="text-[10px]">Institusi</TableHead>
                                       {stage.stageOrder === 1 && (
                                         <TableHead className="text-[10px]">Berkas Diunggah</TableHead>
@@ -832,17 +861,56 @@ export default function DashboardDutaBahasaPage() {
                                           <TableCell className="text-xs font-mono">
                                             {pIdx + 1}
                                           </TableCell>
-                                          <TableCell>
-                                            <div>
-                                              <p className="text-xs font-semibold text-foreground">
-                                                {p.fullName}
-                                              </p>
-                                              <p className="text-[10px] text-muted-foreground font-mono">
-                                                {p.registrationNumber}
-                                              </p>
+                                          <TableCell className="align-top py-3">
+                                            <div className="space-y-1.5 min-w-[220px]">
+                                              {/* Nama Kelompok + Nomor Registrasi */}
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                <div className="h-6 w-6 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                                  <Users className="h-3.5 w-3.5" />
+                                                </div>
+                                                <span className="text-xs font-bold text-foreground tracking-tight">
+                                                  {p.teamName || p.fullName}
+                                                </span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-muted/60 text-muted-foreground border border-border/40 shrink-0">
+                                                  {p.registrationNumber}
+                                                </span>
+                                              </div>
+
+                                              {/* Daftar Anggota Kelompok */}
+                                              <div className="flex flex-wrap gap-1.5 pl-0.5">
+                                                {p.members && p.members.length > 0 ? (
+                                                  p.members.map((m, mIdx) => (
+                                                    <span
+                                                      key={m.id || mIdx}
+                                                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border shadow-xs transition-colors ${
+                                                        m.isLeader
+                                                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                                                          : "bg-muted/70 text-foreground border-border/60"
+                                                      }`}
+                                                    >
+                                                      <User className={`h-2.5 w-2.5 ${m.isLeader ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`} />
+                                                      <span>{m.name}</span>
+                                                      {m.role && (
+                                                        <span className={`text-[9px] px-1 py-0 rounded font-normal ${
+                                                          m.isLeader
+                                                            ? "bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                                                            : "bg-background/80 text-muted-foreground"
+                                                        }`}>
+                                                          {m.role}
+                                                        </span>
+                                                      )}
+                                                    </span>
+                                                  ))
+                                                ) : (
+                                                  <span className="inline-flex items-center gap-1 text-[11px] text-foreground font-medium">
+                                                    <User className="h-2.5 w-2.5 text-muted-foreground" />
+                                                    {p.fullName}
+                                                  </span>
+                                                )}
+                                              </div>
                                             </div>
                                           </TableCell>
-                                          <TableCell className="text-xs text-muted-foreground">
+                                          <TableCell className="text-xs text-muted-foreground align-top py-3">
                                             {p.institution || "-"}
                                           </TableCell>
 
@@ -895,7 +963,7 @@ export default function DashboardDutaBahasaPage() {
                                                   <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => handleQuickSetStatus(p.participantId, stage.id, "lolos", p.fullName)}
+                                                    onClick={() => handleQuickSetStatus(p.participantId, stage.id, "lolos", p.teamName || p.fullName)}
                                                     className={`text-[10px] h-7 px-2 cursor-pointer ${
                                                       progress?.status === "lolos"
                                                         ? "bg-emerald-500/20 text-emerald-700 border-emerald-500 font-bold"
@@ -909,7 +977,7 @@ export default function DashboardDutaBahasaPage() {
                                                   <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => handleQuickSetStatus(p.participantId, stage.id, "tidak_lolos", p.fullName)}
+                                                    onClick={() => handleQuickSetStatus(p.participantId, stage.id, "tidak_lolos", p.teamName || p.fullName)}
                                                     className={`text-[10px] h-7 px-2 cursor-pointer ${
                                                       progress?.status === "tidak_lolos"
                                                         ? "bg-red-500/20 text-red-700 border-red-500 font-bold"
@@ -930,7 +998,7 @@ export default function DashboardDutaBahasaPage() {
                                                 onClick={() => {
                                                   setUpdateDialog({
                                                     participantId: p.participantId,
-                                                    participantName: p.fullName,
+                                                    participantName: p.teamName || p.fullName,
                                                     stageId: stage.id,
                                                     stageTitle: stage.title,
                                                   });

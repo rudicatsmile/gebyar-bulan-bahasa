@@ -43,9 +43,18 @@ export interface DutaBahasaUploadedDoc {
   uploadedAt: string;
 }
 
+export interface DutaBahasaTeamMember {
+  id?: string;
+  name: string;
+  role?: string;
+  isLeader?: boolean;
+}
+
 export interface DutaBahasaParticipantInfo {
   participantId: string;
   fullName: string;
+  teamName?: string;
+  members?: DutaBahasaTeamMember[];
   institution: string;
   registrationNumber: string;
   currentStageId: string;
@@ -405,12 +414,14 @@ export async function getDutaBahasaProgress(): Promise<{
     const dutaCompIds = (dutaComps || []).map((c) => c.id);
 
     let registeredParticipantIds: string[] = [];
+    let regsData: Array<{ id: string; participant_id: string; team_name: string | null }> = [];
     if (dutaCompIds.length > 0) {
       const { data: regs } = await supabase
         .from("registrations")
-        .select("participant_id")
+        .select("id, participant_id, team_name")
         .in("competition_id", dutaCompIds);
-      registeredParticipantIds = (regs || []).map((r) => r.participant_id).filter(Boolean);
+      regsData = regs || [];
+      registeredParticipantIds = regsData.map((r) => r.participant_id).filter(Boolean);
     }
 
     // 4. Combine participant IDs from progressMap AND registeredParticipantIds
@@ -422,8 +433,9 @@ export async function getDutaBahasaProgress(): Promise<{
       return { success: true, participants: [] };
     }
 
-    // 5. Fetch participant details & documents in parallel
-    const [participantsDataRes, docsDataRes] = await Promise.all([
+    // 5. Fetch participant details, documents, and team members in parallel
+    const regIds = regsData.map((r) => r.id).filter(Boolean);
+    const [participantsDataRes, docsDataRes, membersDataRes] = await Promise.all([
       supabase
         .from("participants")
         .select("id, full_name, institution, registration_number")
@@ -433,6 +445,12 @@ export async function getDutaBahasaProgress(): Promise<{
         .select("id, participant_id, doc_type, file_name, file_url, status, note, uploaded_at")
         .in("participant_id", allParticipantIds)
         .order("uploaded_at", { ascending: false }),
+      regIds.length > 0
+        ? supabase
+            .from("registration_members")
+            .select("id, registration_id, member_name, member_role, institution, is_leader")
+            .in("registration_id", regIds)
+        : Promise.resolve({ data: [] }),
     ]);
 
     const participantLookup: Record<
@@ -445,6 +463,27 @@ export async function getDutaBahasaProgress(): Promise<{
         fullName: p.full_name,
         institution: p.institution || "",
         registrationNumber: p.registration_number,
+      };
+    });
+
+    const teamInfoByParticipantId: Record<
+      string,
+      { teamName: string; members: DutaBahasaTeamMember[] }
+    > = {};
+
+    regsData.forEach((r) => {
+      const teamMembers: DutaBahasaTeamMember[] = (((membersDataRes.data as any[]) || []))
+        .filter((m) => m.registration_id === r.id)
+        .map((m) => ({
+          id: m.id,
+          name: m.member_name,
+          role: m.member_role || (m.is_leader ? "Ketua" : "Anggota"),
+          isLeader: m.is_leader,
+        }));
+
+      teamInfoByParticipantId[r.participant_id] = {
+        teamName: r.team_name || "",
+        members: teamMembers,
       };
     });
 
@@ -527,9 +566,18 @@ export async function getDutaBahasaProgress(): Promise<{
           }
         }
 
+        const teamData = teamInfoByParticipantId[pid];
+        const teamName = teamData?.teamName || info.fullName;
+        let members = teamData?.members || [];
+        if (members.length === 0) {
+          members = [{ name: info.fullName, role: "Ketua", isLeader: true }];
+        }
+
         return {
           participantId: pid,
           fullName: info.fullName,
+          teamName,
+          members,
           institution: info.institution,
           registrationNumber: info.registrationNumber,
           currentStageId,
