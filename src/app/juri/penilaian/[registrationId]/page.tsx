@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { notFound, useParams, useRouter } from "next/navigation";
+import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,12 +24,15 @@ import {
   User,
   UserCheck,
   Lock,
+  Layers,
 } from "lucide-react";
 
 export default function FormPenilaianDigitalPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const regId = params?.registrationId as string;
+  const stageId = searchParams?.get("stageId") || undefined;
 
   const [loading, setLoading] = React.useState(true);
   const [notFoundState, setNotFoundState] = React.useState(false);
@@ -50,8 +53,16 @@ export default function FormPenilaianDigitalPage() {
     slug: string;
     category: string;
     type?: string;
+    roundType?: "single_round" | "multi_stage";
     stageName?: string | null;
     status?: string;
+    stage?: {
+      id: string;
+      stageOrder: number;
+      title: string;
+      requiresJudge: boolean;
+      status: string;
+    } | null;
   } | null>(null);
 
   const [criteria, setCriteria] = React.useState<GradingCriterionItem[]>([]);
@@ -71,7 +82,7 @@ export default function FormPenilaianDigitalPage() {
     if (!regId) return;
     setLoading(true);
     try {
-      const res = await getParticipantGradingSheet(regId);
+      const res = await getParticipantGradingSheet(regId, stageId);
       if (!res.success || !res.participant || !res.competition) {
         setNotFoundState(true);
       } else {
@@ -89,7 +100,7 @@ export default function FormPenilaianDigitalPage() {
     } finally {
       setLoading(false);
     }
-  }, [regId]);
+  }, [regId, stageId]);
 
   React.useEffect(() => {
     loadSheet();
@@ -126,6 +137,7 @@ export default function FormPenilaianDigitalPage() {
       const res = await saveAssessment({
         registrationId: participant.registrationId,
         competitionId: competition.id,
+        stageId: competition.stage?.id || stageId,
         scores: payloadScores,
         notes,
         isFinal: false,
@@ -184,6 +196,7 @@ export default function FormPenilaianDigitalPage() {
       const res = await saveAssessment({
         registrationId: participant.registrationId,
         competitionId: competition.id,
+        stageId: competition.stage?.id || stageId,
         scores: payloadScores,
         notes,
         isFinal: true,
@@ -317,6 +330,40 @@ export default function FormPenilaianDigitalPage() {
             </div>
           </div>
         </div>
+
+        {competition?.roundType === "multi_stage" && competition?.stage && (
+          <div className="p-3.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-700 dark:text-indigo-300">
+                <Layers className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge
+                    variant="default"
+                    className="text-[10px] bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/40 font-bold"
+                  >
+                    PENILAIAN TAHAP {competition.stage.stageOrder}
+                  </Badge>
+                  <span className="text-xs sm:text-sm font-bold text-foreground">
+                    {competition.stage.title}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Nilai Anda akan tersimpan khusus untuk babak ini dan tidak mencampur nilai tahap lainnya.
+                </p>
+              </div>
+            </div>
+            {competition.stage.requiresJudge && (
+              <Badge
+                variant="default"
+                className="text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-semibold shrink-0"
+              >
+                ✓ Perlu Juri
+              </Badge>
+            )}
+          </div>
+        )}
 
         {isCompetitionLocked && (
           <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs flex items-center gap-3">

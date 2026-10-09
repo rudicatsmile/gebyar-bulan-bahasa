@@ -342,7 +342,16 @@ export default function JuriLombaPesertaPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link href={`/juri/penilaian/${p.registrationId}`}>
+                        <Link
+                          href={
+                            competition?.roundType === "multi_stage" &&
+                            (p.activeStageId || competition?.activeStage?.id)
+                              ? `/juri/penilaian/${p.registrationId}?stageId=${
+                                  p.activeStageId || competition?.activeStage?.id
+                                }`
+                              : `/juri/penilaian/${p.registrationId}`
+                          }
+                        >
                           <Button
                             size="sm"
                             variant={isSent ? "outline" : "default"}
@@ -353,8 +362,18 @@ export default function JuriLombaPesertaPage() {
                               {isSent
                                 ? "Lihat / Ubah Nilai"
                                 : isDraft
-                                  ? "Lanjutkan Menilai"
-                                  : "Buka Form Nilai"}
+                                  ? `Lanjutkan Menilai${
+                                      competition?.roundType === "multi_stage" &&
+                                      competition?.activeStage
+                                        ? ` (Tahap ${competition.activeStage.stageOrder})`
+                                        : ""
+                                    }`
+                                  : `Buka Form Nilai${
+                                      competition?.roundType === "multi_stage" &&
+                                      competition?.activeStage
+                                        ? ` (Tahap ${competition.activeStage.stageOrder})`
+                                        : ""
+                                    }`}
                             </span>
                           </Button>
                         </Link>
@@ -461,7 +480,17 @@ export default function JuriLombaPesertaPage() {
                     <p className="text-xs text-muted-foreground mt-1">{p.institution}</p>
                   </div>
 
-                  <Link href={`/juri/penilaian/${p.registrationId}`} className="block">
+                  <Link
+                    href={
+                      competition?.roundType === "multi_stage" &&
+                      (p.activeStageId || competition?.activeStage?.id)
+                        ? `/juri/penilaian/${p.registrationId}?stageId=${
+                            p.activeStageId || competition?.activeStage?.id
+                          }`
+                        : `/juri/penilaian/${p.registrationId}`
+                    }
+                    className="block"
+                  >
                     <Button
                       size="sm"
                       variant={isSent ? "outline" : "default"}
@@ -472,8 +501,18 @@ export default function JuriLombaPesertaPage() {
                         {isSent
                           ? "Lihat / Ubah Nilai"
                           : isDraft
-                            ? "Lanjutkan Menilai"
-                            : "Buka Form Nilai"}
+                            ? `Lanjutkan Menilai${
+                                competition?.roundType === "multi_stage" &&
+                                competition?.activeStage
+                                  ? ` (Tahap ${competition.activeStage.stageOrder})`
+                                  : ""
+                              }`
+                            : `Buka Form Nilai${
+                                competition?.roundType === "multi_stage" &&
+                                competition?.activeStage
+                                  ? ` (Tahap ${competition.activeStage.stageOrder})`
+                                  : ""
+                              }`}
                       </span>
                     </Button>
                   </Link>

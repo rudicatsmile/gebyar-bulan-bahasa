@@ -4,10 +4,81 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMultiStageCompetitionState } from "@/app/actions/duta-bahasa";
+import {
+  getMultiStageCompetitionState,
+  getCompetitionStages,
+} from "@/app/actions/duta-bahasa";
 import { getCompetitionRoundTypesMap } from "@/app/actions/competitions";
 
 const SCORE_GAP_ALERT = Number(process.env.NEXT_PUBLIC_SCORE_GAP_ALERT || 20);
+
+// ======================================================================
+// MULTI-STAGE ASSESSMENTS STORAGE HELPERS (event_settings)
+// ======================================================================
+
+export interface StageAssessmentRecord {
+  id: string; // `${registrationId}_${judgeId}_${stageId}`
+  registrationId: string;
+  competitionId: string;
+  stageId: string;
+  stageOrder: number;
+  stageTitle: string;
+  judgeId: string;
+  judgeName?: string;
+  status: "draft" | "terkirim" | "final";
+  weightedTotal: number;
+  notes?: string | null;
+  scores: {
+    criterionId: string;
+    score: number;
+    comment?: string | null;
+  }[];
+  submittedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getStageAssessmentsMap(): Promise<
+  Record<string, StageAssessmentRecord>
+> {
+  try {
+    const adminSupabase = createAdminClient();
+    const { data } = await adminSupabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stage_assessments")
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object" && !Array.isArray(data.value)) {
+      return data.value as unknown as Record<string, StageAssessmentRecord>;
+    }
+    return {};
+  } catch (err) {
+    console.error("Error getStageAssessmentsMap:", err);
+    return {};
+  }
+}
+
+export async function saveStageAssessmentRecord(
+  record: StageAssessmentRecord
+): Promise<void> {
+  const adminSupabase = createAdminClient();
+  const currentMap = await getStageAssessmentsMap();
+  const nextMap: Record<string, any> = {
+    ...currentMap,
+    [record.id]: record,
+  };
+
+  await adminSupabase.from("event_settings").upsert(
+    {
+      key: "stage_assessments",
+      value: nextMap as any,
+      description: "Rekam penilaian juri per tahapan perlombaan multi-stage",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+}
 
 const ScoreInputSchema = z.object({
   criterionId: z.string().uuid("ID Kriteria tidak valid"),
@@ -18,12 +89,15 @@ const ScoreInputSchema = z.object({
 const SubmitAssessmentSchema = z.object({
   registrationId: z.string().uuid("ID Pendaftaran tidak valid"),
   competitionId: z.string().uuid("ID Lomba tidak valid"),
+  stageId: z.string().optional(),
   scores: z.array(ScoreInputSchema).min(1, "Minimal harus ada 1 nilai kriteria"),
   notes: z.string().optional(),
   isFinal: z.boolean().default(false),
 });
 
-export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema>) {
+export type SubmitAssessmentInput = z.infer<typeof SubmitAssessmentSchema>;
+
+export async function saveAssessment(data: SubmitAssessmentInput) {
   const parsed = SubmitAssessmentSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message };
@@ -37,12 +111,25 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
     } = await supabase.auth.getUser();
 
     let judgeId = user?.id;
+    let judgeProfile: any = null;
+
+    if (user) {
+      const { data: p } = await adminSupabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (p) {
+        judgeProfile = p;
+        judgeId = p.id;
+      }
+    }
 
     // Fallback: jika sesi user belum ada atau dalam konteks pengujian lokal, ambil juri aktif dari penugasan lomba
     if (!judgeId) {
       const { data: cj } = await adminSupabase
         .from("competition_judges")
-        .select("judge_id")
+        .select("judge_id, judge:profiles!competition_judges_judge_id_fkey(*)")
         .eq("competition_id", parsed.data.competitionId)
         .eq("status", "aktif")
         .limit(1)
@@ -50,6 +137,7 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
 
       if (cj?.judge_id) {
         judgeId = cj.judge_id;
+        judgeProfile = cj.judge;
       }
     }
 
@@ -60,11 +148,15 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
     // Pastikan lomba belum difinalisasi / dikunci oleh panitia
     const { data: compCheck } = await adminSupabase
       .from("competitions")
-      .select("status, name")
+      .select("id, status, name, slug")
       .eq("id", parsed.data.competitionId)
       .maybeSingle();
 
-    if (compCheck?.status === "selesai") {
+    if (!compCheck) {
+      return { success: false, error: "Cabang lomba tidak ditemukan." };
+    }
+
+    if (compCheck.status === "selesai") {
       return {
         success: false,
         error: "Nilai lomba telah difinalisasi dan dikunci oleh panitia. Perubahan nilai tidak diperkenankan.",
@@ -96,10 +188,122 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
 
     const status = parsed.data.isFinal ? "terkirim" : "draft";
 
-    // Upsert assessment header via admin client
-    const { data: assessment, error: aErr } = await adminSupabase
-      .from("assessments")
-      .upsert(
+    // Cek apakah lomba ini model multi_stage
+    const roundTypesMap = await getCompetitionRoundTypesMap();
+    const roundType: "single_round" | "multi_stage" =
+      roundTypesMap[compCheck.id] ||
+      roundTypesMap[compCheck.slug] ||
+      ((compCheck.slug === "pidato" || compCheck.name?.toLowerCase().includes("duta"))
+        ? "multi_stage"
+        : "single_round");
+
+    // =========================================================================
+    // KASUS 1: MULTI_STAGE (Penilaian terikat ke tahap tertentu)
+    // =========================================================================
+    if (roundType === "multi_stage" || parsed.data.stageId) {
+      const stagesRes = await getCompetitionStages(compCheck.slug);
+      const stages = stagesRes.stages || [];
+
+      let targetStage = parsed.data.stageId
+        ? stages.find((s) => s.id === parsed.data.stageId)
+        : null;
+
+      if (!targetStage) {
+        // Cari tahap yang sedang aktif dan memerlukan juri
+        targetStage =
+          stages.find((s) => s.status === "active" && s.requiresJudge !== false) ||
+          stages.find((s) => s.status === "active") ||
+          stages[0];
+      }
+
+      const stageId = targetStage?.id || "stage-default";
+      const stageTitle = targetStage?.title || "Penilaian Tahap";
+      const stageOrder = targetStage?.stageOrder || 1;
+
+      const stageRecordId = `${parsed.data.registrationId}_${judgeId}_${stageId}`;
+      const stageRecord: StageAssessmentRecord = {
+        id: stageRecordId,
+        registrationId: parsed.data.registrationId,
+        competitionId: parsed.data.competitionId,
+        stageId,
+        stageOrder,
+        stageTitle,
+        judgeId,
+        judgeName: judgeProfile?.full_name || "Dewan Juri",
+        status,
+        weightedTotal: Number(weightedTotal.toFixed(2)),
+        notes: parsed.data.notes || null,
+        scores: parsed.data.scores,
+        submittedAt: parsed.data.isFinal ? new Date().toISOString() : null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await saveStageAssessmentRecord(stageRecord);
+
+      // Jika final, update skor tahap peserta di progress settings
+      if (parsed.data.isFinal) {
+        const { data: regInfo } = await adminSupabase
+          .from("registrations")
+          .select("participant_id")
+          .eq("id", parsed.data.registrationId)
+          .maybeSingle();
+
+        if (regInfo?.participant_id) {
+          const isDuta =
+            compCheck.slug === "duta-bahasa" ||
+            compCheck.slug === "pidato" ||
+            compCheck.name.toLowerCase().includes("duta");
+          const progressKey = isDuta
+            ? "duta_bahasa_progress"
+            : `progress_${compCheck.slug.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`;
+
+          const { data: curProgData } = await adminSupabase
+            .from("event_settings")
+            .select("value")
+            .eq("key", progressKey)
+            .maybeSingle();
+
+          const progMap: Record<string, Record<string, any>> =
+            ((curProgData?.value as unknown) as Record<string, Record<string, any>>) || {};
+
+          const pProg = progMap[regInfo.participant_id] || {};
+          if (!pProg[stageId]) {
+            pProg[stageId] = {
+              participantId: regInfo.participant_id,
+              stageId,
+              status: "menunggu",
+              score: null,
+              notes: `Penilaian tahap ${stageTitle}`,
+              reviewedAt: new Date().toISOString(),
+            };
+          }
+          pProg[stageId].score = Number(weightedTotal.toFixed(2));
+          pProg[stageId].reviewedAt = new Date().toISOString();
+          progMap[regInfo.participant_id] = pProg;
+
+          await adminSupabase.from("event_settings").upsert(
+            {
+              key: progressKey,
+              value: progMap as any,
+              description: `Progress peserta per tahapan lomba ${compCheck.name}`,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "key" }
+          );
+        }
+
+        await adminSupabase.from("activity_logs").insert({
+          actor_id: judgeId,
+          action: "submit_assessment_stage",
+          entity: "stage_assessment",
+          entity_id: stageRecordId,
+          description: `Juri mengirim penilaian final tahap ${stageOrder}: ${stageTitle} (${weightedTotal.toFixed(2)} pts).`,
+        });
+      }
+
+      // Upsert ke assessments header untuk kompatibilitas rekap global
+      await adminSupabase.from("assessments").upsert(
         {
           registration_id: parsed.data.registrationId,
           competition_id: parsed.data.competitionId,
@@ -110,45 +314,66 @@ export async function saveAssessment(data: z.infer<typeof SubmitAssessmentSchema
           submitted_at: parsed.data.isFinal ? new Date().toISOString() : null,
         },
         { onConflict: "registration_id,judge_id" }
-      )
-      .select()
-      .single();
+      );
+    } else {
+      // =========================================================================
+      // KASUS 2: SINGLE_ROUND (Penilaian tunggal per lomba)
+      // =========================================================================
+      const { data: assessment, error: aErr } = await adminSupabase
+        .from("assessments")
+        .upsert(
+          {
+            registration_id: parsed.data.registrationId,
+            competition_id: parsed.data.competitionId,
+            judge_id: judgeId,
+            status,
+            weighted_total: Number(weightedTotal.toFixed(2)),
+            notes: parsed.data.notes || null,
+            submitted_at: parsed.data.isFinal ? new Date().toISOString() : null,
+          },
+          { onConflict: "registration_id,judge_id" }
+        )
+        .select()
+        .single();
 
-    if (aErr) {
-      return { success: false, error: aErr.message };
-    }
+      if (aErr) {
+        return { success: false, error: aErr.message };
+      }
 
-    // Upsert scores per kriteria
-    const scoresToUpsert = parsed.data.scores.map((sc) => ({
-      assessment_id: assessment.id,
-      criterion_id: sc.criterionId,
-      score: sc.score,
-      comment: sc.comment || null,
-    }));
+      // Upsert scores per kriteria
+      const scoresToUpsert = parsed.data.scores.map((sc) => ({
+        assessment_id: assessment.id,
+        criterion_id: sc.criterionId,
+        score: sc.score,
+        comment: sc.comment || null,
+      }));
 
-    const { error: sErr } = await adminSupabase
-      .from("assessment_scores")
-      .upsert(scoresToUpsert, { onConflict: "assessment_id,criterion_id" });
+      const { error: sErr } = await adminSupabase
+        .from("assessment_scores")
+        .upsert(scoresToUpsert, { onConflict: "assessment_id,criterion_id" });
 
-    if (sErr) {
-      return { success: false, error: sErr.message };
-    }
+      if (sErr) {
+        return { success: false, error: sErr.message };
+      }
 
-    // Catat log jika final
-    if (parsed.data.isFinal) {
-      await adminSupabase.from("activity_logs").insert({
-        actor_id: judgeId,
-        action: "submit_assessment",
-        entity: "assessment",
-        entity_id: assessment.id,
-        description: `Juri mengirim penilaian final (${weightedTotal.toFixed(2)} pts).`,
-      });
+      if (parsed.data.isFinal) {
+        await adminSupabase.from("activity_logs").insert({
+          actor_id: judgeId,
+          action: "submit_assessment",
+          entity: "assessment",
+          entity_id: assessment.id,
+          description: `Juri mengirim penilaian final (${weightedTotal.toFixed(2)} pts).`,
+        });
+      }
     }
 
     revalidatePath("/juri");
     revalidatePath("/juri/riwayat");
     revalidatePath("/juri/lomba");
+    revalidatePath(`/juri/lomba/${compCheck.slug}`);
+    revalidatePath(`/juri/penilaian/${parsed.data.registrationId}`);
     revalidatePath("/dashboard/penilaian");
+    revalidatePath("/dashboard/lomba/duta-bahasa");
     revalidatePath("/papan-skor");
     return { success: true, data: { weightedTotal, status } };
   } catch (err: unknown) {
@@ -560,6 +785,10 @@ export interface EvaluationHistoryItem {
   institution: string;
   competitionName: string;
   competitionSlug?: string;
+  roundType?: "single_round" | "multi_stage";
+  stageId?: string;
+  stageOrder?: number;
+  stageTitle?: string;
   weightedScore: number;
   status: "draft" | "terkirim";
   submittedAt: string;
@@ -610,10 +839,84 @@ export async function getJudgeEvaluationHistory(): Promise<{
       }
     }
 
+    // 1. Ambil model babak tiap lomba (single_round vs multi_stage)
+    const roundTypesMap = await getCompetitionRoundTypesMap();
+
+    // 2. Ambil penilaian tahapan (multi_stage) dari event_settings
+    const stageAssessmentsMap = await getStageAssessmentsMap();
+    const stageAssessmentsList = Object.values(stageAssessmentsMap).filter((sa) => {
+      if (!isAdminOrAcara && targetJudgeId) {
+        return sa.judgeId === targetJudgeId;
+      }
+      return true;
+    });
+
+    const stageRegIds = Array.from(new Set(stageAssessmentsList.map((sa) => sa.registrationId)));
+    const regLookup: Record<string, any> = {};
+    if (stageRegIds.length > 0) {
+      const { data: regData } = await adminSupabase
+        .from("registrations")
+        .select(`
+          id,
+          team_name,
+          competition:competitions(id, name, slug),
+          participant:participants(id, full_name, institution, registration_number)
+        `)
+        .in("id", stageRegIds);
+      (regData || []).forEach((r) => {
+        regLookup[r.id] = r;
+      });
+    }
+
+    const multiStageHistoryItems: (EvaluationHistoryItem & { rawDate: string })[] =
+      stageAssessmentsList.map((sa) => {
+        const reg = regLookup[sa.registrationId];
+        const comp = reg?.competition as any;
+        const part = reg?.participant as any;
+
+        const dateStr = sa.submittedAt || sa.updatedAt || sa.createdAt;
+        let formattedDate = "-";
+        if (dateStr) {
+          try {
+            const d = new Date(dateStr);
+            formattedDate =
+              new Intl.DateTimeFormat("id-ID", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }).format(d) + " WIB";
+          } catch {
+            formattedDate = dateStr;
+          }
+        }
+
+        return {
+          id: sa.id,
+          registrationNumber:
+            part?.registration_number || `REG-${sa.registrationId.slice(0, 6)}`,
+          participantName: reg?.team_name || part?.full_name || "Peserta",
+          institution: part?.institution || "Umum",
+          competitionName: comp?.name || "Cabang Lomba",
+          competitionSlug: comp?.slug,
+          roundType: "multi_stage" as const,
+          stageId: sa.stageId,
+          stageOrder: sa.stageOrder,
+          stageTitle: sa.stageTitle,
+          weightedScore: Number(sa.weightedTotal) || 0,
+          status: (sa.status === "final" ? "terkirim" : sa.status) as "draft" | "terkirim",
+          submittedAt: formattedDate,
+          rawDate: dateStr,
+        };
+      });
+
+    // 3. Ambil data single_round dari tabel assessments Supabase
     let query = adminSupabase
       .from("assessments")
       .select(`
         id,
+        registration_id,
         weighted_total,
         status,
         submitted_at,
@@ -636,50 +939,91 @@ export async function getJudgeEvaluationHistory(): Promise<{
       `)
       .order("submitted_at", { ascending: false, nullsFirst: false });
 
-    // Jika bukan admin/acara dan memiliki target judge, filter berdasarkan judge_id
     if (!isAdminOrAcara && targetJudgeId) {
       query = query.eq("judge_id", targetJudgeId);
     }
 
     const { data: rows, error: qErr } = await query;
-
     if (qErr) throw qErr;
 
-    const history: EvaluationHistoryItem[] = (rows || []).map((r) => {
-      const comp = r.competitions as any;
-      const reg = r.registrations as any;
-      const part = reg?.participants as any;
+    const multiStageRegKeys = new Set(stageAssessmentsList.map((sa) => sa.registrationId));
 
-      const dateStr = r.submitted_at || r.created_at;
-      let formattedDate = "-";
-      if (dateStr) {
-        try {
-          const d = new Date(dateStr);
-          formattedDate =
-            new Intl.DateTimeFormat("id-ID", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }).format(d) + " WIB";
-        } catch {
-          formattedDate = dateStr;
+    const singleRoundHistoryItems: (EvaluationHistoryItem & { rawDate: string })[] = (
+      rows || []
+    )
+      .filter((r) => {
+        const comp = r.competitions as any;
+        const isMulti =
+          roundTypesMap[comp?.id] === "multi_stage" ||
+          roundTypesMap[comp?.slug] === "multi_stage" ||
+          comp?.slug === "pidato" ||
+          comp?.name?.toLowerCase().includes("duta");
+
+        // Jika kompetisi ini multi_stage dan sudah ada entri spesifik tahap, hindari duplikasi
+        if (isMulti && multiStageRegKeys.has(r.registration_id)) {
+          return false;
         }
-      }
+        return true;
+      })
+      .map((r) => {
+        const comp = r.competitions as any;
+        const reg = r.registrations as any;
+        const part = reg?.participants as any;
 
-      return {
-        id: r.id,
-        registrationNumber: part?.registration_number || `REG-${r.id.slice(0, 6)}`,
-        participantName: reg?.team_name || part?.full_name || "Peserta",
-        institution: part?.institution || "Umum",
-        competitionName: comp?.name || "Lomba",
-        competitionSlug: comp?.slug,
-        weightedScore: Number(r.weighted_total) || 0,
-        status: (r.status as "draft" | "terkirim") || "draft",
-        submittedAt: formattedDate,
-      };
-    });
+        const isMulti =
+          roundTypesMap[comp?.id] === "multi_stage" ||
+          roundTypesMap[comp?.slug] === "multi_stage" ||
+          comp?.slug === "pidato" ||
+          comp?.name?.toLowerCase().includes("duta");
+
+        const dateStr = r.submitted_at || r.created_at;
+        let formattedDate = "-";
+        if (dateStr) {
+          try {
+            const d = new Date(dateStr);
+            formattedDate =
+              new Intl.DateTimeFormat("id-ID", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }).format(d) + " WIB";
+          } catch {
+            formattedDate = dateStr;
+          }
+        }
+
+        return {
+          id: r.id,
+          registrationNumber: part?.registration_number || `REG-${r.id.slice(0, 6)}`,
+          participantName: reg?.team_name || part?.full_name || "Peserta",
+          institution: part?.institution || "Umum",
+          competitionName: comp?.name || "Lomba",
+          competitionSlug: comp?.slug,
+          roundType: (isMulti ? "multi_stage" : "single_round") as
+            | "single_round"
+            | "multi_stage",
+          stageTitle: isMulti ? "Tahap Penilaian" : "Babak Tunggal",
+          weightedScore: Number(r.weighted_total) || 0,
+          status: (r.status as "draft" | "terkirim") || "draft",
+          submittedAt: formattedDate,
+          rawDate: dateStr,
+        };
+      });
+
+    // Gabungkan dan urutkan berdasarkan waktu kirim / tanggal terbaru
+    const combinedHistory = [...multiStageHistoryItems, ...singleRoundHistoryItems].sort(
+      (a, b) => {
+        const timeA = a.rawDate ? new Date(a.rawDate).getTime() : 0;
+        const timeB = b.rawDate ? new Date(b.rawDate).getTime() : 0;
+        return timeB - timeA;
+      }
+    );
+
+    const history: EvaluationHistoryItem[] = combinedHistory.map(
+      ({ rawDate, ...rest }) => rest
+    );
 
     return {
       success: true,
@@ -717,6 +1061,8 @@ export interface JudgeRosterParticipant {
   stageStatus?: "terdaftar" | "menunggu" | "lolos" | "tidak_lolos";
   stageStatusLabel?: string;
   stageScore?: number | null;
+  activeStageId?: string;
+  activeStageOrder?: number;
   activeStageName?: string;
 }
 
@@ -933,17 +1279,31 @@ export async function getJudgeCompetitionRoster(
         (registrations || []).map((r) => [(r.participant as any)?.registration_number, r])
       );
 
+      // Ambil penilaian tahapan dari event_settings
+      const stageAssessmentsMap = await getStageAssessmentsMap();
+
       const stageRosterParticipants: JudgeRosterParticipant[] = eligibleStageParticipants.map((p, index) => {
         const matchedReg =
           regMapByPartId.get(p.participantId) || regMapByRegNum.get(p.registrationNumber);
         const registrationId = matchedReg?.id || p.participantId;
-        const myAssessment = assessments.find((a) => a.registration_id === registrationId);
+
+        // Cari penilaian khusus tahap aktif ini
+        const stageRecordId = `${registrationId}_${targetJudgeId}_${activeStage.id}`;
+        const myStageAssessment = stageAssessmentsMap[stageRecordId];
 
         let assessStatus: "draft" | "terkirim" | "final" | "belum_dinilai" = "belum_dinilai";
-        if (myAssessment?.status === "terkirim" || myAssessment?.status === "final") {
-          assessStatus = "terkirim";
-        } else if (myAssessment?.status === "draft") {
-          assessStatus = "draft";
+        let assessScore: number | null = null;
+
+        if (myStageAssessment) {
+          assessStatus = myStageAssessment.status === "final" ? "terkirim" : myStageAssessment.status;
+          assessScore = Number(myStageAssessment.weightedTotal);
+        } else {
+          // Fallback ke tabel assessments jika belum ada record di stage_assessments
+          const fallbackAssess = assessments.find((a) => a.registration_id === registrationId);
+          if (fallbackAssess) {
+            assessStatus = fallbackAssess.status === "final" ? "terkirim" : fallbackAssess.status;
+            assessScore = fallbackAssess.weighted_total ? Number(fallbackAssess.weighted_total) : null;
+          }
         }
 
         const stageProg = p.progress[activeStage.id];
@@ -964,7 +1324,7 @@ export async function getJudgeCompetitionRoster(
           teamName: matchedReg?.team_name || null,
           institution: p.institution || "Umum",
           status: assessStatus,
-          weightedScore: myAssessment?.weighted_total ? Number(myAssessment.weighted_total) : null,
+          weightedScore: assessScore,
           performanceOrder: matchedReg?.performance_order || null,
           members: ((matchedReg as any)?.registration_members || []).map((m: any) => ({
             id: m.id,
@@ -974,7 +1334,9 @@ export async function getJudgeCompetitionRoster(
           })),
           stageStatus: rawStageStatus as "terdaftar" | "menunggu" | "lolos" | "tidak_lolos",
           stageStatusLabel,
-          stageScore: stageProg?.score ?? null,
+          stageScore: assessScore ?? stageProg?.score ?? null,
+          activeStageId: activeStage.id,
+          activeStageOrder: activeStage.stageOrder,
           activeStageName: activeStage.title,
         };
       });
@@ -1080,8 +1442,16 @@ export interface ParticipantGradingSheetResult {
     slug: string;
     category: string;
     type?: string;
+    roundType?: "single_round" | "multi_stage";
     stageName?: string | null;
     status?: string;
+    stage?: {
+      id: string;
+      stageOrder: number;
+      title: string;
+      requiresJudge: boolean;
+      status: string;
+    } | null;
   };
   criteria: GradingCriterionItem[];
   existingScores: Record<string, number>;
@@ -1093,7 +1463,8 @@ export interface ParticipantGradingSheetResult {
 }
 
 export async function getParticipantGradingSheet(
-  registrationId: string
+  registrationId: string,
+  stageId?: string
 ): Promise<ParticipantGradingSheetResult> {
   try {
     const adminSupabase = createAdminClient();
@@ -1186,13 +1557,53 @@ export async function getParticipantGradingSheet(
       }
     }
 
+    // Cek model babak lomba: single_round vs multi_stage
+    const roundTypesMap = await getCompetitionRoundTypesMap();
+    const roundType: "single_round" | "multi_stage" =
+      roundTypesMap[comp.id] ||
+      roundTypesMap[comp.slug] ||
+      ((comp.slug === "pidato" || comp.name?.toLowerCase().includes("duta"))
+        ? "multi_stage"
+        : "single_round");
+
+    let targetStage: any = null;
+    if (roundType === "multi_stage") {
+      const stagesRes = await getCompetitionStages(comp.slug);
+      const stages = stagesRes.stages || [];
+      if (stageId) {
+        targetStage = stages.find((s) => s.id === stageId) || null;
+      }
+      if (!targetStage) {
+        targetStage =
+          stages.find((s) => s.status === "active" && s.requiresJudge !== false) ||
+          stages.find((s) => s.status === "active") ||
+          stages[0] ||
+          null;
+      }
+    }
+
     // 4. Ambil penilaian yang sudah ada dari juri ini
     const existingScores: Record<string, number> = {};
     const existingComments: Record<string, string> = {};
     let existingNotes = "";
     let assessmentStatus: "draft" | "terkirim" | "final" | "belum_dinilai" = "belum_dinilai";
 
-    if (targetJudgeId) {
+    if (roundType === "multi_stage" && targetStage) {
+      // Ambil penilaian khusus tahap dari stage_assessments di event_settings
+      const stageAssessmentsMap = await getStageAssessmentsMap();
+      const stageRecordId = `${registrationId}_${targetJudgeId}_${targetStage.id}`;
+      const stageAssess = stageAssessmentsMap[stageRecordId];
+
+      if (stageAssess) {
+        assessmentStatus = (stageAssess.status === "final" ? "terkirim" : stageAssess.status) as any;
+        existingNotes = stageAssess.notes || "";
+        (stageAssess.scores || []).forEach((s) => {
+          existingScores[s.criterionId] = Number(s.score);
+          if (s.comment) existingComments[s.criterionId] = s.comment;
+        });
+      }
+    } else if (targetJudgeId) {
+      // Single round: ambil dari tabel assessments Supabase
       const { data: existingAssessment } = await adminSupabase
         .from("assessments")
         .select("id, status, weighted_total, notes")
@@ -1244,8 +1655,18 @@ export async function getParticipantGradingSheet(
         slug: comp.slug,
         category: comp.type === "kelompok" ? "Kelompok" : "Individu",
         type: comp.type,
-        stageName: comp.theme_link || "Panggung Utama",
+        roundType,
+        stageName: targetStage?.title || comp.theme_link || "Panggung Utama",
         status: comp.status || "berlangsung",
+        stage: targetStage
+          ? {
+              id: targetStage.id,
+              stageOrder: targetStage.stageOrder,
+              title: targetStage.title,
+              requiresJudge: targetStage.requiresJudge ?? true,
+              status: targetStage.status,
+            }
+          : null,
       },
       criteria,
       existingScores,
