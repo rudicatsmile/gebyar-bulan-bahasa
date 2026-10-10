@@ -59,6 +59,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { QRCodeCard } from "@/components/qrcode/QRCodeGenerator";
+import { createClient } from "@/lib/supabase/client";
 
 export default function DashboardKelolaStandPage() {
   const [stands, setStands] = React.useState<AdminStandItem[]>([]);
@@ -78,6 +79,7 @@ export default function DashboardKelolaStandPage() {
   } | null>(null);
   const [recipientsDialogOpen, setRecipientsDialogOpen] = React.useState(false);
   const [isResettingRecipients, setIsResettingRecipients] = React.useState(false);
+  const [isRealtimeConnected, setIsRealtimeConnected] = React.useState(true);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -104,48 +106,128 @@ export default function DashboardKelolaStandPage() {
   const [isActive, setIsActive] = React.useState(true);
 
   // Load stands from database
-  const loadStands = React.useCallback(async () => {
+  const loadStands = React.useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const res = await getAdminStands();
       if (res.success) {
         setStands(res.stands);
-      } else {
+      } else if (showLoading) {
         setFeedback({
           type: "error",
           message: res.error || "Gagal memuat data stand dari database",
         });
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Terjadi kesalahan saat memuat data";
-      setFeedback({ type: "error", message });
+      if (showLoading) {
+        const message = err instanceof Error ? err.message : "Terjadi kesalahan saat memuat data";
+        setFeedback({ type: "error", message });
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
   // Load Special Reward Config & Recipients
-  const loadRewardStatus = React.useCallback(async () => {
+  const loadRewardStatus = React.useCallback(async (showLoading = true) => {
     try {
-      setRewardLoading(true);
+      if (showLoading) setRewardLoading(true);
       const res = await getStandSpecialRewardStatus();
       if (res.success && res.data) {
         setRewardStatus(res.data);
-        setRewardEnabled(res.data.config.enabled);
-        setRewardQuota(res.data.config.quota);
-        setSelectedRewardId(res.data.config.rewardId || "");
+        if (showLoading) {
+          setRewardEnabled(res.data.config.enabled);
+          setRewardQuota(res.data.config.quota);
+          setSelectedRewardId(res.data.config.rewardId || "");
+        }
       }
     } catch (err) {
       console.error("Gagal load status reward khusus:", err);
     } finally {
-      setRewardLoading(false);
+      if (showLoading) setRewardLoading(false);
     }
   }, []);
 
+  // Initial load
   React.useEffect(() => {
-    loadStands();
-    loadRewardStatus();
+    loadStands(true);
+    loadRewardStatus(true);
   }, [loadStands, loadRewardStatus]);
+
+  // Listener Realtime untuk Status Stand, Nilai Kuota, & Penerima Reward Khusus
+  React.useEffect(() => {
+    let isMounted = true;
+    const supabase = createClient();
+
+    const handleRealtimeUpdate = () => {
+      if (!isMounted) return;
+      loadRewardStatus(false);
+      loadStands(false);
+    };
+
+    // 1. Channel Supabase Realtime (Broadcast + Postgres CDC)
+    const channel = supabase
+      .channel("stand-challenge-channel")
+      .on("broadcast", { event: "stand_updated" }, () => {
+        handleRealtimeUpdate();
+      })
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "stands" },
+        () => {
+          handleRealtimeUpdate();
+        }
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "event_settings" },
+        () => {
+          handleRealtimeUpdate();
+        }
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "rewards" },
+        () => {
+          handleRealtimeUpdate();
+        }
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "point_transactions" },
+        () => {
+          handleRealtimeUpdate();
+        }
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "reward_redemptions" },
+        () => {
+          handleRealtimeUpdate();
+        }
+      )
+      .subscribe((status) => {
+        if (!isMounted) return;
+        if (status === "SUBSCRIBED") {
+          setIsRealtimeConnected(true);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setIsRealtimeConnected(false);
+        }
+      });
+
+    // 2. Polling cadangan (setiap 4 detik) saat tab browser aktif untuk ketahanan koneksi
+    const pollInterval = setInterval(() => {
+      if (isMounted && typeof document !== "undefined" && document.visibilityState === "visible") {
+        handleRealtimeUpdate();
+      }
+    }, 4000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
+  }, [loadRewardStatus, loadStands]);
 
   // Handle Save Special Reward Config
   const handleSaveRewardConfig = async (e: React.FormEvent) => {
@@ -415,11 +497,17 @@ export default function DashboardKelolaStandPage() {
                     {rewardEnabled ? "Aktif" : "Nonaktif"}
                   </Badge>
                   <Badge variant="default" className="text-[10px] font-mono border border-accent/40 text-accent">
-                    Batas Kuota: {rewardQuota} Peserta
+                    Batas Kuota: {rewardStatus?.config.quota ?? rewardQuota} Peserta
+                  </Badge>
+                  <Badge
+                    variant={isRealtimeConnected ? "success" : "warning"}
+                    className="text-[10px] gap-1 px-2 py-0.5 font-medium"
+                  >
+                    {isRealtimeConnected ? "Realtime Aktif" : "Sinkronisasi Aktif"}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
-                  Peserta yang berhasil memindai seluruh <strong>{rewardStatus?.totalActiveStands || 8} stand pameran aktif</strong> berhak memperoleh reward khusus otomatis. Sistem membatasi hanya untuk <strong>{rewardQuota} peserta pertama</strong> (kuota dinamis), dan peserta ke-{rewardQuota + 1} dan seterusnya akan menerima notifikasi bahwa kuota hadiah khusus telah habis.
+                  Peserta yang berhasil memindai seluruh <strong>{rewardStatus?.totalActiveStands || 8} stand pameran aktif</strong> berhak memperoleh reward khusus otomatis. Sistem membatasi hanya untuk <strong>{rewardStatus?.config.quota ?? rewardQuota} peserta pertama</strong> (kuota dinamis), dan peserta ke-{(rewardStatus?.config.quota ?? rewardQuota) + 1} dan seterusnya akan menerima notifikasi bahwa kuota hadiah khusus telah habis.
                 </p>
               </div>
             </div>
@@ -448,13 +536,13 @@ export default function DashboardKelolaStandPage() {
             <div className="p-3 rounded-xl bg-muted/40 border border-border/50">
               <span className="text-[11px] text-muted-foreground block">Kuota Diberikan</span>
               <span className="font-mono text-base font-bold text-accent mt-0.5 block">
-                {rewardStatus?.grantedCount || 0} / {rewardQuota} Peserta
+                {rewardStatus?.grantedCount || 0} / {rewardStatus?.config.quota ?? rewardQuota} Peserta
               </span>
             </div>
             <div className="p-3 rounded-xl bg-muted/40 border border-border/50">
               <span className="text-[11px] text-muted-foreground block">Sisa Kuota Tersedia</span>
               <span className="font-mono text-base font-bold text-emerald-500 mt-0.5 block">
-                {rewardStatus?.remainingQuota ?? rewardQuota} Kursi
+                {rewardStatus?.remainingQuota ?? (rewardStatus?.config.quota ?? rewardQuota)} Kursi
               </span>
             </div>
             <div className="p-3 rounded-xl bg-muted/40 border border-border/50">

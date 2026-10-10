@@ -48,6 +48,21 @@ const DEFAULT_CONFIG: StandSpecialRewardConfig = {
   description: "Diberikan khusus untuk 50 peserta pertama yang berhasil mengunjungi seluruh stand pameran budaya.",
 };
 
+async function broadcastStandUpdate(action: string, payload?: Record<string, any>) {
+  try {
+    const supabase = createAdminClient();
+    const channel = supabase.channel("stand-challenge-channel");
+    await channel.send({
+      type: "broadcast",
+      event: "stand_updated",
+      payload: { action, ...payload, timestamp: new Date().toISOString() },
+    });
+    supabase.removeChannel(channel);
+  } catch (err) {
+    console.warn("Realtime broadcast stand error:", err);
+  }
+}
+
 /**
  * Mengambil status lengkap konfigurasi, kuota, stand aktif, dan daftar penerima reward khusus.
  */
@@ -198,6 +213,8 @@ export async function updateStandSpecialRewardConfig(payload: {
 
     if (error) throw error;
 
+    await broadcastStandUpdate("config_updated", { quota: updated.quota, enabled: updated.enabled });
+
     revalidatePath("/dashboard/challenge/stand");
     revalidatePath("/dashboard/challenge/reward");
     revalidatePath("/peserta/scan");
@@ -227,6 +244,8 @@ export async function resetStandSpecialRewardRecipients(): Promise<{
     });
 
     if (error) throw error;
+
+    await broadcastStandUpdate("recipients_reset");
 
     revalidatePath("/dashboard/challenge/stand");
     revalidatePath("/peserta/scan");
@@ -434,11 +453,16 @@ export async function checkAndProcessStandCompletionReward(
 
     recipients.push(newRecipient);
 
-    // Simpan ke event_settings
     await supabase.from("event_settings").upsert({
       key: "stand_special_reward_recipients",
       value: recipients as any,
       updated_at: new Date().toISOString(),
+    });
+
+    await broadcastStandUpdate("recipient_added", {
+      participantId,
+      status: "diterima",
+      rank,
     });
 
     revalidatePath("/dashboard/challenge/stand");
@@ -482,6 +506,12 @@ export async function checkAndProcessStandCompletionReward(
       key: "stand_special_reward_recipients",
       value: recipients as any,
       updated_at: new Date().toISOString(),
+    });
+
+    await broadcastStandUpdate("recipient_added", {
+      participantId,
+      status: "kuota_habis",
+      rank: completionRank,
     });
 
     revalidatePath("/dashboard/challenge/stand");

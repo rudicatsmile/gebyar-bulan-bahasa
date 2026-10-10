@@ -179,6 +179,8 @@ export async function upsertStand(data: StandInput) {
       if (error) throw error;
     }
 
+    await broadcastStandUpdate("stand_saved", parsed.data.id);
+
     revalidatePath("/dashboard/challenge/stand");
     revalidatePath("/dashboard/challenge");
     revalidatePath("/peserta/scan");
@@ -204,6 +206,8 @@ export async function deleteStand(standId: string) {
 
     if (error) throw error;
 
+    await broadcastStandUpdate("stand_deleted", standId);
+
     revalidatePath("/dashboard/challenge/stand");
     revalidatePath("/dashboard/challenge");
     revalidatePath("/peserta/scan");
@@ -225,6 +229,8 @@ export async function toggleStandStatus(standId: string, isActive: boolean) {
 
     if (error) throw error;
 
+    await broadcastStandUpdate("stand_toggled", standId);
+
     revalidatePath("/dashboard/challenge/stand");
     revalidatePath("/dashboard/challenge");
     revalidatePath("/peserta/scan");
@@ -233,5 +239,20 @@ export async function toggleStandStatus(standId: string, isActive: boolean) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal mengubah status stand.";
     return { success: false, error: message };
+  }
+}
+
+async function broadcastStandUpdate(action: string, standId?: string) {
+  try {
+    const supabase = createAdminClient();
+    const channel = supabase.channel("stand-challenge-channel");
+    await channel.send({
+      type: "broadcast",
+      event: "stand_updated",
+      payload: { action, standId, timestamp: new Date().toISOString() },
+    });
+    supabase.removeChannel(channel);
+  } catch (err) {
+    console.warn("Realtime broadcast stand error:", err);
   }
 }
