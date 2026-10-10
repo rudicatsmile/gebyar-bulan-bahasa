@@ -11,6 +11,10 @@ import {
 } from "@/app/actions/challenges";
 import { checkParticipantPuzzleAttempt } from "@/app/actions/puzzle";
 import { checkParticipantTwibbonStatus } from "@/app/actions/twibbon";
+import {
+  getActiveJigsawPuzzle,
+  getParticipantJigsawStatus,
+} from "@/app/actions/kepingan-puzzle";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -103,9 +107,42 @@ export default function PesertaChallengeListPage() {
     hasApproved: boolean;
     pointsAwarded: boolean;
   } | null>(null);
+  const [jigsawStatus, setJigsawStatus] = React.useState<{
+    isActive: boolean;
+    hasCompleted: boolean;
+    points: number;
+    title: string;
+  } | null>(null);
 
   // Periksa apakah peserta sudah pernah menyelesaikan challenge puzzle
   React.useEffect(() => {
+    // Periksa status Game Kepingan Puzzle
+    getActiveJigsawPuzzle().then((res) => {
+      if (res.success && res.puzzle && res.puzzle.isActive) {
+        const pz = res.puzzle;
+        const participantRowId = participant?.participantRowId || participant?.id;
+        if (participantRowId) {
+          getParticipantJigsawStatus(participantRowId, pz.id).then((status) => {
+            setJigsawStatus({
+              isActive: true,
+              hasCompleted: status.hasCompleted,
+              points: status.attempt?.score ?? pz.pointsReward,
+              title: pz.title,
+            });
+          });
+        } else {
+          setJigsawStatus({
+            isActive: true,
+            hasCompleted: false,
+            points: pz.pointsReward,
+            title: pz.title,
+          });
+        }
+      } else {
+        setJigsawStatus(null);
+      }
+    });
+
     if (!participant?.id) return;
     checkParticipantPuzzleAttempt(participant.id)
       .then((res) => {
@@ -130,7 +167,7 @@ export default function PesertaChallengeListPage() {
       .catch(() => {
         setTwibbonStatus({ hasSubmitted: false, hasApproved: false, pointsAwarded: false });
       });
-  }, [participant?.id]);
+  }, [participant?.id, participant?.participantRowId]);
 
   // challenge yang tampil di sini bersumber dari tabel `challenges` yang sama
   // dengan halaman admin /dashboard/challenge
@@ -243,6 +280,35 @@ export default function PesertaChallengeListPage() {
                   ) : null
                 }
               />
+              {jigsawStatus?.isActive && (
+                <ChallengeItem
+                  title={`Game Kepingan Puzzle: ${jigsawStatus.title}`}
+                  meta={
+                    jigsawStatus.hasCompleted
+                      ? `Perolehan Skor: +${jigsawStatus.points} Poin (Puzzle Selesai)`
+                      : `+${jigsawStatus.points} poin saat seluruh kepingan tersusun`
+                  }
+                  href="/peserta/challenge/kepingan-puzzle"
+                  actionLabel={
+                    jigsawStatus.hasCompleted
+                      ? "Lihat Hasil Mahakarya"
+                      : "Mulai Susun Kepingan"
+                  }
+                  icon={jigsawStatus.hasCompleted ? CheckCircle2 : Puzzle}
+                  variant={jigsawStatus.hasCompleted ? "outline" : "accent"}
+                  badge={
+                    jigsawStatus.hasCompleted ? (
+                      <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                        Sudah Selesai
+                      </Badge>
+                    ) : (
+                      <Badge variant="gold" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                        Game Baru
+                      </Badge>
+                    )
+                  }
+                />
+              )}
               <ChallengeItem
                 title="Challenge Puzzle: Cocokkan Baju Daerah"
                 meta={

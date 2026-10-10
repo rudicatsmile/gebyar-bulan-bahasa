@@ -44,6 +44,7 @@ import {
   Search,
   MoreHorizontal,
   ShieldAlert,
+  Puzzle,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -80,6 +81,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Broadcast Darurat", href: "/dashboard/broadcast", icon: Radio },
   { title: "CHALLENGE & STAND", href: "#", icon: Sparkles, isHeader: true },
   { title: "Daftar Challenge", href: "/dashboard/challenge", icon: Sparkles },
+  { title: "Kepingan Puzzle", href: "/dashboard/challenge/kepingan-puzzle", icon: Puzzle },
   { title: "Kelola 8 Stand", href: "/dashboard/challenge/stand", icon: Store },
   { title: "Verifikasi Bukti", href: "/dashboard/challenge/verifikasi", icon: CheckCircle2 },
   { title: "Penyesuaian Poin", href: "/dashboard/challenge/poin", icon: Coins },

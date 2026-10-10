@@ -65,6 +65,22 @@ interface SpecialChallengeItem {
 
 const SPECIAL_CHALLENGES: SpecialChallengeItem[] = [
   {
+    id: "sp-kepingan-puzzle",
+    title: "Game Kepingan Puzzle",
+    subtitle: "Menyusun Potongan Gambar Mahakarya",
+    description:
+      "Tantangan visual interaktif menyusun kembali kepingan gambar puzzle (4, 9, 16, 25 keping). Atur gambar puzzle, jumlah kepingan, batas waktu, dan poin reward untuk peserta.",
+    type: "Game Kepingan",
+    pointReward: 100,
+    badge: "Kreator Budaya",
+    href: "/dashboard/challenge/kepingan-puzzle",
+    icon: Puzzle,
+    borderHover:
+      "border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card hover:border-amber-500",
+    btnLabel: "Kelola Gambar & Poin",
+    tag: "KEPINGAN PUZZLE",
+  },
+  {
     id: "sp-puzzle",
     title: "Puzzle Baju Daerah",
     subtitle: "Mencocokkan Busana Adat Nusantara",

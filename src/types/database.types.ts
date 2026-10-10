@@ -1422,6 +1422,84 @@ export interface Database {
         };
         Relationships: [];
       };
+      jigsaw_puzzles: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          image_url: string;
+          grid_size: number;
+          pieces_count: number;
+          points_reward: number;
+          time_limit_seconds: number;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title?: string;
+          description?: string | null;
+          image_url: string;
+          grid_size?: number;
+          pieces_count?: number;
+          points_reward?: number;
+          time_limit_seconds?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string | null;
+          image_url?: string;
+          grid_size?: number;
+          pieces_count?: number;
+          points_reward?: number;
+          time_limit_seconds?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      jigsaw_attempts: {
+        Row: {
+          id: string;
+          puzzle_id: string;
+          participant_id: string;
+          score: number;
+          time_seconds: number | null;
+          moves_count: number;
+          is_completed: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          puzzle_id: string;
+          participant_id: string;
+          score?: number;
+          time_seconds?: number | null;
+          moves_count?: number;
+          is_completed?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          puzzle_id?: string;
+          participant_id?: string;
+          score?: number;
+          time_seconds?: number | null;
+          moves_count?: number;
+          is_completed?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       current_role: {
