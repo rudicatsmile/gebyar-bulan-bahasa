@@ -46,7 +46,7 @@ export function LombaClient({ initialCompetitions }: LombaClientProps) {
               Katalog Perlombaan Resmi
             </Badge>
             <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground">
-              8 Cabang Lomba Kebudayaan & Sastra
+              {initialCompetitions.length} Cabang Lomba Kebudayaan & Sastra
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
               Jelajahi petunjuk teknis, susunan dewan juri ahli, kriteria penilaian berbobot 100%, serta papan skor peserta secara terbuka dan transparan.
@@ -230,7 +230,7 @@ export function LombaClient({ initialCompetitions }: LombaClientProps) {
         </div>
       </main>
 
-      <PublicFooter />
+      <PublicFooter competitionsCount={initialCompetitions.length} />
     </div>
   );
 }

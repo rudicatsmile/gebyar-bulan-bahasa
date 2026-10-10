@@ -1,12 +1,42 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Layers } from "lucide-react";
 import { useEventSettings } from "@/lib/hooks/useEventSettings";
 import { renderBrandText } from "@/components/ui/BrandText";
+import { COMPETITIONS } from "@/lib/dummy-data";
+import { getCompetitions } from "@/lib/supabase/queries";
 
-export function PublicFooter() {
+interface PublicFooterProps {
+  competitionsCount?: number;
+}
+
+export function PublicFooter({ competitionsCount }: PublicFooterProps = {}) {
   const { settings } = useEventSettings();
+  const [count, setCount] = useState<number>(competitionsCount ?? COMPETITIONS.length);
+
+  useEffect(() => {
+    if (competitionsCount !== undefined) {
+      setCount(competitionsCount);
+      return;
+    }
+
+    let isMounted = true;
+    getCompetitions()
+      .then((data) => {
+        if (isMounted && data && data.length > 0) {
+          setCount(data.length);
+        }
+      })
+      .catch(() => {
+        // Fallback to initial count
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [competitionsCount]);
 
   return (
     <footer className="border-t border-border bg-card mt-auto">
@@ -40,7 +70,7 @@ export function PublicFooter() {
             <ul className="space-y-2 text-xs text-muted-foreground">
               <li>
                 <Link href="/lomba" className="hover:text-foreground transition-colors">
-                  Katalog 8 Lomba
+                  Katalog {count} Lomba
                 </Link>
               </li>
               <li>

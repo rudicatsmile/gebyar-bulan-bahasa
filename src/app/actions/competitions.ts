@@ -195,11 +195,14 @@ export async function getJudgeAssignmentData(): Promise<{
     // 1. Ambil juri dari profiles
     const { data: dbJudges, error: errJudges } = await supabase
       .from("profiles")
-      .select("id, full_name, email, institution, nickname, avatar_url")
+      .select("id, full_name, email, institution, nickname, avatar_url, is_active")
       .eq("role", "juri")
       .order("created_at", { ascending: true });
 
     if (errJudges) throw errJudges;
+
+    // Filter hanya juri aktif (is_active !== false)
+    const activeJudges = (dbJudges || []).filter((j: any) => j.is_active !== false);
 
     // 2. Ambil kompetisi dari competitions
     const { data: dbCompetitions, error: errComps } = await supabase
@@ -225,7 +228,7 @@ export async function getJudgeAssignmentData(): Promise<{
 
     return {
       success: true,
-      judges: (dbJudges || []).map((j) => ({
+      judges: activeJudges.map((j) => ({
         id: j.id,
         fullName: j.full_name || "Dewan Juri",
         email: j.email || "",
@@ -487,6 +490,129 @@ export async function updateJudgeAccount(data: {
     return {
       success: false,
       error: err instanceof Error ? err.message : "Gagal memperbarui data dewan juri.",
+    };
+  }
+}
+
+export async function deleteJudgeAccount(judgeId: string): Promise<{
+  success: boolean;
+  softDeleted?: boolean;
+  message?: string;
+  error?: string;
+}> {
+  if (!judgeId) {
+    return { success: false, error: "ID dewan juri tidak ditemukan." };
+  }
+
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Ambil data profil juri
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, role")
+      .eq("id", judgeId)
+      .maybeSingle();
+
+    if (profileErr || !profile) {
+      return { success: false, error: "Data dewan juri tidak ditemukan." };
+    }
+
+    if (profile.role !== "juri") {
+      return {
+        success: false,
+        error: `Pengguna ini memiliki peran "${profile.role}", bukan juri. Hapus atau ubah peran melalui menu Pengguna.`,
+      };
+    }
+
+    // 2. Cek apakah juri memiliki riwayat penilaian (assessments)
+    const { count: assessCount, error: countErr } = await supabase
+      .from("assessments")
+      .select("id", { count: "exact", head: true })
+      .eq("judge_id", judgeId);
+
+    if (countErr) {
+      console.warn("Pengecekan riwayat penilaian juri mengalami kendala:", countErr);
+    }
+
+    const hasAssessments = (assessCount ?? 0) > 0;
+
+    // 3. Bersihkan penugasan aktif di competition_judges agar juri tidak lagi ditugaskan ke lomba
+    const { error: assignmentCleanupErr } = await supabase
+      .from("competition_judges")
+      .delete()
+      .eq("judge_id", judgeId);
+
+    if (assignmentCleanupErr) {
+      console.warn("Notice: Gagal membersihkan competition_judges:", assignmentCleanupErr);
+    }
+
+    // 4. Jika juri SUDAH memiliki penilaian di database:
+    // Lakukan SOFT DELETE agar relasi penilaian dan rekap skor peserta tetap utuh & sah!
+    if (hasAssessments) {
+      const { error: softDeleteErr } = await supabase
+        .from("profiles")
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", judgeId);
+
+      if (softDeleteErr) {
+        return { success: false, error: softDeleteErr.message };
+      }
+
+      // Sinkronkan ke auth user_metadata
+      try {
+        await supabase.auth.admin.updateUserById(judgeId, {
+          user_metadata: { is_active: false },
+        });
+      } catch (e) {
+        console.warn("Notice: Gagal update auth metadata saat soft delete juri:", e);
+      }
+
+      revalidatePath("/dashboard/juri");
+      revalidatePath("/dashboard/juri/penugasan");
+      revalidatePath("/dashboard/pengguna");
+
+      return {
+        success: true,
+        softDeleted: true,
+        message: `Dewan Juri "${profile.full_name}" memiliki riwayat ${assessCount} penilaian lomba. Akun berhasil dinonaktifkan (Soft Delete) dan penugasan dicabut untuk melindungi keabsahan rekap skor lomba.`,
+      };
+    }
+
+    // 5. Jika juri BELUM pernah menilai peserta (hasAssessments === false):
+    // Lakukan HARD DELETE bersih dari database profiles & Supabase Auth.
+    const { error: deleteProfileErr } = await supabase
+      .from("profiles")
+      .delete()
+      .eq("id", judgeId);
+
+    if (deleteProfileErr) {
+      return { success: false, error: deleteProfileErr.message };
+    }
+
+    try {
+      await supabase.auth.admin.deleteUser(judgeId);
+    } catch (authErr) {
+      console.warn("Notice: Auth user gagal dihapus atau sudah terhapus:", authErr);
+    }
+
+    revalidatePath("/dashboard/juri");
+    revalidatePath("/dashboard/juri/penugasan");
+    revalidatePath("/dashboard/pengguna");
+
+    return {
+      success: true,
+      softDeleted: false,
+      message: `Dewan Juri "${profile.full_name}" berhasil dihapus secara permanen.`,
+    };
+  } catch (err: unknown) {
+    console.error("Error deleteJudgeAccount:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Terjadi kesalahan saat menghapus dewan juri.",
     };
   }
 }

@@ -17,8 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Judge } from "@/lib/dummy-data";
-import { UserCheck, UserPlus, ShieldCheck, Mail, Sliders, Loader2, Pencil, Upload, X, ImageIcon, Camera } from "lucide-react";
-import { getJudgeAssignmentData, createJudgeAccount, updateJudgeAccount } from "@/app/actions/competitions";
+import { UserCheck, UserPlus, ShieldCheck, Mail, Sliders, Loader2, Pencil, Upload, X, ImageIcon, Camera, Trash2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { getJudgeAssignmentData, createJudgeAccount, updateJudgeAccount, deleteJudgeAccount } from "@/app/actions/competitions";
 import { uploadJudgePhotoAction } from "@/app/actions/settings";
 
 /** Sub-komponen: area upload foto juri */
@@ -190,6 +190,11 @@ export default function DashboardJuriPage() {
   const [editAvatarUrl, setEditAvatarUrl] = React.useState("");
   const [isUpdating, setIsUpdating] = React.useState(false);
 
+  // Delete states & feedback
+  const [deleteTarget, setDeleteTarget] = React.useState<Judge | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [feedback, setFeedback] = React.useState<{ type: "success" | "error"; message: string } | null>(null);
+
   const loadJudges = React.useCallback(async () => {
     try {
       setLoading(true);
@@ -302,6 +307,34 @@ export default function DashboardJuriPage() {
     }
   };
 
+  const handleDeleteJudge = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const res = await deleteJudgeAccount(deleteTarget.id);
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          message: res.message || `Dewan Juri "${deleteTarget.fullName}" berhasil dihapus.`,
+        });
+        setDeleteTarget(null);
+        await loadJudges();
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal menghapus data dewan juri.",
+        });
+      }
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Terjadi kesalahan saat menghapus juri.",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <DashboardLayout role="seksi_acara">
       <div className="space-y-6">
@@ -328,6 +361,32 @@ export default function DashboardJuriPage() {
             </Button>
           </div>
         </div>
+
+        {feedback && (
+          <div
+            className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+              feedback.type === "success"
+                ? "bg-success/10 border-success/30 text-success"
+                : "bg-danger/10 border-danger/30 text-danger"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {feedback.type === "success" ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+              )}
+              <span>{feedback.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFeedback(null)}
+              className="text-muted-foreground hover:text-foreground cursor-pointer p-1"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
 
         {justAdded && (
           <div className="p-3 rounded-xl border border-accent/30 bg-accent/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -406,7 +465,7 @@ export default function DashboardJuriPage() {
                         </Link>
                       )}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5 cursor-pointer" onClick={() => handleOpenEditDialog(j)}>
                         <Pencil className="h-3.5 w-3.5" />
                         <span>Edit</span>
@@ -414,6 +473,16 @@ export default function DashboardJuriPage() {
                       <Link href="/dashboard/juri/penugasan">
                         <Button variant="outline" size="sm" className="text-xs h-8">Atur Tugas</Button>
                       </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8 gap-1 cursor-pointer text-muted-foreground hover:text-danger hover:border-danger/50"
+                        onClick={() => setDeleteTarget(j)}
+                        title="Hapus data dewan juri"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Hapus</span>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -532,6 +601,16 @@ export default function DashboardJuriPage() {
                             Atur Tugas
                           </Button>
                         </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-8 gap-1.5 cursor-pointer text-muted-foreground hover:text-danger hover:border-danger/50"
+                          onClick={() => setDeleteTarget(j)}
+                          title="Hapus data dewan juri"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Hapus</span>
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -703,6 +782,89 @@ export default function DashboardJuriPage() {
               </Button>
             </DialogFooter>
           </form>
+        </Dialog>
+
+        {/* Modal: Konfirmasi Hapus Dewan Juri */}
+        <Dialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => {
+            if (!open && !isDeleting) setDeleteTarget(null);
+          }}
+        >
+          <div className="space-y-4">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-danger">
+                <AlertTriangle className="h-5 w-5" />
+                Konfirmasi Hapus Dewan Juri
+              </DialogTitle>
+              <DialogDescription>
+                Apakah Anda yakin ingin menghapus data dewan juri berikut?
+              </DialogDescription>
+            </DialogHeader>
+
+            {deleteTarget && (
+              <div className="space-y-3">
+                <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <strong className="text-sm text-foreground block">
+                      {deleteTarget.fullName}
+                    </strong>
+                    <Badge variant={deleteTarget.isChiefJudge ? "gold" : "default"} className="text-[10px]">
+                      {deleteTarget.isChiefJudge ? "JURI UTAMA" : "ANGGOTA JURI"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs font-mono text-muted-foreground">{deleteTarget.email}</p>
+                  <p className="text-xs text-foreground font-medium">{deleteTarget.expertise}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Penugasan: {deleteTarget.assignedCompetitionIds.length} cabang lomba
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg border border-accent/30 bg-accent/5 text-xs text-muted-foreground space-y-1.5">
+                  <p className="font-semibold text-accent">Perlindungan Relasi &amp; Integritas Penilaian:</p>
+                  <ul className="list-disc list-inside space-y-1 pl-1">
+                    <li>
+                      Seluruh penugasan pada cabang lomba akan otomatis <strong>dicabut</strong>.
+                    </li>
+                    <li>
+                      Jika juri <strong>belum pernah memberi penilaian</strong>, data akun akan <strong>dihapus permanen (Hard Delete)</strong>.
+                    </li>
+                    <li>
+                      Jika juri <strong>sudah memiliki riwayat penilaian</strong>, sistem akan melakukan <strong>Soft Delete (dinonaktifkan &amp; diarsipkan)</strong> untuk melindungi keabsahan lembar skor dan peringkat juara.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="text-xs cursor-pointer"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteJudge}
+                disabled={isDeleting}
+                className="text-xs cursor-pointer gap-1.5"
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                {isDeleting ? "Menghapus..." : "Ya, Hapus Juri"}
+              </Button>
+            </DialogFooter>
+          </div>
         </Dialog>
       </div>
     </DashboardLayout>

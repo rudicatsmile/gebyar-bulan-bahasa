@@ -382,7 +382,7 @@ export function HomeClient({
             <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
               <Link href="/lomba">
                 <Button size="default" className="text-xs sm:text-sm font-semibold gap-2 shadow-xs h-9 sm:h-10 px-3.5 sm:px-4">
-                  <span>Jelajahi 8 Lomba</span>
+                  <span>Jelajahi {competitions.length} Lomba</span>
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -473,7 +473,7 @@ export function HomeClient({
                 Katalog Perlombaan
               </span>
               <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">
-                8 Cabang Lomba Kebudayaan & Sastra
+                {competitions.length} Cabang Lomba Kebudayaan & Sastra
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground max-w-xl">
                 Setiap lomba dinilai secara digital oleh dewan juri ahli berlisensi menggunakan bobot kriteria terstandarisasi.
@@ -779,7 +779,7 @@ export function HomeClient({
         </section>
       </main>
 
-      <PublicFooter />
+      <PublicFooter competitionsCount={competitions.length} />
     </div>
   );
 }
