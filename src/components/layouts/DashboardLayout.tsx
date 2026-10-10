@@ -114,7 +114,7 @@ const MEDIA_NAV: NavItem[] = [
 const PESERTA_NAV: NavItem[] = [
   { title: "Beranda Peserta", href: "/peserta", icon: LayoutDashboard },
   { title: "Lomba", href: "/peserta/pendaftaran", icon: Trophy },
-  { title: "Challenge", href: "/peserta/challenge", icon: Sparkles },
+  { title: "Misi", href: "/peserta/challenge", icon: Sparkles },
   { title: "Riwayat Poin", href: "/peserta/riwayat-poin", icon: Coins },
   { title: "Katalog Reward", href: "/peserta/reward", icon: Gift },
   { title: "Twibbon Saya", href: "/peserta/twibbon", icon: Camera },

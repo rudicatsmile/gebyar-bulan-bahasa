@@ -222,12 +222,12 @@ export default function PesertaChallengeListPage() {
                 Kerjakan misi, kumpulkan poin.
               </p>
             </div>
-            <Link href="/peserta/scan" className="shrink-0">
+            {/* <Link href="/peserta/scan" className="shrink-0">
               <Button size="sm" variant="accent" className="h-10 px-3 text-xs gap-1.5">
                 <QrCode className="h-3.5 w-3.5" />
                 <span>Scan QR</span>
               </Button>
-            </Link>
+            </Link> */}
           </div>
         </div>
 
@@ -255,16 +255,16 @@ export default function PesertaChallengeListPage() {
                   twibbonStatus?.pointsAwarded
                     ? "+20 Poin Diperoleh (Disetujui)"
                     : twibbonStatus?.hasSubmitted
-                    ? "Menunggu verifikasi moderasi Media Center"
-                    : "+20 poin per unggahan foto (setelah disetujui)"
+                      ? "Menunggu verifikasi moderasi Media Center"
+                      : "+20 poin per unggahan foto (setelah disetujui)"
                 }
                 href={twibbonStatus?.hasSubmitted ? "/peserta/twibbon" : "/twibbon/unggah"}
                 actionLabel={
                   twibbonStatus?.pointsAwarded
                     ? "Lihat Twibbon Saya"
                     : twibbonStatus?.hasSubmitted
-                    ? "Cek Status Moderasi"
-                    : "Kirim Bukti Twibbon"
+                      ? "Cek Status Moderasi"
+                      : "Kirim Bukti Twibbon"
                 }
                 icon={twibbonStatus?.pointsAwarded ? CheckCircle2 : Camera}
                 variant={twibbonStatus?.pointsAwarded ? "outline" : "accent"}
@@ -309,7 +309,7 @@ export default function PesertaChallengeListPage() {
                   }
                 />
               )}
-              <ChallengeItem
+              {/* <ChallengeItem
                 title="Challenge Puzzle: Cocokkan Baju Daerah"
                 meta={
                   puzzleAttempt?.hasAttempted
@@ -331,9 +331,9 @@ export default function PesertaChallengeListPage() {
                     </Badge>
                   ) : null
                 }
-              />
+              /> */}
               <ChallengeItem
-                title="Challenge QR Huruf: Jelajah Aksara & Susun Kata"
+                title="Misi QR Huruf: Jelajah Aksara & Susun Kata"
                 meta="+100 poin bila kalimat tersusun"
                 href="/peserta/challenge/qr-huruf"
                 actionLabel="Mulai Berburu QR"
