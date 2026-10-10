@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -22,13 +23,29 @@ import {
   type TeamRegistrationRow,
   type GroupCompetitionItem,
 } from "@/app/actions/participants";
-import { UserPlus, Edit2, Trash2, Loader2, CheckCircle2, AlertCircle, Users } from "lucide-react";
+import { getActiveInstitutions, type InstitutionItem } from "@/app/actions/institutions";
+import { UserPlus, Edit2, Trash2, Loader2, CheckCircle2, AlertCircle, Users, Plus } from "lucide-react";
+
+interface TeamMemberInput {
+  name: string;
+  role: "ketua" | "anggota";
+  studentId: string;
+  institution: string;
+}
+
+function emptyMember(role: "ketua" | "anggota" = "anggota"): TeamMemberInput {
+  return { name: "", role, studentId: "", institution: "" };
+}
 
 export default function DashboardPendaftaranPage() {
   const [isMounted, setIsMounted] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [teams, setTeams] = React.useState<TeamRegistrationRow[]>([]);
   const [competitions, setCompetitions] = React.useState<GroupCompetitionItem[]>([]);
+
+  // Master Instansi
+  const [institutions, setInstitutions] = React.useState<InstitutionItem[]>([]);
+  const [loadingInstitutions, setLoadingInstitutions] = React.useState(true);
 
   // Notifikasi
   const [notification, setNotification] = React.useState<{
@@ -42,7 +59,7 @@ export default function DashboardPendaftaranPage() {
   const [teamName, setTeamName] = React.useState("");
   const [leaderName, setLeaderName] = React.useState("");
   const [institution, setInstitution] = React.useState("");
-  const [memberNames, setMemberNames] = React.useState("");
+  const [members, setMembers] = React.useState<TeamMemberInput[]>([emptyMember("anggota")]);
   const [isSubmittingAdd, setIsSubmittingAdd] = React.useState(false);
 
   // State Modal Edit
@@ -92,6 +109,16 @@ export default function DashboardPendaftaranPage() {
     loadData();
   }, [loadData]);
 
+  // Load Master Instansi Aktif
+  React.useEffect(() => {
+    getActiveInstitutions().then((res) => {
+      if (res.success && res.institutions.length > 0) {
+        setInstitutions(res.institutions);
+      }
+      setLoadingInstitutions(false);
+    });
+  }, []);
+
   // Auto-dismiss notification after 4 seconds
   React.useEffect(() => {
     if (!notification) return;
@@ -99,17 +126,55 @@ export default function DashboardPendaftaranPage() {
     return () => clearTimeout(timer);
   }, [notification]);
 
+  const resetAddForm = React.useCallback(() => {
+    setTeamName("");
+    setLeaderName("");
+    setInstitution("");
+    setMembers([emptyMember("anggota")]);
+  }, []);
+
+  const updateMember = (idx: number, patch: Partial<TeamMemberInput>) => {
+    setMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
+  };
+
+  const removeMember = (idx: number) => {
+    setMembers((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addMember = () => {
+    setMembers((prev) => [...prev, emptyMember("anggota")]);
+  };
+
   // Handle Tambah Tim Baru
   const handleRegisterTeam = async (e: React.FormEvent) => {
     e.preventDefault();
-    const members = memberNames
-      .split("\n")
-      .map((m) => m.trim())
-      .filter((m) => m.length > 0);
 
     const compIdToUse = selectedComp || (competitions[0]?.id ?? "");
     if (!compIdToUse) {
       alert("Pilih cabang lomba terlebih dahulu.");
+      return;
+    }
+
+    const compObj = competitions.find((c) => c.id === compIdToUse);
+    const minRequired = compObj?.minMembers ?? 2;
+    const maxAllowed = compObj?.maxMembers ?? 10;
+
+    const validMembers = members.filter((m) => m.name.trim().length > 0);
+    const totalTeamCount = 1 + validMembers.length; // 1 Ketua + Anggota
+
+    if (totalTeamCount < minRequired) {
+      alert(
+        `Cabang lomba "${compObj?.name || "Beregu"}" memerlukan minimal ${minRequired} orang (1 Ketua + ${
+          minRequired - 1
+        } Anggota).`
+      );
+      return;
+    }
+
+    if (totalTeamCount > maxAllowed) {
+      alert(
+        `Cabang lomba "${compObj?.name || "Beregu"}" maksimal beranggotakan ${maxAllowed} orang.`
+      );
       return;
     }
 
@@ -120,16 +185,19 @@ export default function DashboardPendaftaranPage() {
         teamName,
         leaderName,
         institution,
-        memberNames: members,
+        memberNames: validMembers.map((m) => m.name.trim()),
+        members: validMembers.map((m) => ({
+          name: m.name.trim(),
+          role: "anggota",
+          studentId: m.studentId.trim() || undefined,
+          institution: m.institution.trim() || institution.trim(),
+        })),
         status: "terverifikasi",
       });
 
       if (res.success) {
         setAddDialogOpen(false);
-        setTeamName("");
-        setLeaderName("");
-        setInstitution("");
-        setMemberNames("");
+        resetAddForm();
         setNotification({
           type: "success",
           message: `Rombongan tim "${teamName}" berhasil didaftarkan ke database!`,
@@ -251,6 +319,7 @@ export default function DashboardPendaftaranPage() {
               if (competitions.length > 0 && !selectedComp) {
                 setSelectedComp(competitions[0].id);
               }
+              resetAddForm();
               setAddDialogOpen(true);
             }}
             size="sm"
@@ -521,36 +590,155 @@ export default function DashboardPendaftaranPage() {
               required
             />
 
-            <Input
+            <Select
               label="Asal Sekolah / Universitas / Sanggar *"
-              placeholder="Contoh: Universitas Indonesia"
               value={institution}
               onChange={(e) => setInstitution(e.target.value)}
               required
-            />
+            >
+              <option value="">
+                {loadingInstitutions
+                  ? "-- Memuat daftar instansi... --"
+                  : "-- Pilih Asal Sekolah / Universitas / Sanggar --"}
+              </option>
+              {institutions.map((inst) => (
+                <option key={inst.id} value={inst.name}>
+                  {inst.name}
+                </option>
+              ))}
+            </Select>
 
-            <div className="space-y-1.5 text-left">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Nama Anggota Lain (1 nama per baris) *
-              </label>
-              <textarea
-                rows={3}
-                placeholder="Fikri Haikal (Sinematografer)&#10;Annisa Rizky (Editor)"
-                value={memberNames}
-                onChange={(e) => setMemberNames(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background p-3 text-sm focus:outline-none"
-                required
-              />
-              <span className="text-[11px] text-muted-foreground">
-                Ketua tim otomatis dicatat sebagai pimpinan regu. Tuliskan anggota tim lainnya di sini.
-              </span>
+            {/* Input Anggota Tim Mengikuti Pola Lomba Kelompok */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Anggota Tim Lainnya ({members.length})
+                  </span>
+                  {(() => {
+                    const compObj = competitions.find(
+                      (c) => c.id === (selectedComp || competitions[0]?.id)
+                    );
+                    return compObj ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Total regu (Ketua + Anggota): {members.length + 1} orang (Syarat: Min.{" "}
+                        {compObj.minMembers} - Maks. {compObj.maxMembers} Anggota)
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-xs gap-1.5 cursor-pointer"
+                  onClick={addMember}
+                  disabled={(() => {
+                    const compObj = competitions.find(
+                      (c) => c.id === (selectedComp || competitions[0]?.id)
+                    );
+                    return !!compObj && members.length + 1 >= compObj.maxMembers;
+                  })()}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Tambah Anggota</span>
+                </Button>
+              </div>
+
+              {members.map((member, idx) => (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-xl border border-border bg-card space-y-3 shadow-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <Badge variant="default" className="text-[10px]">
+                      ANGGOTA {idx + 1}
+                    </Badge>
+                    {members.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => removeMember(idx)}
+                        className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                        aria-label={`Hapus anggota ${idx + 1}`}
+                        title={`Hapus anggota ${idx + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <Input
+                    label="Nama Lengkap *"
+                    placeholder="Nama anggota tim"
+                    value={member.name}
+                    onChange={(e) => updateMember(idx, { name: e.target.value })}
+                    required
+                  />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label="Nomor Induk (Opsional)"
+                      placeholder="NIS / NIM"
+                      value={member.studentId}
+                      onChange={(e) => updateMember(idx, { studentId: e.target.value })}
+                    />
+                    <Select
+                      label="Asal Instansi (Opsional)"
+                      value={member.institution}
+                      onChange={(e) => updateMember(idx, { institution: e.target.value })}
+                    >
+                      <option value="">
+                        {loadingInstitutions
+                          ? "-- Memuat daftar instansi... --"
+                          : "-- Sama dengan Ketua / Pilih Instansi --"}
+                      </option>
+                      {institutions.map((inst) => (
+                        <option key={inst.id} value={inst.name}>
+                          {inst.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+              ))}
+
+              {members.length === 0 && (
+                <div className="p-4 rounded-xl border border-dashed border-border text-center space-y-1 bg-muted/20">
+                  <p className="text-xs text-muted-foreground">Belum ada anggota tambahan yang dimasukkan.</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1.5 mt-1 cursor-pointer"
+                    onClick={addMember}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Tambah Anggota</span>
+                  </Button>
+                </div>
+              )}
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>
                 Batal
               </Button>
-              <Button type="submit" disabled={isSubmittingAdd || !teamName || !leaderName || !institution}>
+              <Button
+                type="submit"
+                disabled={
+                  isSubmittingAdd ||
+                  !teamName ||
+                  !leaderName ||
+                  !institution ||
+                  (() => {
+                    const compObj = competitions.find(
+                      (c) => c.id === (selectedComp || competitions[0]?.id)
+                    );
+                    const validCount = 1 + members.filter((m) => m.name.trim().length > 0).length;
+                    return !!compObj && validCount < compObj.minMembers;
+                  })()
+                }
+              >
                 {isSubmittingAdd ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
@@ -606,12 +794,26 @@ export default function DashboardPendaftaranPage() {
               required
             />
 
-            <Input
+            <Select
               label="Asal Sekolah / Universitas / Sanggar *"
               value={editInstitution}
               onChange={(e) => setEditInstitution(e.target.value)}
               required
-            />
+            >
+              <option value="">
+                {loadingInstitutions
+                  ? "-- Memuat daftar instansi... --"
+                  : "-- Pilih Asal Sekolah / Universitas / Sanggar --"}
+              </option>
+              {editInstitution && !institutions.some((inst) => inst.name === editInstitution) && (
+                <option value={editInstitution}>{editInstitution}</option>
+              )}
+              {institutions.map((inst) => (
+                <option key={inst.id} value={inst.name}>
+                  {inst.name}
+                </option>
+              ))}
+            </Select>
 
             <div className="space-y-1.5 text-left">
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">

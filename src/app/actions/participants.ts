@@ -549,6 +549,13 @@ export async function getTeamRegistrationsData(): Promise<{
   }
 }
 
+export interface TeamMemberItem {
+  name: string;
+  role?: "ketua" | "anggota";
+  studentId?: string;
+  institution?: string;
+}
+
 export async function createTeamRegistrationAdmin(input: {
   competitionId: string;
   teamName: string;
@@ -556,7 +563,8 @@ export async function createTeamRegistrationAdmin(input: {
   institution: string;
   email?: string;
   phone?: string;
-  memberNames: string[];
+  memberNames?: string[];
+  members?: TeamMemberItem[];
   status?: "menunggu_verifikasi" | "terverifikasi";
 }): Promise<{ success: boolean; error?: string }> {
   try {
@@ -613,6 +621,30 @@ export async function createTeamRegistrationAdmin(input: {
     if (rErr) return { success: false, error: rErr.message };
 
     // 3. Simpan di registration_members
+    const otherMembers =
+      input.members && input.members.length > 0
+        ? input.members
+            .filter((m) => m.name.trim().length > 0)
+            .map((m) => ({
+              registration_id: reg.id,
+              member_name: m.name.trim(),
+              member_role: m.role || "anggota",
+              is_leader: false,
+              student_id: m.studentId?.trim() || null,
+              institution: (m.institution?.trim() || input.institution).trim(),
+            }))
+        : (input.memberNames || [])
+            .map((m) => m.trim())
+            .filter((m) => m.length > 0)
+            .map((m) => ({
+              registration_id: reg.id,
+              member_name: m,
+              member_role: "anggota",
+              is_leader: false,
+              student_id: null,
+              institution: input.institution.trim(),
+            }));
+
     const membersToInsert = [
       {
         registration_id: reg.id,
@@ -620,17 +652,9 @@ export async function createTeamRegistrationAdmin(input: {
         member_role: "ketua",
         is_leader: true,
         institution: input.institution.trim(),
+        student_id: null,
       },
-      ...input.memberNames
-        .map((m) => m.trim())
-        .filter((m) => m.length > 0)
-        .map((m) => ({
-          registration_id: reg.id,
-          member_name: m,
-          member_role: "anggota",
-          is_leader: false,
-          institution: input.institution.trim(),
-        })),
+      ...otherMembers,
     ];
 
     const { error: mErr } = await supabase.from("registration_members").insert(membersToInsert);
@@ -664,7 +688,8 @@ export async function updateTeamRegistrationAdmin(input: {
   teamName: string;
   leaderName: string;
   institution: string;
-  memberNames: string[];
+  memberNames?: string[];
+  members?: TeamMemberItem[];
   status: "menunggu_verifikasi" | "terverifikasi" | "ditolak";
 }): Promise<{ success: boolean; error?: string }> {
   try {
@@ -710,6 +735,30 @@ export async function updateTeamRegistrationAdmin(input: {
     // 4. Update registration_members: hapus lama, pasang baru
     await supabase.from("registration_members").delete().eq("registration_id", input.registrationId);
 
+    const otherMembers =
+      input.members && input.members.length > 0
+        ? input.members
+            .filter((m) => m.name.trim().length > 0)
+            .map((m) => ({
+              registration_id: input.registrationId,
+              member_name: m.name.trim(),
+              member_role: m.role || "anggota",
+              is_leader: false,
+              student_id: m.studentId?.trim() || null,
+              institution: (m.institution?.trim() || input.institution).trim(),
+            }))
+        : (input.memberNames || [])
+            .map((m) => m.trim())
+            .filter((m) => m.length > 0)
+            .map((m) => ({
+              registration_id: input.registrationId,
+              member_name: m,
+              member_role: "anggota",
+              is_leader: false,
+              student_id: null,
+              institution: input.institution.trim(),
+            }));
+
     const membersToInsert = [
       {
         registration_id: input.registrationId,
@@ -717,17 +766,9 @@ export async function updateTeamRegistrationAdmin(input: {
         member_role: "ketua",
         is_leader: true,
         institution: input.institution.trim(),
+        student_id: null,
       },
-      ...input.memberNames
-        .map((m) => m.trim())
-        .filter((m) => m.length > 0)
-        .map((m) => ({
-          registration_id: input.registrationId,
-          member_name: m,
-          member_role: "anggota",
-          is_leader: false,
-          institution: input.institution.trim(),
-        })),
+      ...otherMembers,
     ];
 
     await supabase.from("registration_members").insert(membersToInsert);
