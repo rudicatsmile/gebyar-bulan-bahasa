@@ -22,6 +22,8 @@ import {
   type TwibbonItem,
 } from "@/lib/dummy-data";
 
+export type { Competition };
+
 type DbCompetition = Database["public"]["Tables"]["competitions"]["Row"];
 type DbCriterion = Database["public"]["Tables"]["competition_criteria"]["Row"];
 type DbSchedule = Database["public"]["Tables"]["schedules"]["Row"];
@@ -912,6 +914,9 @@ export interface MonitorDisplayData {
   competitions: Competition[];
   activeCompetition: Competition | null;
   liveScores: MonitorScoreItem[];
+  scoreboardEnabled?: boolean;
+  allowedCompetitions?: Competition[];
+  competitionsScores?: Record<string, MonitorScoreItem[]>;
   announcements: Announcement[];
   importantAnnouncement: Announcement | null;
   winners: Winner[];
@@ -973,30 +978,78 @@ export async function getMonitorData(): Promise<MonitorDisplayData> {
         getChallengeLeaderboard(),
       ]);
 
-    const activeCompetition =
-      competitions.find((c) => c.status === "berlangsung") ||
-      competitions.find((c) => c.status === "pendaftaran") ||
-      competitions[0] ||
-      null;
+    // 1. Ambil pengaturan scoreboard monitor dari event_settings
+    let scoreboardEnabled = true;
+    let selectedCompetitionIds: string[] = [];
+    try {
+      const { data: scoreSettingRow } = await publicClient
+        .from("event_settings")
+        .select("value")
+        .eq("key", "monitor_scoreboard_settings")
+        .maybeSingle();
 
-    let liveScores: MonitorScoreItem[] = [];
-    if (activeCompetition?.id) {
+      if (scoreSettingRow?.value && typeof scoreSettingRow.value === "object") {
+        const val = scoreSettingRow.value as any;
+        scoreboardEnabled = val.enabled !== false;
+        if (Array.isArray(val.selectedCompetitionIds)) {
+          selectedCompetitionIds = val.selectedCompetitionIds;
+        }
+      }
+    } catch {
+      // fallback default
+    }
+
+    // 2. Tentukan allowedCompetitions berdasarkan checklist admin
+    let allowedCompetitions: Competition[] = [];
+    if (selectedCompetitionIds.length > 0) {
+      allowedCompetitions = competitions.filter((c) =>
+        selectedCompetitionIds.includes(c.id)
+      );
+    }
+
+    // Jika checklist belum dipilih / kosong, ambil semua lomba yang berstatus berlangsung (atau semua lomba)
+    if (allowedCompetitions.length === 0) {
+      allowedCompetitions = competitions.filter((c) => c.status === "berlangsung");
+      if (allowedCompetitions.length === 0) {
+        allowedCompetitions = competitions.filter((c) => c.status === "pendaftaran");
+      }
+      if (allowedCompetitions.length === 0 && competitions.length > 0) {
+        allowedCompetitions = [competitions[0]];
+      }
+    }
+
+    // 3. Ambil rekapitulasi skor 5 besar untuk SEMUA allowedCompetitions
+    const competitionsScores: Record<string, MonitorScoreItem[]> = {};
+    if (scoreboardEnabled && allowedCompetitions.length > 0) {
       try {
         const { getCompetitionScoringRecap } = await import("@/app/actions/assessments");
-        const recapRes = await getCompetitionScoringRecap(activeCompetition.id);
-        if (recapRes.success && recapRes.recaps && recapRes.recaps.length > 0) {
-          liveScores = recapRes.recaps.map((r) => ({
-            rank: r.rank,
-            registrationId: r.registrationId,
-            participantName: r.participantName,
-            institution: r.institution,
-            finalAverageScore: r.finalScore,
-          }));
-        }
+        await Promise.all(
+          allowedCompetitions.map(async (comp) => {
+            try {
+              const recapRes = await getCompetitionScoringRecap(comp.id);
+              if (recapRes.success && recapRes.recaps && recapRes.recaps.length > 0) {
+                competitionsScores[comp.id] = recapRes.recaps.map((r) => ({
+                  rank: r.rank,
+                  registrationId: r.registrationId,
+                  participantName: r.participantName,
+                  institution: r.institution,
+                  finalAverageScore: r.finalScore,
+                }));
+              } else {
+                competitionsScores[comp.id] = [];
+              }
+            } catch {
+              competitionsScores[comp.id] = [];
+            }
+          })
+        );
       } catch (err) {
         console.error("Error fetching live scores for monitor:", err);
       }
     }
+
+    const activeCompetition = allowedCompetitions[0] || null;
+    const liveScores = (activeCompetition ? competitionsScores[activeCompetition.id] : []) || [];
 
     const importantAnnouncement =
       announcements.find((a) => a.isPinned || a.category === "penting") ||
@@ -1047,6 +1100,9 @@ export async function getMonitorData(): Promise<MonitorDisplayData> {
       competitions,
       activeCompetition,
       liveScores,
+      scoreboardEnabled,
+      allowedCompetitions,
+      competitionsScores,
       announcements,
       importantAnnouncement,
       winners,
@@ -1065,6 +1121,9 @@ export async function getMonitorData(): Promise<MonitorDisplayData> {
       competitions: COMPETITIONS,
       activeCompetition: COMPETITIONS[0] || null,
       liveScores: [],
+      scoreboardEnabled: true,
+      allowedCompetitions: COMPETITIONS,
+      competitionsScores: {},
       announcements: ANNOUNCEMENTS,
       importantAnnouncement: ANNOUNCEMENTS[0] || null,
       winners: [],

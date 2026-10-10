@@ -23,7 +23,7 @@ import {
   Siren,
 } from "lucide-react";
 
-const MODULES = [
+const ALL_MODULES = [
   { key: "jadwal", title: "Jadwal & Agenda Panggung Hari Ini" },
   { key: "papan_skor", title: "Papan Skor Sementara (5 Besar Lomba Aktif)" },
   { key: "pengumuman", title: "Warta Resmi & Arahan Panitia" },
@@ -41,6 +41,27 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
   const [currentIdx, setCurrentIdx] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
   const ROTATION_SECONDS = 15;
+
+  // Modul aktif (jika scoreboard dinonaktifkan dari pengaturan, sembunyikan papan_skor)
+  const modules = React.useMemo(() => {
+    if (data.scoreboardEnabled === false) {
+      return ALL_MODULES.filter((m) => m.key !== "papan_skor");
+    }
+    return ALL_MODULES;
+  }, [data.scoreboardEnabled]);
+
+  // Rotasi cabang lomba pada papan skor jika ada lebih dari 1 lomba yang diizinkan
+  const allowedComps = React.useMemo(() => {
+    if (data.allowedCompetitions && data.allowedCompetitions.length > 0) {
+      return data.allowedCompetitions;
+    }
+    if (data.activeCompetition) {
+      return [data.activeCompetition];
+    }
+    return [];
+  }, [data.allowedCompetitions, data.activeCompetition]);
+
+  const [activeScoreCompIdx, setActiveScoreCompIdx] = React.useState(0);
 
   // ===== SIARAN DARURAT (Emergency Takeover) =====
   const [isTakeoverActive, setIsTakeoverActive] = React.useState(false);
@@ -62,8 +83,7 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
     }
   }, []);
 
-  // Polling cepat + subscribe realtime monitor_displays agar status darurat
-  // langsung sampai ke layar (bukan hanya menunggu siklus 15 detik).
+  // Polling cepat + subscribe realtime monitor_displays & event_settings
   React.useEffect(() => {
     const pollInterval = setInterval(fetchLatest, 5000);
 
@@ -79,6 +99,14 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           "postgres_changes" as any,
           { event: "UPDATE", schema: "public", table: "monitor_displays" },
+          () => {
+            fetchLatest();
+          }
+        )
+        .on(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          "postgres_changes" as any,
+          { event: "*", schema: "public", table: "event_settings" },
           () => {
             fetchLatest();
           }
@@ -135,21 +163,40 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
     };
   }, []);
 
+  const activeModule = modules[currentIdx % (modules.length || 1)] || ALL_MODULES[0];
+
   // Auto rotation timer (dijeda saat manual pause ATAU saat takeover darurat)
   React.useEffect(() => {
     if (isPaused || isTakeoverActive) return;
     const timer = setInterval(() => {
-      setCurrentIdx((prev) => (prev + 1) % MODULES.length);
+      setCurrentIdx((prev) => (prev + 1) % modules.length);
     }, ROTATION_SECONDS * 1000);
     return () => clearInterval(timer);
-  }, [isPaused, isTakeoverActive]);
+  }, [isPaused, isTakeoverActive, modules.length]);
 
-  const activeModule = MODULES[currentIdx];
+  // Sub-rotasi cabang lomba otomatis setiap 7 detik saat modul papan skor sedang aktif
+  React.useEffect(() => {
+    if (isPaused || isTakeoverActive || activeModule.key !== "papan_skor" || allowedComps.length <= 1) {
+      return;
+    }
+    const subTimer = setInterval(() => {
+      setActiveScoreCompIdx((prev) => (prev + 1) % allowedComps.length);
+    }, 7000);
+    return () => clearInterval(subTimer);
+  }, [isPaused, isTakeoverActive, activeModule.key, allowedComps.length]);
+
+  const currentComp = allowedComps[activeScoreCompIdx % (allowedComps.length || 1)] || null;
+
+  const currentScores = React.useMemo(() => {
+    if (!currentComp) return (data.liveScores || []).slice(0, 5);
+    if (data.competitionsScores && data.competitionsScores[currentComp.id]) {
+      return (data.competitionsScores[currentComp.id] || []).slice(0, 5);
+    }
+    return (data.liveScores || []).slice(0, 5);
+  }, [currentComp, data.competitionsScores, data.liveScores]);
 
   // Data helpers
   const schedules = data.schedules || [];
-  const activeComp = data.activeCompetition;
-  const liveScores = (data.liveScores || []).slice(0, 5);
   const importantAnnouncement = data.importantAnnouncement;
   const featuredTwibbons = (data.twibbons || []).slice(0, 4);
   const winners = data.winners || [];
@@ -161,7 +208,7 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
       currentCycleText={
         isTakeoverActive
           ? "Rotasi modul dijeda sementara"
-          : `Modul ${currentIdx + 1} dari ${MODULES.length} • Rotasi Otomatis 15 Detik`
+          : `Modul ${(currentIdx % modules.length) + 1} dari ${modules.length} • Rotasi Otomatis 15 Detik`
       }
       emergencyMessage={isTakeoverActive ? undefined : data.emergencyMessage || undefined}
       eventName={data.eventSettings?.eventName}
@@ -266,18 +313,48 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
         {/* ============================================================= */}
         {activeModule.key === "papan_skor" && (
           <div className="space-y-6 animate-in fade-in-50 duration-300">
-            <div className="flex items-center justify-between bg-white/5 p-4 rounded-xl border border-white/10">
-              <span className="font-heading text-xl sm:text-2xl font-bold text-accent">
-                Cabang: {activeComp ? `${activeComp.name} (${activeComp.category.toUpperCase()})` : "Penilaian Lomba"}
-              </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/5 p-4 rounded-xl border border-white/10 gap-3">
+              <div className="flex items-center gap-3">
+                <span className="font-heading text-xl sm:text-2xl font-bold text-accent">
+                  Cabang: {currentComp ? `${currentComp.name} (${currentComp.category.toUpperCase()})` : "Penilaian Lomba"}
+                </span>
+                {allowedComps.length > 1 && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-accent/20 text-accent border border-accent/30">
+                    Lomba {(activeScoreCompIdx % allowedComps.length) + 1} dari {allowedComps.length}
+                  </span>
+                )}
+              </div>
               <span className="text-sm font-mono text-white/60">
                 Panggung Utama • Agregasi Penilaian Multi-Juri
               </span>
             </div>
 
-            {liveScores.length > 0 ? (
+            {/* Chips selector cabang lomba yang dirotasikan */}
+            {allowedComps.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {allowedComps.map((comp, idx) => {
+                  const isActive = idx === (activeScoreCompIdx % allowedComps.length);
+                  return (
+                    <button
+                      key={comp.id}
+                      onClick={() => setActiveScoreCompIdx(idx)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isActive
+                          ? "bg-accent text-black font-bold shadow-xs scale-105"
+                          : "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+                      }`}
+                    >
+                      {isActive && <span className="h-1.5 w-1.5 rounded-full bg-black animate-ping" />}
+                      <span>{comp.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {currentScores.length > 0 ? (
               <div className="space-y-3">
-                {liveScores.map((sc, idx) => (
+                {currentScores.map((sc, idx) => (
                   <div
                     key={sc.registrationId || idx}
                     className={`p-5 sm:p-6 rounded-2xl border flex items-center justify-between gap-4 transition-all ${sc.rank === 1
@@ -317,7 +394,7 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
               <div className="text-center p-12 rounded-2xl border border-white/10 bg-white/5 max-w-xl mx-auto space-y-4">
                 <Sparkles className="h-12 w-12 text-accent mx-auto" />
                 <h3 className="text-2xl font-bold text-white font-heading">
-                  Sesi Penilaian Sedang Berlangsung
+                  Sesi Penilaian {currentComp ? currentComp.name : ""} Sedang Berlangsung
                 </h3>
                 <p className="text-white/60 text-sm">
                   Rekapitulasi nilai dewan juri akan muncul secara otomatis segera setelah input nilai dimasukkan.
@@ -569,7 +646,7 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
       <div className="flex items-center justify-center gap-3 pt-4">
         <button
           onClick={() =>
-            setCurrentIdx((prev) => (prev === 0 ? MODULES.length - 1 : prev - 1))
+            setCurrentIdx((prev) => (prev === 0 ? modules.length - 1 : prev - 1))
           }
           className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
           title="Modul Sebelumnya"
@@ -585,7 +662,7 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
         </button>
 
         <button
-          onClick={() => setCurrentIdx((prev) => (prev + 1) % MODULES.length)}
+          onClick={() => setCurrentIdx((prev) => (prev + 1) % modules.length)}
           className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
           title="Modul Berikutnya"
         >

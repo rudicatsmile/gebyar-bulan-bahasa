@@ -113,3 +113,9 @@ export async function setEmergencyAlert(
     return { success: false, error: message };
   }
 }
+
+export {
+  getMonitorScoreboardSettings,
+  updateMonitorScoreboardSettings,
+  type MonitorScoreboardSettings,
+} from "./settings";

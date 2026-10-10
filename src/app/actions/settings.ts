@@ -544,3 +544,95 @@ export async function uploadJudgePhotoAction(formData: FormData): Promise<{
     };
   }
 }
+
+export interface MonitorScoreboardSettings {
+  enabled: boolean;
+  selectedCompetitionIds: string[];
+}
+
+export async function getMonitorScoreboardSettings(): Promise<{
+  success: boolean;
+  settings: MonitorScoreboardSettings;
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "monitor_scoreboard_settings")
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === "object") {
+      const val = data.value as any;
+      return {
+        success: true,
+        settings: {
+          enabled: val.enabled !== false,
+          selectedCompetitionIds: Array.isArray(val.selectedCompetitionIds)
+            ? val.selectedCompetitionIds
+            : [],
+        },
+      };
+    }
+
+    return {
+      success: true,
+      settings: {
+        enabled: true,
+        selectedCompetitionIds: [],
+      },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memuat pengaturan papan skor monitor.";
+    return {
+      success: false,
+      settings: { enabled: true, selectedCompetitionIds: [] },
+      error: message,
+    };
+  }
+}
+
+export async function updateMonitorScoreboardSettings(input: {
+  enabled: boolean;
+  selectedCompetitionIds: string[];
+}): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
+
+    const { error } = await supabase.from("event_settings").upsert({
+      key: "monitor_scoreboard_settings",
+      value: {
+        enabled: input.enabled,
+        selectedCompetitionIds: input.selectedCompetitionIds,
+      },
+      updated_at: now,
+    });
+
+    if (error) throw error;
+
+    // Trigger update on monitor_displays to wake up realtime subscribers
+    try {
+      await supabase
+        .from("monitor_displays")
+        .update({ updated_at: now })
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+    } catch {
+      // ignore
+    }
+
+    revalidatePath("/monitor");
+    revalidatePath("/api/monitor");
+    revalidatePath("/media/konten-monitor");
+    revalidatePath("/dashboard/pengaturan");
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menyimpan pengaturan papan skor monitor.";
+    return { success: false, error: message };
+  }
+}

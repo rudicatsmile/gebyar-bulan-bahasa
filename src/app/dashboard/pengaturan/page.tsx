@@ -7,7 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { getEventSettings, saveEventSettings, uploadHeroImageAction, uploadLogoImageAction } from "@/app/actions/settings";
+import {
+  getEventSettings,
+  saveEventSettings,
+  uploadHeroImageAction,
+  uploadLogoImageAction,
+  getMonitorScoreboardSettings,
+  updateMonitorScoreboardSettings,
+} from "@/app/actions/settings";
+import { getCompetitions, type Competition } from "@/lib/supabase/queries";
 import {
   Settings,
   Save,
@@ -19,6 +27,9 @@ import {
   Upload,
   Trash2,
   Camera,
+  Trophy,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 
 export default function DashboardPengaturanPage() {
@@ -42,6 +53,11 @@ export default function DashboardPengaturanPage() {
   const [maxCompetitions, setMaxCompetitions] = React.useState("3");
   const [rotationInterval, setRotationInterval] = React.useState("15");
   const [autoApproveTwibbon, setAutoApproveTwibbon] = React.useState(false);
+
+  // Pengaturan modul Papan Skor Layar Monitor TV
+  const [competitionsList, setCompetitionsList] = React.useState<Competition[]>([]);
+  const [scoreboardEnabled, setScoreboardEnabled] = React.useState(true);
+  const [selectedScoreboardCompIds, setSelectedScoreboardCompIds] = React.useState<string[]>([]);
 
   // Kontak & Sekretariat Panitia
   const [contactLocation, setContactLocation] = React.useState(
@@ -72,6 +88,21 @@ export default function DashboardPengaturanPage() {
     setIsLoading(true);
     setFeedback(null);
     try {
+      // Muat daftar cabang lomba & konfigurasi scoreboard monitor secara paralel
+      try {
+        const [comps, sbRes] = await Promise.all([
+          getCompetitions(),
+          getMonitorScoreboardSettings(),
+        ]);
+        setCompetitionsList(comps);
+        if (sbRes.success && sbRes.settings) {
+          setScoreboardEnabled(sbRes.settings.enabled);
+          setSelectedScoreboardCompIds(sbRes.settings.selectedCompetitionIds);
+        }
+      } catch (errSb) {
+        console.error("Gagal memuat konfigurasi scoreboard monitor:", errSb);
+      }
+
       // Prioritaskan direct API route
       const res = await fetch("/api/settings", { cache: "no-store" });
       if (res.ok) {
@@ -278,6 +309,16 @@ export default function DashboardPengaturanPage() {
     };
 
     try {
+      // Simpan pengaturan scoreboard monitor
+      try {
+        await updateMonitorScoreboardSettings({
+          enabled: scoreboardEnabled,
+          selectedCompetitionIds: selectedScoreboardCompIds,
+        });
+      } catch (sbErr) {
+        console.warn("Gagal simpan updateMonitorScoreboardSettings:", sbErr);
+      }
+
       // 1. Coba simpan via API Route /api/settings (REST, paling andal)
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -716,8 +757,8 @@ export default function DashboardPengaturanPage() {
               {/* Bagian 4 */}
               <div className="space-y-4 pt-4 border-t border-border">
                 <h3 className="font-heading text-base font-bold text-foreground border-b border-border pb-2 flex items-center justify-between">
-                  <span>4. Layar Monitor Lapangan Venue</span>
-                  <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings & monitor_displays (key: monitor)</span>
+                  <span>4. Layar Monitor Lapangan Venue & Papan Skor</span>
+                  <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings & monitor_displays (key: monitor, monitor_scoreboard_settings)</span>
                 </h3>
                 <Input
                   name="rotationInterval"
@@ -730,6 +771,156 @@ export default function DashboardPengaturanPage() {
                   helperText="Waktu jeda per modul tayangan (Jadwal, Skor, Pemenang, Twibbon, Leaderboard)."
                   required
                 />
+
+                {/* Toggle & Checklist Papan Skor */}
+                <div className="p-4 sm:p-5 rounded-xl border border-border bg-card/60 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1.5 max-w-xl">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-4 w-4 text-accent" />
+                        <span className="font-heading text-sm sm:text-base font-bold text-foreground">
+                          Tampilkan Modul Papan Skor Sementara di Layar Monitor
+                        </span>
+                        <Badge
+                          variant={scoreboardEnabled ? "success" : "warning"}
+                          className="text-[10px]"
+                        >
+                          {scoreboardEnabled ? "AKTIF (Ditayangkan)" : "NONAKTIF (Disembunyikan)"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Jika diaktifkan, modul <strong>Papan Skor Sementara (5 Besar Lomba Aktif)</strong> akan muncul dalam siklus rotasi layar monitor panggung (<span className="font-mono text-[11px]">/monitor</span>).
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+                      <span className="text-xs font-semibold text-muted-foreground hidden sm:inline">
+                        {scoreboardEnabled ? "Ditayangkan" : "Disembunyikan"}
+                      </span>
+                      <button
+                        id="toggle-scoreboard-monitor"
+                        type="button"
+                        role="switch"
+                        aria-checked={scoreboardEnabled}
+                        onClick={() => setScoreboardEnabled(!scoreboardEnabled)}
+                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
+                          scoreboardEnabled ? "bg-accent" : "bg-muted-foreground/30"
+                        }`}
+                      >
+                        <span className="sr-only">Toggle Papan Skor Monitor</span>
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            scoreboardEnabled ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {scoreboardEnabled && (
+                    <div className="pt-3 border-t border-border space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Pilih Cabang Lomba yang Ditampilkan di Papan Skor
+                          </label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Layar monitor akan merotasikan papan skor 5 besar untuk cabang-cabang lomba yang dicentang.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedScoreboardCompIds(competitionsList.map((c) => c.id))}
+                            className="text-[11px] h-7 px-2.5 gap-1 cursor-pointer"
+                          >
+                            <CheckSquare className="h-3 w-3" />
+                            <span>Pilih Semua</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedScoreboardCompIds([])}
+                            className="text-[11px] h-7 px-2.5 gap-1 cursor-pointer"
+                          >
+                            <Square className="h-3 w-3" />
+                            <span>Kosongkan (Semua)</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                        {competitionsList.map((comp) => {
+                          const isChecked =
+                            selectedScoreboardCompIds.length === 0 ||
+                            selectedScoreboardCompIds.includes(comp.id);
+                          return (
+                            <label
+                              key={comp.id}
+                              className={`p-3 rounded-lg border flex items-center justify-between gap-2 cursor-pointer transition-colors ${
+                                isChecked
+                                  ? "border-accent/40 bg-accent/5 hover:bg-accent/10"
+                                  : "border-border/60 bg-muted/10 opacity-70 hover:opacity-100"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (selectedScoreboardCompIds.length === 0) {
+                                      if (!e.target.checked) {
+                                        setSelectedScoreboardCompIds(
+                                          competitionsList
+                                            .filter((c) => c.id !== comp.id)
+                                            .map((c) => c.id)
+                                        );
+                                      }
+                                    } else {
+                                      if (e.target.checked) {
+                                        setSelectedScoreboardCompIds([
+                                          ...selectedScoreboardCompIds,
+                                          comp.id,
+                                        ]);
+                                      } else {
+                                        setSelectedScoreboardCompIds(
+                                          selectedScoreboardCompIds.filter((id) => id !== comp.id)
+                                        );
+                                      }
+                                    }
+                                  }}
+                                  className="h-4 w-4 rounded border-border text-accent focus:ring-accent accent-accent cursor-pointer"
+                                />
+                                <div className="min-w-0">
+                                  <div className="text-xs font-semibold text-foreground truncate">
+                                    {comp.name}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground uppercase font-mono">
+                                    {comp.category} • Status: {comp.status}
+                                  </div>
+                                </div>
+                              </div>
+                              <Badge
+                                variant={comp.status === "berlangsung" ? "live" : "default"}
+                                className="text-[9px] uppercase px-1.5 py-0 shrink-0"
+                              >
+                                {comp.status === "berlangsung" ? "LIVE" : comp.status}
+                              </Badge>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      <p className="text-[11px] text-muted-foreground italic">
+                        * Catatan: Jika tidak ada lomba yang dipilih secara spesifik, sistem secara otomatis merotasikan seluruh cabang lomba yang berstatus sedang berlangsung (&apos;berlangsung&apos;).
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Bagian 5 */}
