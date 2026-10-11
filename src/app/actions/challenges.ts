@@ -7,7 +7,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { ChallengeType } from "@/types/database.types";
 import { STANDS } from "@/lib/dummy-data";
-import { checkAndProcessStandCompletionReward } from "./stand-rewards";
+import {
+  checkAndProcessStandCompletionReward,
+  checkInStandSession,
+  checkOutStandSession,
+} from "./stand-rewards";
 
 export interface AdminChallengeItem {
   id: string;
@@ -242,141 +246,56 @@ const RedeemRewardSchema = z.object({
 
 export type RedeemRewardInput = z.infer<typeof RedeemRewardSchema>;
 
-// Aksi: Scan QR / Input Kode Unik Stand Budaya
+// Aksi: Scan QR / Input Kode Unik Stand Budaya (Mengikuti alur sesi menonton baru tanpa poin per stand)
 export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
   const parsed = ScanStandSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message };
   }
 
-  let cleanInput = parsed.data.standCode.trim();
+  const rawInput = parsed.data.standCode.trim();
+  const isCheckout = rawInput.toUpperCase().startsWith("IN-") || rawInput.toUpperCase().startsWith("CHECKOUT-");
 
-  // Defensively extract if user passed JSON payload (from QRCodeCard)
-  if (cleanInput.startsWith("{") && cleanInput.endsWith("}")) {
-    try {
-      const obj = JSON.parse(cleanInput);
-      if (obj.code) cleanInput = String(obj.code).trim();
-      else if (obj.token) cleanInput = String(obj.token).trim();
-    } catch { }
-  }
-
-  // Defensively extract if URLs
-  if (cleanInput.includes("http://") || cleanInput.includes("https://") || cleanInput.includes("HTTP://") || cleanInput.includes("HTTPS://")) {
-    try {
-      const parsedUrl = new URL(cleanInput);
-      const codeParam = parsedUrl.searchParams.get("code") || parsedUrl.searchParams.get("stand") || parsedUrl.searchParams.get("token");
-      if (codeParam) cleanInput = codeParam.trim();
-    } catch { }
-  }
-
-  try {
-    const supabase = createAdminClient();
-
-    // 1. Cari stand berdasarkan kode unik atau qr_token/id (case insensitive)
-    let stand: { id: string; name: string; points_per_visit: number; is_active: boolean } | null = null;
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanInput);
-
-    let query = supabase
-      .from("stands")
-      .select("id, name, points_per_visit, is_active");
-
-    if (isUuid) {
-      query = query.or(`id.eq.${cleanInput},qr_token.eq.${cleanInput}`);
-    } else {
-      query = query.ilike("code", cleanInput);
-    }
-
-    const { data: dbStand } = await query.maybeSingle();
-
-    if (dbStand) {
-      stand = dbStand;
-    } else {
-      // Fallback: Check in STANDS dummy-data if database not yet migrated
-      const matchedDummy = STANDS.find(
-        (s) => s.code.toUpperCase() === cleanInput.toUpperCase() || s.qrToken.toUpperCase() === cleanInput.toUpperCase()
-      );
-      if (matchedDummy) {
-        // Map to valid UUID format if id is in format 'stand-X'
-        const dummyUuidMap: Record<string, string> = {
-          "stand-1": "c0000000-0000-0000-0000-000000000001",
-          "stand-2": "c0000000-0000-0000-0000-000000000002",
-          "stand-3": "c0000000-0000-0000-0000-000000000003",
-          "stand-4": "c0000000-0000-0000-0000-000000000004",
-          "stand-5": "c0000000-0000-0000-0000-000000000005",
-          "stand-6": "c0000000-0000-0000-0000-000000000006",
-          "stand-7": "c0000000-0000-0000-0000-000000000007",
-          "stand-8": "c0000000-0000-0000-0000-000000000008",
-        };
-        const validId = dummyUuidMap[matchedDummy.id] || matchedDummy.id;
-        stand = {
-          id: validId,
-          name: matchedDummy.name,
-          points_per_visit: matchedDummy.points,
-          is_active: true,
-        };
-      }
-    }
-
-    if (!stand) {
-      return { success: false, error: `Kode stand "${cleanInput}" tidak valid atau tidak terdaftar.` };
-    }
-
-    if (!stand.is_active) {
-      return { success: false, error: `Stand "${stand.name}" saat ini sedang nonaktif.` };
-    }
-
-    // 2. Periksa apakah peserta sudah pernah mengunjungi stand ini
-    const { data: existingVisit } = await supabase
-      .from("point_transactions")
-      .select("id")
-      .eq("participant_id", parsed.data.participantId)
-      .eq("stand_id", stand.id)
-      .eq("source", "kode_unik")
-      .maybeSingle();
-
-    if (existingVisit) {
-      return {
-        success: false,
-        error: `Anda sudah pernah mengklaim poin dari ${stand.name}. Kunjungan hanya dapat diklaim 1 kali per stand.`,
-      };
-    }
-
-    // 3. Masukkan transaksi poin (ledger)
-    await ensureParticipantLedgerSynced(supabase, parsed.data.participantId);
-    const { error: pErr } = await supabase.from("point_transactions").insert({
-      participant_id: parsed.data.participantId,
-      stand_id: stand.id,
-      points: stand.points_per_visit,
-      source: "kode_unik",
-      note: `Kunjungan stand budaya: ${stand.name}`,
+  if (isCheckout) {
+    const res = await checkOutStandSession({
+      participantId: parsed.data.participantId,
+      validationInput: rawInput,
     });
-
-    if (pErr) {
-      return { success: false, error: pErr.message };
+    if (!res.success) {
+      return { success: false, error: res.error || "Gagal validasi checkout stand." };
     }
-
-    revalidatePath("/peserta");
-    revalidatePath("/peserta/scan");
-    revalidatePath("/peserta/riwayat-poin");
-    revalidatePath("/leaderboard");
-    revalidatePath("/monitor");
-    revalidatePath("/monitor/leaderboard");
-
-    // 4. Periksa apakah seluruh stand aktif telah selesai dikunjungi & proses reward khusus (50 pertama)
-    const completionResult = await checkAndProcessStandCompletionReward(parsed.data.participantId);
-
     return {
       success: true,
       data: {
-        standName: stand.name,
-        pointsAwarded: stand.points_per_visit,
-        ...completionResult,
+        standName: res.standName,
+        pointsAwarded: 0,
+        allStandsCompleted: res.allCompleted,
+        standsCompletedCount: res.standsCompletedCount,
+        totalActiveStands: res.totalActiveStands,
+        specialReward: res.specialReward,
       },
     };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Gagal mengklaim poin stand.";
-    return { success: false, error: message };
   }
+
+  // Jika kode check-in biasa
+  const res = await checkInStandSession({
+    participantId: parsed.data.participantId,
+    standInput: rawInput,
+  });
+
+  if (!res.success) {
+    return { success: false, error: res.error || "Gagal check-in di stand." };
+  }
+
+  return {
+    success: true,
+    data: {
+      standName: res.session?.standName || "Stand Lomba",
+      pointsAwarded: 0,
+      sessionStarted: true,
+      minDurationMinutes: res.session?.minDurationMinutes || 15,
+    },
+  };
 }
 
 // Aksi: Penukaran Reward

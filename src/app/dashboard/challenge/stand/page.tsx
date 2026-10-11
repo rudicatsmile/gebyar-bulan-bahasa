@@ -36,6 +36,7 @@ import {
   resetStandSpecialRewardRecipients,
   type StandSpecialRewardStatus,
 } from "@/app/actions/stand-rewards";
+import { getStandCheckoutCode, getStandCheckoutToken } from "@/lib/stand-utils";
 import {
   ArrowLeft,
   QrCode,
@@ -72,7 +73,10 @@ export default function DashboardKelolaStandPage() {
   const [rewardSaving, setRewardSaving] = React.useState(false);
   const [rewardEnabled, setRewardEnabled] = React.useState(true);
   const [rewardQuota, setRewardQuota] = React.useState(50);
+  const [minDurationMinutes, setMinDurationMinutes] = React.useState(15);
+  const [validationMode, setValidationMode] = React.useState<"both" | "qr" | "code">("both");
   const [selectedRewardId, setSelectedRewardId] = React.useState<string>("");
+  const [qrTab, setQrTab] = React.useState<"checkin" | "checkout">("checkin");
   const [rewardFeedback, setRewardFeedback] = React.useState<{
     type: "success" | "error";
     message: string;
@@ -138,6 +142,8 @@ export default function DashboardKelolaStandPage() {
         if (showLoading) {
           setRewardEnabled(res.data.config.enabled);
           setRewardQuota(res.data.config.quota);
+          setMinDurationMinutes(res.data.config.minDurationMinutes || 15);
+          setValidationMode(res.data.config.validationMode || "both");
           setSelectedRewardId(res.data.config.rewardId || "");
         }
       }
@@ -240,6 +246,8 @@ export default function DashboardKelolaStandPage() {
       const res = await updateStandSpecialRewardConfig({
         enabled: rewardEnabled,
         quota: Math.max(1, rewardQuota),
+        minDurationMinutes: Math.max(1, minDurationMinutes),
+        validationMode: validationMode,
         rewardId: selectedRewardId || null,
         rewardName: selected ? selected.name : (rewardStatus?.config.rewardName || "Paket Merchandise Spesial Eksplorasi Budaya"),
       });
@@ -247,7 +255,7 @@ export default function DashboardKelolaStandPage() {
       if (res.success) {
         setRewardFeedback({
           type: "success",
-          message: "Pengaturan kuota dinamis & reward khusus stand berhasil disimpan ke database!",
+          message: "Pengaturan kuota dinamis, durasi menonton, & reward khusus stand berhasil disimpan ke database!",
         });
         await loadRewardStatus();
       } else {
@@ -582,7 +590,7 @@ export default function DashboardKelolaStandPage() {
 
           {/* Konfigurasi Form */}
           <form onSubmit={handleSaveRewardConfig} className="space-y-4 pt-1">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
               {/* 1. Toggle Aktif */}
               <div className="p-3.5 rounded-xl border border-border bg-background flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
@@ -590,7 +598,7 @@ export default function DashboardKelolaStandPage() {
                     Status Reward Khusus
                   </label>
                   <span className="text-[11px] text-muted-foreground block">
-                    {rewardEnabled ? "Reward diberikan saat scan stand lengkap" : "Sistem dinonaktifkan sementara"}
+                    {rewardEnabled ? "Aktif (Reward saat SEMUA stand tuntas)" : "Sistem dinonaktifkan"}
                   </span>
                 </div>
                 <input
@@ -602,7 +610,53 @@ export default function DashboardKelolaStandPage() {
                 />
               </div>
 
-              {/* 2. Batas Kuota Dinamis */}
+              {/* 2. Durasi Minimal Menonton Stand */}
+              <div className="p-3.5 rounded-xl border border-border bg-background space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="duration-input" className="text-xs font-semibold text-foreground">
+                    Durasi Min. Nonton *
+                  </label>
+                  <span className="text-[10px] font-mono text-muted-foreground">Server-side timer</span>
+                </div>
+                <div className="relative">
+                  <Input
+                    id="duration-input"
+                    type="number"
+                    min={1}
+                    max={180}
+                    step={1}
+                    value={minDurationMinutes}
+                    onChange={(e) => setMinDurationMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="h-9 text-sm font-mono font-bold pr-16"
+                    required
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                    Menit
+                  </span>
+                </div>
+              </div>
+
+              {/* 3. Mode Validasi Akhir di Stand */}
+              <div className="p-3.5 rounded-xl border border-border bg-background space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="validation-mode-select" className="text-xs font-semibold text-foreground">
+                    Validasi Checkout Stand *
+                  </label>
+                  <span className="text-[10px] font-mono text-muted-foreground">Di dalam stand</span>
+                </div>
+                <select
+                  id="validation-mode-select"
+                  value={validationMode}
+                  onChange={(e) => setValidationMode(e.target.value as "both" | "qr" | "code")}
+                  className="w-full h-9 rounded-lg border border-border bg-card px-2.5 text-xs text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="both">Kombinasi (QR Checkout ATAU Kode Dalam)</option>
+                  <option value="code">Hanya Kode Dalam Stand</option>
+                  <option value="qr">Hanya Scan QR Checkout Dalam Stand</option>
+                </select>
+              </div>
+
+              {/* 4. Batas Kuota Dinamis */}
               <div className="p-3.5 rounded-xl border border-border bg-background space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label htmlFor="quota-input" className="text-xs font-semibold text-foreground">
@@ -627,12 +681,14 @@ export default function DashboardKelolaStandPage() {
                   </span>
                 </div>
               </div>
+            </div>
 
-              {/* 3. Pilihan Reward dari Katalog */}
-              <div className="p-3.5 rounded-xl border border-border bg-background space-y-1.5">
-                <div className="flex items-center justify-between">
+            {/* Pilihan Reward dari Katalog */}
+            <div className="p-3.5 rounded-xl border border-border bg-background flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="space-y-0.5 sm:max-w-xs">
+                <div className="flex items-center gap-1.5">
                   <label htmlFor="reward-select" className="text-xs font-semibold text-foreground">
-                    Pilih Hadiah / Merchandise *
+                    Pilih Hadiah / Merchandise Katalog *
                   </label>
                   <Link
                     href="/dashboard/challenge/reward"
@@ -643,6 +699,11 @@ export default function DashboardKelolaStandPage() {
                     <ExternalLink className="h-2.5 w-2.5" />
                   </Link>
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Reward diberikan otomatis jika peserta menyelesaikan SELURUH stand aktif.
+                </p>
+              </div>
+              <div className="flex-1 max-w-md">
                 <select
                   id="reward-select"
                   value={selectedRewardId}
@@ -710,9 +771,9 @@ export default function DashboardKelolaStandPage() {
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                  <span className="px-2.5 py-1 rounded bg-primary text-accent font-mono font-bold tracking-wider">{s.code}</span>
-                  <span className="font-mono font-bold text-foreground">+{s.points} Pts</span>
-                  <span className="text-muted-foreground">{s.visitCount} Kunjungan</span>
+                  <span className="px-2 py-0.5 rounded bg-primary/20 text-accent font-mono font-bold" title="Kode Pintu Masuk">Masuk: {s.code}</span>
+                  <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 font-mono font-bold" title="Kode Dalam Stand">Dalam: {getStandCheckoutCode(s.code)}</span>
+                  <span className="text-muted-foreground">{s.visitCount} Selesai</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <MapPin className="h-3.5 w-3.5 text-accent shrink-0" />
@@ -783,10 +844,15 @@ export default function DashboardKelolaStandPage() {
                         {s.description || "Stand edukasi pameran kebudayaan."}
                       </span>
                     </TableCell>
-                    <TableCell className="text-center font-mono font-bold text-accent text-sm">
-                      <span className="px-2.5 py-1 rounded bg-primary text-accent tracking-wider">
-                        {s.code}
-                      </span>
+                    <TableCell className="text-center font-mono">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="px-2 py-0.5 rounded bg-primary/20 text-accent font-bold text-xs" title="Kode Pintu Masuk">
+                          Masuk: {s.code}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 font-bold text-[11px]" title="Kode Dalam Stand">
+                          Dalam: {getStandCheckoutCode(s.code)}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       <div className="flex items-center gap-1.5">
@@ -1021,23 +1087,65 @@ export default function DashboardKelolaStandPage() {
 
         {/* Modal Pratinjau QR Stand Siap Cetak */}
         {previewStand && (
-          <Dialog open={!!previewStand} onOpenChange={() => setPreviewStand(null)}>
-            <div className="space-y-4 text-center p-4">
+          <Dialog open={!!previewStand} onOpenChange={() => { setPreviewStand(null); setQrTab("checkin"); }}>
+            <div className="space-y-4 text-center p-4 max-w-lg mx-auto">
               <DialogHeader>
                 <DialogTitle>{previewStand.name}</DialogTitle>
                 <DialogDescription>
-                  Kode QR token resmi untuk dicetak dan ditempel di meja stand pameran.
+                  Cetak 2 QR token resmi: satu untuk <strong>Pintu Masuk</strong> (check-in), dan satu lagi untuk <strong>Di Dalam Stand</strong> (checkout setelah 15 menit).
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="py-2">
-                <QRCodeCard
-                  standName={previewStand.name}
-                  standCode={previewStand.code}
-                  qrToken={previewStand.qrToken}
-                  location={previewStand.location}
-                  points={previewStand.points}
-                />
+              {/* Tab Switcher: QR Masuk vs QR Di Dalam Stand */}
+              <div className="flex items-center justify-center p-1 bg-muted rounded-xl gap-1 border border-border">
+                <button
+                  type="button"
+                  onClick={() => setQrTab("checkin")}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    qrTab === "checkin"
+                      ? "bg-card text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  🚪 1. QR Masuk (Check-in)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQrTab("checkout")}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    qrTab === "checkout"
+                      ? "bg-card text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  📍 2. QR Dalam Stand (Checkout)
+                </button>
+              </div>
+
+              <div className="py-1">
+                {qrTab === "checkin" ? (
+                  <QRCodeCard
+                    standName={previewStand.name}
+                    standCode={previewStand.code}
+                    qrToken={previewStand.qrToken}
+                    location={previewStand.location}
+                    points={previewStand.points}
+                    type="checkin"
+                    badgeLabel="PINTU MASUK STAND (CHECK-IN)"
+                    infoText="Tempel di pintu masuk/depan stand. Peserta memindai untuk check-in & memulai sesi menonton minimal 15 menit."
+                  />
+                ) : (
+                  <QRCodeCard
+                    standName={previewStand.name}
+                    standCode={getStandCheckoutCode(previewStand.code)}
+                    qrToken={getStandCheckoutToken(previewStand.id, previewStand.qrToken)}
+                    location={previewStand.location}
+                    points={previewStand.points}
+                    type="checkout"
+                    badgeLabel="DI DALAM AREA STAND (CHECKOUT)"
+                    infoText="HANYA dipajang di dalam panggung/area dalam stand. Dipindai / dimasukkan kodenya oleh peserta setelah durasi 15 menit selesai."
+                  />
+                )}
               </div>
             </div>
           </Dialog>

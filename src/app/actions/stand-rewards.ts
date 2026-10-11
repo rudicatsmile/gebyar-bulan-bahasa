@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { STANDS } from "@/lib/dummy-data";
+import { getStandCheckoutCode, getStandCheckoutToken } from "@/lib/stand-utils";
 
 export interface StandSpecialRewardConfig {
   enabled: boolean;
@@ -10,6 +11,8 @@ export interface StandSpecialRewardConfig {
   rewardId: string | null;
   rewardName: string;
   description?: string;
+  minDurationMinutes: number; // default: 15 menit
+  validationMode: "both" | "qr" | "code"; // "both", "qr", "code"
 }
 
 export interface StandSpecialRewardRecipient {
@@ -23,10 +26,23 @@ export interface StandSpecialRewardRecipient {
   status: "diterima" | "kuota_habis";
 }
 
+export interface StandViewerSession {
+  id: string;
+  participantId: string;
+  standId: string;
+  standName: string;
+  standCode: string;
+  location?: string;
+  startedAt: string; // ISO date server
+  minDurationMinutes: number;
+  status: "sedang_menonton" | "selesai" | "dibatalkan";
+  completedAt?: string;
+}
+
 export interface StandSpecialRewardStatus {
   config: StandSpecialRewardConfig;
   totalActiveStands: number;
-  activeStandsList: { id: string; name: string; code: string }[];
+  activeStandsList: { id: string; name: string; code: string; location?: string; checkoutCode?: string; checkoutToken?: string }[];
   grantedCount: number;
   remainingQuota: number;
   totalCompleters: number;
@@ -45,7 +61,9 @@ const DEFAULT_CONFIG: StandSpecialRewardConfig = {
   quota: 50,
   rewardId: null,
   rewardName: "Paket Merchandise Spesial Eksplorasi Budaya",
-  description: "Diberikan khusus untuk 50 peserta pertama yang berhasil mengunjungi seluruh stand pameran budaya.",
+  description: "Diberikan khusus untuk peserta yang berhasil menyelesaikan seluruh stand pameran budaya.",
+  minDurationMinutes: 15,
+  validationMode: "both",
 };
 
 async function broadcastStandUpdate(action: string, payload?: Record<string, any>) {
@@ -77,16 +95,19 @@ export async function getStandSpecialRewardStatus(): Promise<{
     // 1. Ambil stand yang aktif
     const { data: dbStands } = await supabase
       .from("stands")
-      .select("id, name, code, is_active")
+      .select("id, name, code, booth_location, qr_token, is_active")
       .eq("is_active", true)
       .order("code", { ascending: true });
 
-    let activeStands: { id: string; name: string; code: string }[] = [];
+    let activeStands: { id: string; name: string; code: string; location?: string; checkoutCode?: string; checkoutToken?: string }[] = [];
     if (dbStands && dbStands.length > 0) {
       activeStands = dbStands.map((s) => ({
         id: s.id,
         name: s.name,
         code: s.code,
+        location: s.booth_location || "Area Pameran",
+        checkoutCode: getStandCheckoutCode(s.code),
+        checkoutToken: getStandCheckoutToken(s.id, s.qr_token),
       }));
     } else {
       // Fallback dummy stands jika tabel belum diisi
@@ -94,6 +115,9 @@ export async function getStandSpecialRewardStatus(): Promise<{
         id: s.id,
         name: s.name,
         code: s.code,
+        location: s.location || "Area Pameran",
+        checkoutCode: getStandCheckoutCode(s.code),
+        checkoutToken: getStandCheckoutToken(s.id, s.qrToken),
       }));
     }
 
@@ -172,7 +196,7 @@ export async function getStandSpecialRewardStatus(): Promise<{
 }
 
 /**
- * Menyimpan konfigurasi batas penerima (kuota), pilihan reward, dan status aktif reward khusus.
+ * Menyimpan konfigurasi batas penerima (kuota), durasi menonton minimal, pilihan reward, dan status aktif reward khusus.
  */
 export async function updateStandSpecialRewardConfig(payload: {
   enabled?: boolean;
@@ -180,6 +204,8 @@ export async function updateStandSpecialRewardConfig(payload: {
   rewardId?: string | null;
   rewardName?: string;
   description?: string;
+  minDurationMinutes?: number;
+  validationMode?: "both" | "qr" | "code";
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createAdminClient();
@@ -203,6 +229,8 @@ export async function updateStandSpecialRewardConfig(payload: {
       ...(payload.rewardId !== undefined ? { rewardId: payload.rewardId } : {}),
       ...(payload.rewardName !== undefined ? { rewardName: payload.rewardName } : {}),
       ...(payload.description !== undefined ? { description: payload.description } : {}),
+      ...(payload.minDurationMinutes !== undefined ? { minDurationMinutes: Math.max(1, Number(payload.minDurationMinutes) || 15) } : {}),
+      ...(payload.validationMode !== undefined ? { validationMode: payload.validationMode } : {}),
     };
 
     const { error } = await supabase.from("event_settings").upsert({
@@ -213,7 +241,12 @@ export async function updateStandSpecialRewardConfig(payload: {
 
     if (error) throw error;
 
-    await broadcastStandUpdate("config_updated", { quota: updated.quota, enabled: updated.enabled });
+    await broadcastStandUpdate("config_updated", {
+      quota: updated.quota,
+      enabled: updated.enabled,
+      minDurationMinutes: updated.minDurationMinutes,
+      validationMode: updated.validationMode,
+    });
 
     revalidatePath("/dashboard/challenge/stand");
     revalidatePath("/dashboard/challenge/reward");
@@ -306,7 +339,22 @@ export async function checkAndProcessStandCompletionReward(
 
   const activeStandIdSet = new Set(activeStands.map((s) => s.id));
 
-  // 2. Dapatkan riwayat kunjungan stand oleh peserta ini dari point_transactions
+  // 2. Dapatkan riwayat penyelesaian stand oleh peserta ini dari sesi menonton (status: selesai)
+  const { data: sessionRow } = await supabase
+    .from("event_settings")
+    .select("value")
+    .eq("key", "stand_viewer_sessions")
+    .maybeSingle();
+
+  const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
+    ? (sessionRow.value as unknown as StandViewerSession[])
+    : [];
+
+  const sessionCompletedIds = allSessions
+    .filter((s) => s.participantId === participantId && s.status === "selesai")
+    .map((s) => s.standId);
+
+  // Dukungan riwayat kunjungan legacy
   const { data: userVisits } = await supabase
     .from("point_transactions")
     .select("stand_id")
@@ -314,9 +362,12 @@ export async function checkAndProcessStandCompletionReward(
     .eq("source", "kode_unik")
     .not("stand_id", "is", null);
 
+  const legacyVisitedIds = (userVisits || [])
+    .map((v) => v.stand_id)
+    .filter((id): id is string => Boolean(id));
+
   const visitedStandIds = new Set(
-    (userVisits || [])
-      .map((v) => v.stand_id)
+    [...sessionCompletedIds, ...legacyVisitedIds]
       .filter((id): id is string => Boolean(id && activeStandIdSet.has(id)))
   );
 
@@ -554,7 +605,22 @@ export async function getParticipantStandProgress(participantId: string) {
     const totalActiveStands = activeStands.length;
     const activeStandIdSet = new Set(activeStands.map((s) => s.id));
 
-    // 2. Kunjungan peserta
+    // 2. Kunjungan / sesi selesai peserta
+    const { data: sessionRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_viewer_sessions")
+      .maybeSingle();
+
+    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
+      ? (sessionRow.value as unknown as StandViewerSession[])
+      : [];
+
+    const sessionCompletedIds = allSessions
+      .filter((s) => s.participantId === participantId && s.status === "selesai")
+      .map((s) => s.standId);
+
+    // Kunjungan legacy
     const { data: userVisits } = await supabase
       .from("point_transactions")
       .select("stand_id")
@@ -562,9 +628,12 @@ export async function getParticipantStandProgress(participantId: string) {
       .eq("source", "kode_unik")
       .not("stand_id", "is", null);
 
+    const legacyVisitedIds = (userVisits || [])
+      .map((v) => v.stand_id)
+      .filter((id): id is string => Boolean(id));
+
     const visitedStandIds = new Set(
-      (userVisits || [])
-        .map((v) => v.stand_id)
+      [...sessionCompletedIds, ...legacyVisitedIds]
         .filter((id): id is string => Boolean(id && activeStandIdSet.has(id)))
     );
 
@@ -619,6 +688,561 @@ export async function getParticipantStandProgress(participantId: string) {
       remainingQuota: 50,
       existingRecipient: null,
     };
+  }
+}
+
+/**
+ * Mengambil informasi sesi menonton aktif peserta beserta perhitungan waktu server.
+ */
+export async function getParticipantStandSession(participantId: string) {
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Ambil stand aktif
+    const { data: dbStands } = await supabase
+      .from("stands")
+      .select("id, name, code, booth_location, qr_token, is_active")
+      .eq("is_active", true)
+      .order("code", { ascending: true });
+
+    const activeStands = (dbStands && dbStands.length > 0)
+      ? dbStands
+      : STANDS.map((s) => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          booth_location: s.location,
+          qr_token: s.qrToken,
+          is_active: true,
+        }));
+
+    const totalActiveStands = activeStands.length;
+
+    // 2. Ambil konfigurasi
+    const { data: configRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_special_reward_config")
+      .maybeSingle();
+
+    const config: StandSpecialRewardConfig = {
+      ...DEFAULT_CONFIG,
+      ...((configRow?.value as any) || {}),
+    };
+
+    // 3. Ambil daftar sesi dari event_settings
+    const { data: sessionRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_viewer_sessions")
+      .maybeSingle();
+
+    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
+      ? (sessionRow.value as unknown as StandViewerSession[])
+      : [];
+
+    const userSessions = allSessions.filter((s) => s.participantId === participantId);
+    const activeSession = userSessions.find((s) => s.status === "sedang_menonton") || null;
+
+    // Ambil stand yang sudah selesai
+    const sessionCompletedIds = userSessions
+      .filter((s) => s.status === "selesai")
+      .map((s) => s.standId);
+
+    // Kunjungan legacy jika ada
+    const { data: userVisits } = await supabase
+      .from("point_transactions")
+      .select("stand_id")
+      .eq("participant_id", participantId)
+      .eq("source", "kode_unik")
+      .not("stand_id", "is", null);
+
+    const legacyVisitedIds = (userVisits || [])
+      .map((v) => v.stand_id)
+      .filter((id): id is string => Boolean(id));
+
+    const completedStandIds = Array.from(
+      new Set([...sessionCompletedIds, ...legacyVisitedIds])
+    );
+
+    // Hitung timer server jika ada sesi aktif
+    let sessionTiming: {
+      serverTime: string;
+      elapsedSeconds: number;
+      requiredSeconds: number;
+      remainingSeconds: number;
+      isDurationMet: boolean;
+      progressPercent: number;
+    } | null = null;
+
+    if (activeSession) {
+      const startedAtTime = new Date(activeSession.startedAt).getTime();
+      const nowTime = Date.now();
+      const elapsedSeconds = Math.max(0, Math.floor((nowTime - startedAtTime) / 1000));
+      const requiredSeconds = (activeSession.minDurationMinutes || config.minDurationMinutes || 15) * 60;
+      const remainingSeconds = Math.max(0, requiredSeconds - elapsedSeconds);
+      const isDurationMet = elapsedSeconds >= requiredSeconds;
+      const progressPercent = Math.min(100, Math.floor((elapsedSeconds / requiredSeconds) * 100));
+
+      sessionTiming = {
+        serverTime: new Date().toISOString(),
+        elapsedSeconds,
+        requiredSeconds,
+        remainingSeconds,
+        isDurationMet,
+        progressPercent,
+      };
+    }
+
+    // 4. Ambil status reward khusus jika sudah selesai semua
+    const { data: recRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_special_reward_recipients")
+      .maybeSingle();
+
+    const recipients: StandSpecialRewardRecipient[] = Array.isArray(recRow?.value)
+      ? (recRow.value as unknown as StandSpecialRewardRecipient[])
+      : [];
+
+    const existingRecipient = recipients.find((r) => r.participantId === participantId) || null;
+    const grantedCount = recipients.filter((r) => r.status === "diterima").length;
+    const remainingQuota = Math.max(0, config.quota - grantedCount);
+    const allCompleted = completedStandIds.length >= totalActiveStands && totalActiveStands > 0;
+
+    return {
+      success: true,
+      activeSession,
+      sessionTiming,
+      completedStandIds,
+      standsCompletedCount: completedStandIds.length,
+      totalActiveStands,
+      activeStandsList: activeStands.map((s) => ({
+        id: s.id,
+        name: s.name,
+        code: s.code,
+        location: s.booth_location || "Area Pameran",
+        isCompleted: completedStandIds.includes(s.id),
+        checkoutCode: getStandCheckoutCode(s.code),
+      })),
+      allCompleted,
+      config,
+      grantedCount,
+      remainingQuota,
+      existingRecipient,
+    };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      activeSession: null,
+      sessionTiming: null,
+      completedStandIds: [],
+      standsCompletedCount: 0,
+      totalActiveStands: 8,
+      activeStandsList: [],
+      allCompleted: false,
+      config: DEFAULT_CONFIG,
+      grantedCount: 0,
+      remainingQuota: 50,
+      existingRecipient: null,
+    };
+  }
+}
+
+/**
+ * Check-in ke dalam stand untuk memulai sesi menonton (1 sesi aktif dalam satu waktu).
+ */
+export async function checkInStandSession(payload: {
+  participantId: string;
+  standInput: string;
+}): Promise<{
+  success: boolean;
+  session?: StandViewerSession;
+  error?: string;
+  message?: string;
+}> {
+  if (!payload.participantId) {
+    return { success: false, error: "Peserta tidak valid." };
+  }
+
+  let cleanInput = (payload.standInput || "").trim();
+
+  // Defensively extract if user passed JSON or URL payload
+  if (cleanInput.startsWith("{") && cleanInput.endsWith("}")) {
+    try {
+      const obj = JSON.parse(cleanInput);
+      if (obj.code) cleanInput = String(obj.code).trim();
+      else if (obj.token) cleanInput = String(obj.token).trim();
+      else if (obj.standCode) cleanInput = String(obj.standCode).trim();
+    } catch { }
+  }
+  if (cleanInput.includes("http://") || cleanInput.includes("https://")) {
+    try {
+      const parsedUrl = new URL(cleanInput);
+      const codeParam =
+        parsedUrl.searchParams.get("code") ||
+        parsedUrl.searchParams.get("stand") ||
+        parsedUrl.searchParams.get("token");
+      if (codeParam) cleanInput = codeParam.trim();
+    } catch { }
+  }
+
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Dapatkan daftar stand aktif
+    const { data: dbStands } = await supabase
+      .from("stands")
+      .select("id, name, code, booth_location, qr_token, is_active")
+      .eq("is_active", true);
+
+    const activeStands = (dbStands && dbStands.length > 0)
+      ? dbStands
+      : STANDS.map((s) => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          booth_location: s.location,
+          qr_token: s.qrToken,
+          is_active: true,
+        }));
+
+    const cleanUpper = cleanInput.toUpperCase();
+    const matchedStand = activeStands.find(
+      (s) =>
+        s.id.toLowerCase() === cleanInput.toLowerCase() ||
+        s.code.toUpperCase() === cleanUpper ||
+        (s.qr_token && s.qr_token.toUpperCase() === cleanUpper)
+    );
+
+    if (!matchedStand) {
+      return {
+        success: false,
+        error: `Kode atau QR masuk "${cleanInput}" tidak ditemukan atau stand sedang nonaktif.`,
+      };
+    }
+
+    // 2. Ambil konfigurasi durasi minimal
+    const { data: configRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_special_reward_config")
+      .maybeSingle();
+
+    const config: StandSpecialRewardConfig = {
+      ...DEFAULT_CONFIG,
+      ...((configRow?.value as any) || {}),
+    };
+
+    const minMinutes = config.minDurationMinutes || 15;
+
+    // 3. Ambil daftar sesi dari event_settings
+    const { data: sessionRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_viewer_sessions")
+      .maybeSingle();
+
+    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
+      ? (sessionRow.value as unknown as StandViewerSession[])
+      : [];
+
+    // Cek apakah stand ini sudah pernah selesai
+    const isAlreadyCompleted = allSessions.some(
+      (s) =>
+        s.participantId === payload.participantId &&
+        s.standId === matchedStand.id &&
+        s.status === "selesai"
+    );
+
+    if (isAlreadyCompleted) {
+      return {
+        success: false,
+        error: `Anda sudah pernah menyelesaikan kunjungan di stand "${matchedStand.name}". Silakan kunjungi stand lainnya.`,
+      };
+    }
+
+    // Cek apakah peserta memiliki sesi lain yang sedang berlangsung
+    const activeSession = allSessions.find(
+      (s) => s.participantId === payload.participantId && s.status === "sedang_menonton"
+    );
+
+    if (activeSession) {
+      if (activeSession.standId === matchedStand.id) {
+        return {
+          success: true,
+          session: activeSession,
+          message: `Anda sedang berada di sesi menonton stand "${matchedStand.name}".`,
+        };
+      } else {
+        return {
+          success: false,
+          error: `Anda masih memiliki sesi menonton aktif di "${activeSession.standName}". Selesaikan atau batalkan sesi tersebut terlebih dahulu sebelum check-in ke stand lain.`,
+        };
+      }
+    }
+
+    // 4. Buat sesi baru di server
+    const newSession: StandViewerSession = {
+      id: `SES-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      participantId: payload.participantId,
+      standId: matchedStand.id,
+      standName: matchedStand.name,
+      standCode: matchedStand.code,
+      location: matchedStand.booth_location || "Area Pameran",
+      startedAt: new Date().toISOString(),
+      minDurationMinutes: minMinutes,
+      status: "sedang_menonton",
+    };
+
+    allSessions.push(newSession);
+
+    await supabase.from("event_settings").upsert({
+      key: "stand_viewer_sessions",
+      value: allSessions as any,
+      updated_at: new Date().toISOString(),
+    });
+
+    await broadcastStandUpdate("session_started", {
+      participantId: payload.participantId,
+      standId: matchedStand.id,
+      standName: matchedStand.name,
+    });
+
+    revalidatePath("/peserta/scan");
+
+    return {
+      success: true,
+      session: newSession,
+      message: `Check-in berhasil! Anda mulai menonton di "${matchedStand.name}". Durasi minimal menonton adalah ${minMinutes} menit.`,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memulai sesi menonton stand.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Validasi checkout kehadiran di dalam stand setelah durasi terpenuhi.
+ * Tidak menambahkan poin per stand (aturan utama).
+ */
+export async function checkOutStandSession(payload: {
+  participantId: string;
+  standId?: string;
+  checkoutInput?: string;
+  validationInput?: string;
+}): Promise<{
+  success: boolean;
+  standName?: string;
+  standCompleted?: boolean;
+  allCompleted?: boolean;
+  standsCompletedCount?: number;
+  totalActiveStands?: number;
+  specialReward?: any;
+  error?: string;
+  message?: string;
+}> {
+  if (!payload.participantId) {
+    return { success: false, error: "Peserta tidak valid." };
+  }
+
+  let cleanInput = (payload.checkoutInput || payload.validationInput || "").trim();
+
+  // Defensively extract if JSON or URL
+  if (cleanInput.startsWith("{") && cleanInput.endsWith("}")) {
+    try {
+      const obj = JSON.parse(cleanInput);
+      if (obj.checkoutCode) cleanInput = String(obj.checkoutCode).trim();
+      else if (obj.code) cleanInput = String(obj.code).trim();
+      else if (obj.token) cleanInput = String(obj.token).trim();
+    } catch { }
+  }
+  if (cleanInput.includes("http://") || cleanInput.includes("https://")) {
+    try {
+      const parsedUrl = new URL(cleanInput);
+      const codeParam =
+        parsedUrl.searchParams.get("checkout") ||
+        parsedUrl.searchParams.get("code") ||
+        parsedUrl.searchParams.get("token");
+      if (codeParam) cleanInput = codeParam.trim();
+    } catch { }
+  }
+
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Ambil daftar sesi
+    const { data: sessionRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_viewer_sessions")
+      .maybeSingle();
+
+    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
+      ? (sessionRow.value as unknown as StandViewerSession[])
+      : [];
+
+    const sessionIndex = allSessions.findIndex(
+      (s) =>
+        s.participantId === payload.participantId &&
+        s.status === "sedang_menonton" &&
+        (!payload.standId || s.standId === payload.standId)
+    );
+
+    if (sessionIndex === -1) {
+      return {
+        success: false,
+        error: "Tidak ditemukan sesi menonton aktif untuk stand ini. Pastikan Anda sudah check-in terlebih dahulu.",
+      };
+    }
+
+    const session = allSessions[sessionIndex];
+    const targetStandId = session.standId;
+
+    // 2. Validasi Durasi Minimal di Server
+    const startedAtTime = new Date(session.startedAt).getTime();
+    const nowTime = Date.now();
+    const elapsedSeconds = Math.floor((nowTime - startedAtTime) / 1000);
+    const requiredSeconds = (session.minDurationMinutes || 15) * 60;
+
+    if (elapsedSeconds < requiredSeconds) {
+      const remainingMinutes = Math.ceil((requiredSeconds - elapsedSeconds) / 60);
+      return {
+        success: false,
+        error: `Durasi menonton belum mencukupi! Anda baru menonton selama ${Math.floor(elapsedSeconds / 60)} menit. Wajib menonton minimal ${session.minDurationMinutes} menit (kurang ${remainingMinutes} menit lagi).`,
+      };
+    }
+
+    // 3. Ambil data stand untuk verifikasi checkout
+    const { data: dbStand } = await supabase
+      .from("stands")
+      .select("id, name, code, qr_token, is_active")
+      .eq("id", targetStandId)
+      .maybeSingle();
+
+    const standName = dbStand?.name || session.standName;
+    const expectedCheckoutCode = getStandCheckoutCode(dbStand?.code || session.standCode);
+    const expectedCheckoutToken = getStandCheckoutToken(targetStandId, dbStand?.qr_token);
+
+    const inputUpper = cleanInput.toUpperCase();
+    const isCodeValid =
+      inputUpper === expectedCheckoutCode ||
+      inputUpper === expectedCheckoutToken.toUpperCase() ||
+      inputUpper === (dbStand?.code || session.standCode).toUpperCase();
+
+    if (!isCodeValid) {
+      return {
+        success: false,
+        error: `Kode di dalam stand / QR checkout "${cleanInput}" tidak sesuai untuk ${standName}. Pastikan memindai QR checkout atau memasukkan kode yang dipajang di dalam area stand.`,
+      };
+    }
+
+    // 4. Tandai Sesi Selesai (TANPA MENAMBAHKAN POIN APAPUN)
+    allSessions[sessionIndex] = {
+      ...session,
+      status: "selesai",
+      completedAt: new Date().toISOString(),
+    };
+
+    await supabase.from("event_settings").upsert({
+      key: "stand_viewer_sessions",
+      value: allSessions as any,
+      updated_at: new Date().toISOString(),
+    });
+
+    await broadcastStandUpdate("session_completed", {
+      participantId: payload.participantId,
+      standId: targetStandId,
+      standName,
+    });
+
+    // 5. Cek apakah seluruh stand aktif sudah tuntas
+    const completionResult = await checkAndProcessStandCompletionReward(payload.participantId);
+
+    revalidatePath("/peserta/scan");
+    revalidatePath("/dashboard/challenge/stand");
+
+    return {
+      success: true,
+      standName,
+      standCompleted: true,
+      allCompleted: completionResult.allStandsCompleted,
+      standsCompletedCount: completionResult.standsCompletedCount,
+      totalActiveStands: completionResult.totalActiveStands,
+      specialReward: completionResult.specialReward,
+      message: `🎉 Selamat! Stand "${standName}" berhasil diselesaikan (${completionResult.standsCompletedCount}/${completionResult.totalActiveStands} stand tuntas).`,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal memproses checkout stand.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Batalkan sesi menonton jika peserta keluar atau berpindah stand lebih awal.
+ */
+export async function cancelStandSession(
+  param: string | { participantId: string; standId?: string }
+): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  const payload = typeof param === "string" ? { participantId: param } : param;
+
+  if (!payload.participantId) {
+    return { success: false, error: "Peserta tidak valid." };
+  }
+
+  try {
+    const supabase = createAdminClient();
+    const { data: sessionRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_viewer_sessions")
+      .maybeSingle();
+
+    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
+      ? (sessionRow.value as unknown as StandViewerSession[])
+      : [];
+
+    const sessionIndex = allSessions.findIndex(
+      (s) =>
+        s.participantId === payload.participantId &&
+        s.status === "sedang_menonton" &&
+        (!payload.standId || s.standId === payload.standId)
+    );
+
+    if (sessionIndex === -1) {
+      return { success: true, message: "Tidak ada sesi aktif untuk dibatalkan." };
+    }
+
+    const cancelled = allSessions[sessionIndex];
+    allSessions[sessionIndex] = {
+      ...cancelled,
+      status: "dibatalkan",
+      completedAt: new Date().toISOString(),
+    };
+
+    await supabase.from("event_settings").upsert({
+      key: "stand_viewer_sessions",
+      value: allSessions as any,
+      updated_at: new Date().toISOString(),
+    });
+
+    await broadcastStandUpdate("session_cancelled", {
+      participantId: payload.participantId,
+      standId: cancelled.standId,
+    });
+
+    revalidatePath("/peserta/scan");
+
+    return {
+      success: true,
+      message: `Sesi menonton di stand "${cancelled.standName}" telah dibatalkan.`,
+    };
+  } catch (err: unknown) {
+    return { success: false, error: "Gagal membatalkan sesi menonton." };
   }
 }
 

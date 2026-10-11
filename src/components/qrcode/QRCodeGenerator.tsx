@@ -10,7 +10,10 @@ interface QRCodeCardProps {
   standCode: string;
   qrToken: string;
   location?: string;
-  points: number;
+  points?: number;
+  badgeLabel?: string;
+  infoText?: string;
+  type?: "checkin" | "checkout";
 }
 
 export function QRCodeCard({
@@ -18,7 +21,10 @@ export function QRCodeCard({
   standCode,
   qrToken,
   location = "Area Pameran & Budaya",
-  points = 10,
+  points = 0,
+  badgeLabel,
+  infoText,
+  type = "checkin",
 }: QRCodeCardProps) {
   const [dataUrl, setDataUrl] = React.useState<string>("");
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -27,9 +33,10 @@ export function QRCodeCard({
     // Generate QR payload containing standard app scan URL or token
     const qrPayload = JSON.stringify({
       app: "GebyarBulanBahasa",
-      type: "stand",
+      type: type === "checkout" ? "stand_checkout" : "stand_checkin",
       code: standCode,
       token: qrToken,
+      standCode: standCode,
     });
 
     QRCode.toDataURL(qrPayload, {
@@ -71,6 +78,11 @@ export function QRCodeCard({
           {standName}
         </h4>
         <p className="text-xs text-muted-foreground">{location}</p>
+        {badgeLabel && (
+          <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-accent/20 text-accent border border-accent/30">
+            {badgeLabel}
+          </span>
+        )}
       </div>
 
       <div className="p-3 bg-white rounded-xl border border-border shadow-xs">
@@ -89,13 +101,13 @@ export function QRCodeCard({
 
       <div className="w-full bg-muted/60 p-3 rounded-xl border border-border space-y-1">
         <span className="text-[10px] uppercase font-mono text-muted-foreground block">
-          KODE UNIK STAND
+          {type === "checkout" ? "KODE CHECKOUT DALAM STAND" : "KODE MASUK STAND"}
         </span>
         <div className="font-mono text-2xl font-black text-foreground tracking-widest">
           {standCode}
         </div>
         <span className="text-[11px] font-mono text-accent font-semibold block">
-          +{points} Poin Acara
+          {infoText || (points > 0 ? `+${points} Poin Acara` : "Misi Menonton Stand (Minimal 15 Menit)")}
         </span>
       </div>
 
