@@ -79,9 +79,10 @@ export default function PesertaKepinganPuzzlePage() {
       const targetPieces = res.puzzle.piecesCount;
 
       // Cek apakah peserta sudah pernah menyelesaikan puzzle ini
-      if (participant?.participantRowId) {
+      const pId = participant?.participantRowId || participant?.id || participant?.userId;
+      if (pId) {
         const statusRes = await getParticipantJigsawStatus(
-          participant.participantRowId,
+          pId,
           res.puzzle.id
         );
         if (statusRes.hasCompleted && statusRes.attempt) {
@@ -176,11 +177,12 @@ export default function PesertaKepinganPuzzlePage() {
       setShowVictoryModal(true);
       setSubmitting(true);
 
-      if (participant?.participantRowId && puzzle) {
+      const pId = participant?.participantRowId || participant?.id;
+      if (pId && puzzle) {
         try {
           const res = await submitJigsawCompletion({
             puzzleId: puzzle.id,
-            participantId: participant.participantRowId,
+            participantId: pId,
             timeSeconds: currentElapsed,
             movesCount: currentMoves,
           });
@@ -201,7 +203,7 @@ export default function PesertaKepinganPuzzlePage() {
         setSubmitting(false);
       }
     },
-    [participant?.participantRowId, puzzle]
+    [participant?.participantRowId, participant?.id, puzzle]
   );
 
   // Handle Tile Click / Tap-to-Swap

@@ -356,7 +356,7 @@ export async function uploadJigsawImage(
 }
 
 // =============================================================================
-// 6. PESERTA — GET STATUS PENYELESAIAN (CEGAH KLAIM GANDA)
+// 6. PESERTA — GET STATUS PENYELESAIAN (CEGAH KLAIM GANDA & DETEKSI PERSISTEN)
 // =============================================================================
 export async function getParticipantJigsawStatus(
   participantId: string,
@@ -365,44 +365,132 @@ export async function getParticipantJigsawStatus(
   hasCompleted: boolean;
   attempt?: JigsawAttempt;
 }> {
-  if (!participantId || !puzzleId) {
+  if (!participantId) {
     return { hasCompleted: false };
   }
 
   try {
     const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("jigsaw_attempts")
-      .select("*")
-      .eq("participant_id", participantId)
-      .eq("puzzle_id", puzzleId)
-      .maybeSingle();
 
-    if (data) {
-      return {
-        hasCompleted: true,
-        attempt: {
-          id: data.id,
-          puzzleId: data.puzzle_id,
-          participantId: data.participant_id,
-          score: data.score,
-          timeSeconds: data.time_seconds,
-          movesCount: data.moves_count,
-          isCompleted: data.is_completed,
-          createdAt: data.created_at,
-        },
-      };
+    // 1. Cek tabel resmi jigsaw_attempts jika sudah dimigrasikan
+    try {
+      let query = supabase
+        .from("jigsaw_attempts")
+        .select("*")
+        .eq("participant_id", participantId);
+
+      if (puzzleId) {
+        query = query.eq("puzzle_id", puzzleId);
+      }
+
+      const { data, error } = await query.maybeSingle();
+
+      if (!error && data) {
+        return {
+          hasCompleted: true,
+          attempt: {
+            id: data.id,
+            puzzleId: data.puzzle_id,
+            participantId: data.participant_id,
+            score: data.score,
+            timeSeconds: data.time_seconds,
+            movesCount: data.moves_count,
+            isCompleted: data.is_completed,
+            createdAt: data.created_at,
+          },
+        };
+      }
+    } catch {
+      // Abaikan jika tabel jigsaw_attempts belum dibuat di Supabase
     }
 
+    // Kumpulkan target ID (menangani jika input adalah participantRowId atau auth user_id)
+    const targetIds = [participantId];
+    try {
+      const { data: pLookup } = await supabase
+        .from("participants")
+        .select("id")
+        .eq("user_id", participantId)
+        .maybeSingle();
+      if (pLookup?.id && !targetIds.includes(pLookup.id)) {
+        targetIds.push(pLookup.id);
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    // 2. Cek tabel event_settings key "jigsaw_attempts_data" (persistensi fallback database)
+    try {
+      const { data: esRow } = await supabase
+        .from("event_settings")
+        .select("value")
+        .eq("key", "jigsaw_attempts_data")
+        .maybeSingle();
+
+      if (esRow?.value && Array.isArray(esRow.value)) {
+        const attemptsList = esRow.value as unknown as JigsawAttempt[];
+        const matched = attemptsList.find(
+          (a) => targetIds.includes(a.participantId) && (a.puzzleId === puzzleId || !puzzleId)
+        );
+        if (matched) {
+          return { hasCompleted: true, attempt: matched };
+        }
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    // 3. CEK TABEL point_transactions (SUMBER DATA TRANSAKSI MUTLAK DI DATABASE LIVE)
+    //    Saat peserta menyelesaikan game puzzle, mutasi poin SELALU dicatat di point_transactions.
+    try {
+      const { data: ptRows } = await supabase
+        .from("point_transactions")
+        .select("id, points, note, created_at, participant_id")
+        .in("participant_id", targetIds)
+        .ilike("note", "%Kepingan Puzzle%")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (ptRows && ptRows.length > 0) {
+        const pt = ptRows[0];
+        let moves = 0;
+        let secs: number | null = null;
+        if (pt.note) {
+          const moveMatch = pt.note.match(/(\d+)\s*swap/i);
+          if (moveMatch) moves = parseInt(moveMatch[1], 10);
+          const secMatch = pt.note.match(/(\d+)s/i);
+          if (secMatch) secs = parseInt(secMatch[1], 10);
+        }
+
+        return {
+          hasCompleted: true,
+          attempt: {
+            id: pt.id,
+            puzzleId: puzzleId,
+            participantId: pt.participant_id || participantId,
+            score: pt.points || 100,
+            timeSeconds: secs,
+            movesCount: moves,
+            isCompleted: true,
+            createdAt: pt.created_at,
+          },
+        };
+      }
+    } catch (ptErr) {
+      console.warn("getParticipantJigsawStatus point_transactions notice:", ptErr);
+    }
+
+    // 4. Memory fallback
     const memoryMatch = fallbackAttempts.find(
-      (a) => a.participantId === participantId && a.puzzleId === puzzleId
+      (a) => targetIds.includes(a.participantId) && (a.puzzleId === puzzleId || !puzzleId)
     );
     if (memoryMatch) {
       return { hasCompleted: true, attempt: memoryMatch };
     }
 
     return { hasCompleted: false };
-  } catch {
+  } catch (err: unknown) {
+    console.warn("getParticipantJigsawStatus error:", err);
     const memoryMatch = fallbackAttempts.find(
       (a) => a.participantId === participantId && a.puzzleId === puzzleId
     );
@@ -471,22 +559,45 @@ export async function submitJigsawCompletion(
     }
 
     // 2. Cegah penyelesaian ganda (cek apakah peserta sudah pernah menyelesaikan)
-    const { data: existingDb } = await supabase
-      .from("jigsaw_attempts")
-      .select("id")
-      .eq("participant_id", participantId)
-      .eq("puzzle_id", puzzleId)
-      .maybeSingle();
+    try {
+      const { data: existingDb, error: errDb } = await supabase
+        .from("jigsaw_attempts")
+        .select("id")
+        .eq("participant_id", participantId)
+        .eq("puzzle_id", puzzleId)
+        .maybeSingle();
 
-    if (existingDb) {
-      return {
-        success: false,
-        error: "Anda sudah pernah menyelesaikan puzzle ini dan memperoleh poin sebelumnya.",
-      };
+      if (!errDb && existingDb) {
+        return {
+          success: false,
+          error: "Anda sudah pernah menyelesaikan puzzle ini dan memperoleh poin sebelumnya.",
+        };
+      }
+    } catch {
+      // Non-fatal jika tabel jigsaw_attempts belum ada
+    }
+
+    // Cek juga ke tabel point_transactions untuk mencegah klaim ganda
+    try {
+      const { data: ptExisting } = await supabase
+        .from("point_transactions")
+        .select("id")
+        .eq("participant_id", participantId)
+        .ilike("note", "%Kepingan Puzzle%")
+        .limit(1);
+
+      if (ptExisting && ptExisting.length > 0) {
+        return {
+          success: false,
+          error: "Anda sudah pernah menyelesaikan puzzle ini dan memperoleh poin sebelumnya.",
+        };
+      }
+    } catch {
+      // Non-fatal
     }
 
     const memoryExisting = fallbackAttempts.find(
-      (a) => a.participantId === participantId && a.puzzleId === puzzleId
+      (a) => a.participantId === participantId && (a.puzzleId === puzzleId || !puzzleId)
     );
     if (memoryExisting) {
       return {
@@ -499,7 +610,18 @@ export async function submitJigsawCompletion(
     const attemptId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
-    // 3. Simpan attempt ke database
+    const newAttemptItem: JigsawAttempt = {
+      id: attemptId,
+      puzzleId,
+      participantId,
+      score: points,
+      timeSeconds,
+      movesCount,
+      isCompleted: true,
+      createdAt: nowIso,
+    };
+
+    // 3. Simpan attempt ke database (jigsaw_attempts & event_settings)
     try {
       await supabase.from("jigsaw_attempts").insert({
         id: attemptId,
@@ -510,9 +632,45 @@ export async function submitJigsawCompletion(
         moves_count: movesCount,
         is_completed: true,
       });
+    } catch (insertErr) {
+      console.warn("DB attempt insert notice, continuing:", insertErr);
+    }
 
-      // 4. Beri poin ke saldo peserta dan catat riwayat transaksi
-      if (points > 0) {
+    // Simpan juga secara persisten ke event_settings (key: "jigsaw_attempts_data")
+    try {
+      const { data: esRow } = await supabase
+        .from("event_settings")
+        .select("value")
+        .eq("key", "jigsaw_attempts_data")
+        .maybeSingle();
+
+      const existingAttempts: JigsawAttempt[] = Array.isArray(esRow?.value)
+        ? (esRow.value as any)
+        : [];
+
+      const updatedList = [
+        newAttemptItem,
+        ...existingAttempts.filter(
+          (a) => !(a.participantId === participantId && a.puzzleId === puzzleId)
+        ),
+      ];
+
+      await supabase.from("event_settings").upsert(
+        {
+          key: "jigsaw_attempts_data",
+          value: updatedList as any,
+          description: "Riwayat penyelesaian peserta untuk game kepingan puzzle",
+          updated_at: nowIso,
+        },
+        { onConflict: "key" }
+      );
+    } catch (esErr) {
+      console.warn("Gagal simpan attempt ke event_settings:", esErr);
+    }
+
+    // 4. Beri poin ke saldo peserta dan catat riwayat transaksi
+    if (points > 0) {
+      try {
         await ensureParticipantLedgerSynced(supabase, participantId);
         await supabase.from("point_transactions").insert({
           participant_id: participantId,
@@ -520,22 +678,13 @@ export async function submitJigsawCompletion(
           source: "input_panitia",
           note: `Game Kepingan Puzzle: ${puzzle.title} (${movesCount} swap, ${timeSeconds}s) (+${points} poin)`,
         });
+      } catch (ptErr) {
+        console.warn("Gagal mencatat transaksi poin kepingan puzzle:", ptErr);
       }
-    } catch (insertErr) {
-      console.warn("DB attempt insert notice, caching memory:", insertErr);
     }
 
     // Simpan ke in-memory fallback
-    fallbackAttempts.unshift({
-      id: attemptId,
-      puzzleId,
-      participantId,
-      score: points,
-      timeSeconds,
-      movesCount,
-      isCompleted: true,
-      createdAt: nowIso,
-    });
+    fallbackAttempts.unshift(newAttemptItem);
 
     safeRevalidate("/peserta");
     safeRevalidate("/peserta/challenge");

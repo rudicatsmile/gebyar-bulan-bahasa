@@ -120,9 +120,9 @@ export default function PesertaChallengeListPage() {
     getActiveJigsawPuzzle().then((res) => {
       if (res.success && res.puzzle && res.puzzle.isActive) {
         const pz = res.puzzle;
-        const participantRowId = participant?.participantRowId || participant?.id;
-        if (participantRowId) {
-          getParticipantJigsawStatus(participantRowId, pz.id).then((status) => {
+        const pId = participant?.participantRowId || participant?.id || participant?.userId;
+        if (pId) {
+          getParticipantJigsawStatus(pId, pz.id).then((status) => {
             setJigsawStatus({
               isActive: true,
               hasCompleted: status.hasCompleted,
@@ -167,7 +167,7 @@ export default function PesertaChallengeListPage() {
       .catch(() => {
         setTwibbonStatus({ hasSubmitted: false, hasApproved: false, pointsAwarded: false });
       });
-  }, [participant?.id, participant?.participantRowId]);
+  }, [participant?.id, participant?.participantRowId, participant?.userId]);
 
   // challenge yang tampil di sini bersumber dari tabel `challenges` yang sama
   // dengan halaman admin /dashboard/challenge
