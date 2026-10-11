@@ -291,11 +291,10 @@ export default function PesertaRiwayatPoinPage() {
         {/* Feedback Notifikasi */}
         {cancelFeedback && (
           <div
-            className={`p-4 rounded-xl border text-xs sm:text-sm flex items-start gap-3 animate-in zoom-in-95 ${
-              cancelFeedback.type === "success"
+            className={`p-4 rounded-xl border text-xs sm:text-sm flex items-start gap-3 animate-in zoom-in-95 ${cancelFeedback.type === "success"
                 ? "border-success/40 bg-success/10 text-success"
                 : "border-danger/40 bg-danger/10 text-danger"
-            }`}
+              }`}
           >
             {cancelFeedback.type === "success" ? (
               <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-success" />
@@ -410,8 +409,8 @@ export default function PesertaRiwayatPoinPage() {
                 {rewardFilter === "menunggu"
                   ? "Tidak ada reward yang sedang menunggu pengambilan."
                   : rewardFilter === "diserahkan"
-                  ? "Belum ada reward yang diserahkan."
-                  : "Anda belum pernah menukarkan poin dengan reward merchandise."}
+                    ? "Belum ada reward yang diserahkan."
+                    : "Anda belum pernah menukarkan poin dengan reward merchandise."}
               </p>
               {rewardFilter === "semua" && (
                 <Link href="/peserta/reward">
@@ -431,13 +430,12 @@ export default function PesertaRiwayatPoinPage() {
                 return (
                   <div
                     key={item.id}
-                    className={`rounded-xl border p-4 transition-all space-y-3 relative overflow-hidden ${
-                      isPending
+                    className={`rounded-xl border p-4 transition-all space-y-3 relative overflow-hidden ${isPending
                         ? "border-amber-500/40 bg-amber-500/5 shadow-xs"
                         : isHandedOver
-                        ? "border-success/30 bg-success/5"
-                        : "border-border/60 bg-muted/20 opacity-85"
-                    }`}
+                          ? "border-success/30 bg-success/5"
+                          : "border-border/60 bg-muted/20 opacity-85"
+                      }`}
                   >
                     {/* Header Card: Status & Mutasi Poin */}
                     <div className="flex items-center justify-between gap-2">
@@ -588,7 +586,7 @@ export default function PesertaRiwayatPoinPage() {
                 <Link href="/peserta/challenge">
                   <Button size="sm" className="text-xs gap-1.5">
                     <Sparkles className="h-3.5 w-3.5" />
-                    <span>Kerjakan Challenge</span>
+                    <span>Kerjakan Misi</span>
                   </Button>
                 </Link>
               </div>
@@ -604,13 +602,12 @@ export default function PesertaRiwayatPoinPage() {
                   return (
                     <div
                       key={tx.id}
-                      className={`rounded-xl border bg-card p-3.5 space-y-2 shadow-xs transition-colors hover:border-accent/40 ${
-                        isRefund
+                      className={`rounded-xl border bg-card p-3.5 space-y-2 shadow-xs transition-colors hover:border-accent/40 ${isRefund
                           ? "border-sky-500/30 bg-sky-500/5"
                           : isSpent
-                          ? "border-destructive/30 bg-destructive/5"
-                          : "border-border"
-                      }`}
+                            ? "border-destructive/30 bg-destructive/5"
+                            : "border-border"
+                        }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <Badge
@@ -618,17 +615,16 @@ export default function PesertaRiwayatPoinPage() {
                             isRefund
                               ? "info"
                               : isSpent
-                              ? "danger"
-                              : "gold"
+                                ? "danger"
+                                : "gold"
                           }
                           className="text-[10px] shrink-0 font-medium"
                         >
                           {tx.source}
                         </Badge>
                         <span
-                          className={`font-mono font-bold text-sm shrink-0 ${
-                            isSpent ? "text-destructive" : isRefund ? "text-sky-500" : "text-accent"
-                          }`}
+                          className={`font-mono font-bold text-sm shrink-0 ${isSpent ? "text-destructive" : isRefund ? "text-sky-500" : "text-accent"
+                            }`}
                         >
                           {tx.pointsDelta >= 0 ? `+${tx.pointsDelta}` : tx.pointsDelta} Pts
                         </span>
@@ -671,8 +667,8 @@ export default function PesertaRiwayatPoinPage() {
                                 isRefund
                                   ? "info"
                                   : isSpent
-                                  ? "danger"
-                                  : "gold"
+                                    ? "danger"
+                                    : "gold"
                               }
                               className="text-[10px]"
                             >
@@ -686,13 +682,12 @@ export default function PesertaRiwayatPoinPage() {
                             {tx.timestamp}
                           </TableCell>
                           <TableCell
-                            className={`text-right font-mono font-bold text-sm sm:text-base ${
-                              isSpent
+                            className={`text-right font-mono font-bold text-sm sm:text-base ${isSpent
                                 ? "text-destructive"
                                 : isRefund
-                                ? "text-sky-500"
-                                : "text-accent"
-                            }`}
+                                  ? "text-sky-500"
+                                  : "text-accent"
+                              }`}
                           >
                             {tx.pointsDelta >= 0 ? `+${tx.pointsDelta}` : tx.pointsDelta} Pts
                           </TableCell>
