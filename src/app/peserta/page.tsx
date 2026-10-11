@@ -150,7 +150,7 @@ export default function DashboardPesertaPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-heading text-lg font-bold text-foreground flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
-              <span>Misi Challenge yang Dapat Diikuti</span>
+              <span>Misi yang Dapat Diikuti</span>
             </h2>
             <Link href="/peserta/challenge" className="text-xs text-accent hover:underline">
               Lihat Semua →
@@ -173,36 +173,36 @@ export default function DashboardPesertaPage() {
                   Belum ada tantangan aktif
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Misi challenge akan muncul di sini begitu panitia mengaktifkannya.
+                  Misi  akan muncul di sini begitu panitia mengaktifkannya.
                 </p>
               </Card>
             ) : (
               activeChallenges.map((ch) => (
-              <Card key={ch.id} className="p-5 flex flex-col justify-between space-y-3">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="gold" className="text-[10px]">
-                      +{ch.pointReward} Poin
-                    </Badge>
-                    <span className="text-[10px] font-mono uppercase text-muted-foreground">
-                      {ch.type.replace(/_/g, " ")}
-                    </span>
+                <Card key={ch.id} className="p-5 flex flex-col justify-between space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="gold" className="text-[10px]">
+                        +{ch.pointReward} Poin
+                      </Badge>
+                      <span className="text-[10px] font-mono uppercase text-muted-foreground">
+                        {ch.type.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <h3 className="font-heading text-base font-bold text-foreground">
+                      {ch.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                      {ch.description}
+                    </p>
                   </div>
-                  <h3 className="font-heading text-base font-bold text-foreground">
-                    {ch.title}
-                  </h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                    {ch.description}
-                  </p>
-                </div>
 
-                <Link href={ch.type === "scan_qr" ? "/peserta/scan" : "/peserta/challenge"}>
-                  <Button size="sm" variant="outline" className="w-full text-xs gap-1">
-                    <span>Kerjakan Misi</span>
-                    <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </Link>
-              </Card>
+                  <Link href={ch.type === "scan_qr" ? "/peserta/scan" : "/peserta/challenge"}>
+                    <Button size="sm" variant="outline" className="w-full text-xs gap-1">
+                      <span>Kerjakan Misi</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                </Card>
               ))
             )}
           </div>
