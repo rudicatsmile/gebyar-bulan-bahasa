@@ -303,7 +303,7 @@ export default function PesertaChallengeListPage() {
                       </Badge>
                     ) : (
                       <Badge variant="gold" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
-                        Game Baru
+                        Game Unggulan
                       </Badge>
                     )
                   }
