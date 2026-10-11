@@ -605,7 +605,24 @@ export async function getParticipantStandProgress(participantId: string) {
     const totalActiveStands = activeStands.length;
     const activeStandIdSet = new Set(activeStands.map((s) => s.id));
 
-    // 2. Kunjungan / sesi selesai peserta
+    // 2. Dapatkan semua ID terkait peserta (id dan user_id) untuk konsistensi query
+    const validIds = new Set<string>([participantId]);
+    try {
+      const { data: partRow } = await supabase
+        .from("participants")
+        .select("id, user_id")
+        .or(`id.eq.${participantId},user_id.eq.${participantId}`)
+        .maybeSingle();
+
+      if (partRow) {
+        if (partRow.id) validIds.add(partRow.id);
+        if (partRow.user_id) validIds.add(partRow.user_id);
+      }
+    } catch {
+      // Abaikan jika format ID bukan UUID atau query gagal
+    }
+
+    // 3. Kunjungan / sesi selesai peserta
     const { data: sessionRow } = await supabase
       .from("event_settings")
       .select("value")
@@ -617,14 +634,14 @@ export async function getParticipantStandProgress(participantId: string) {
       : [];
 
     const sessionCompletedIds = allSessions
-      .filter((s) => s.participantId === participantId && s.status === "selesai")
+      .filter((s) => validIds.has(s.participantId) && s.status === "selesai")
       .map((s) => s.standId);
 
     // Kunjungan legacy
     const { data: userVisits } = await supabase
       .from("point_transactions")
       .select("stand_id")
-      .eq("participant_id", participantId)
+      .in("participant_id", Array.from(validIds))
       .eq("source", "kode_unik")
       .not("stand_id", "is", null);
 
@@ -638,9 +655,8 @@ export async function getParticipantStandProgress(participantId: string) {
     );
 
     const standsCompletedCount = visitedStandIds.size;
-    const allCompleted = standsCompletedCount >= totalActiveStands && totalActiveStands > 0;
 
-    // 3. Konfigurasi reward khusus
+    // 4. Konfigurasi reward khusus
     const { data: configRow } = await supabase
       .from("event_settings")
       .select("value")
@@ -652,7 +668,7 @@ export async function getParticipantStandProgress(participantId: string) {
       ...((configRow?.value as any) || {}),
     };
 
-    // 4. Cek apakah peserta sudah terdaftar sebagai penerima
+    // 5. Cek apakah peserta sudah terdaftar sebagai penerima reward khusus
     const { data: recRow } = await supabase
       .from("event_settings")
       .select("value")
@@ -663,9 +679,14 @@ export async function getParticipantStandProgress(participantId: string) {
       ? (recRow.value as unknown as StandSpecialRewardRecipient[])
       : [];
 
-    const existingRecipient = recipients.find((r) => r.participantId === participantId) || null;
+    const existingRecipient = recipients.find((r) => validIds.has(r.participantId)) || null;
     const grantedCount = recipients.filter((r) => r.status === "diterima").length;
     const remainingQuota = Math.max(0, config.quota - grantedCount);
+
+    // Peserta dianggap selesai jika sudah menuntaskan seluruh stand aktif ATAU sudah tercatat sebagai penerima reward
+    const allCompleted =
+      Boolean(existingRecipient) ||
+      (standsCompletedCount >= totalActiveStands && totalActiveStands > 0);
 
     return {
       success: true,
@@ -737,11 +758,22 @@ export async function getParticipantStandSession(participantId: string) {
       .eq("key", "stand_viewer_sessions")
       .maybeSingle();
 
-    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
-      ? (sessionRow.value as unknown as StandViewerSession[])
-      : [];
+    // Dapatkan semua ID terkait peserta (id dan user_id)
+    const validIds = new Set<string>([participantId]);
+    try {
+      const { data: partRow } = await supabase
+        .from("participants")
+        .select("id, user_id")
+        .or(`id.eq.${participantId},user_id.eq.${participantId}`)
+        .maybeSingle();
 
-    const userSessions = allSessions.filter((s) => s.participantId === participantId);
+      if (partRow) {
+        if (partRow.id) validIds.add(partRow.id);
+        if (partRow.user_id) validIds.add(partRow.user_id);
+      }
+    } catch { }
+
+    const userSessions = allSessions.filter((s) => validIds.has(s.participantId));
     const activeSession = userSessions.find((s) => s.status === "sedang_menonton") || null;
 
     // Ambil stand yang sudah selesai
@@ -753,7 +785,7 @@ export async function getParticipantStandSession(participantId: string) {
     const { data: userVisits } = await supabase
       .from("point_transactions")
       .select("stand_id")
-      .eq("participant_id", participantId)
+      .in("participant_id", Array.from(validIds))
       .eq("source", "kode_unik")
       .not("stand_id", "is", null);
 
@@ -805,10 +837,12 @@ export async function getParticipantStandSession(participantId: string) {
       ? (recRow.value as unknown as StandSpecialRewardRecipient[])
       : [];
 
-    const existingRecipient = recipients.find((r) => r.participantId === participantId) || null;
+    const existingRecipient = recipients.find((r) => validIds.has(r.participantId)) || null;
     const grantedCount = recipients.filter((r) => r.status === "diterima").length;
     const remainingQuota = Math.max(0, config.quota - grantedCount);
-    const allCompleted = completedStandIds.length >= totalActiveStands && totalActiveStands > 0;
+    const allCompleted =
+      Boolean(existingRecipient) ||
+      (completedStandIds.length >= totalActiveStands && totalActiveStands > 0);
 
     return {
       success: true,
@@ -943,14 +977,54 @@ export async function checkInStandSession(payload: {
       .eq("key", "stand_viewer_sessions")
       .maybeSingle();
 
-    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
-      ? (sessionRow.value as unknown as StandViewerSession[])
+    // Dapatkan semua ID terkait peserta (id dan user_id)
+    const validIds = new Set<string>([payload.participantId]);
+    try {
+      const { data: partRow } = await supabase
+        .from("participants")
+        .select("id, user_id")
+        .or(`id.eq.${payload.participantId},user_id.eq.${payload.participantId}`)
+        .maybeSingle();
+
+      if (partRow) {
+        if (partRow.id) validIds.add(partRow.id);
+        if (partRow.user_id) validIds.add(partRow.user_id);
+      }
+    } catch { }
+
+    // Cek apakah peserta sudah menyelesaikan SELURUH stand aktif atau sudah mendapatkan reward
+    const totalActiveStands = activeStands.length;
+    const completedStandIds = new Set(
+      allSessions
+        .filter((s) => validIds.has(s.participantId) && s.status === "selesai")
+        .map((s) => s.standId)
+    );
+
+    const { data: recRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_special_reward_recipients")
+      .maybeSingle();
+
+    const recipients: StandSpecialRewardRecipient[] = Array.isArray(recRow?.value)
+      ? (recRow.value as unknown as StandSpecialRewardRecipient[])
       : [];
+
+    const isAllStandsFinished =
+      (totalActiveStands > 0 && completedStandIds.size >= totalActiveStands) ||
+      recipients.some((r) => validIds.has(r.participantId));
+
+    if (isAllStandsFinished) {
+      return {
+        success: false,
+        error: "Selamat! Anda telah menyelesaikan kunjungan di seluruh stand pameran budaya. Misi ini sudah tuntas.",
+      };
+    }
 
     // Cek apakah stand ini sudah pernah selesai
     const isAlreadyCompleted = allSessions.some(
       (s) =>
-        s.participantId === payload.participantId &&
+        validIds.has(s.participantId) &&
         s.standId === matchedStand.id &&
         s.status === "selesai"
     );
@@ -964,7 +1038,7 @@ export async function checkInStandSession(payload: {
 
     // Cek apakah peserta memiliki sesi lain yang sedang berlangsung
     const activeSession = allSessions.find(
-      (s) => s.participantId === payload.participantId && s.status === "sedang_menonton"
+      (s) => validIds.has(s.participantId) && s.status === "sedang_menonton"
     );
 
     if (activeSession) {

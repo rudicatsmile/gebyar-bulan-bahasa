@@ -551,6 +551,10 @@ export default function PesertaQrHurufPage() {
 
   // Submit word arrangement
   const handleSubmitPhrase = async () => {
+    if (isCompleted) {
+      alert("Misi QR Huruf ini sudah Anda selesaikan sebelumnya dan poin reward sudah diterima!");
+      return;
+    }
     if (!challenge) return;
     if (!formedSentence.trim()) {
       alert("Susun huruf terlebih dahulu menjadi kata atau kalimat!");
@@ -672,48 +676,59 @@ export default function PesertaQrHurufPage() {
                 Klaim QR Huruf dari Lokasi Pameran
               </h2>
             </div>
-            <Button
-              type="button"
-              onClick={openCameraModal}
-              className="text-xs h-9 px-4 gap-2 font-bold bg-amber-500 hover:bg-amber-600 text-white cursor-pointer shadow-sm shrink-0"
-            >
-              <Camera className="h-4 w-4" />
-              <span>Buka Kamera Pemindai HP</span>
-            </Button>
+            {!isCompleted && (
+              <Button
+                type="button"
+                onClick={openCameraModal}
+                className="text-xs h-9 px-4 gap-2 font-bold bg-amber-500 hover:bg-amber-600 text-white cursor-pointer shadow-sm shrink-0"
+              >
+                <Camera className="h-4 w-4" />
+                <span>Buka Kamera Pemindai HP</span>
+              </Button>
+            )}
           </div>
 
-          <form
-            onSubmit={handleManualSubmit}
-            className="flex flex-col sm:flex-row gap-2"
-          >
-            <div className="relative flex-1">
-              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Atau ketik manual token stiker (contoh: GBB-LET-A1)"
-                value={inputToken}
-                onChange={(e) => setInputToken(e.target.value)}
-                className="w-full h-11 pl-9 pr-3 rounded-lg border border-border bg-background text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/40 uppercase"
-              />
+          {isCompleted ? (
+            <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+              <span>
+                <strong>Misi Telah Tuntas!</strong> Seluruh huruf telah berhasil Anda kumpulkan dan kalimat target telah terpecahkan dengan sukses. Kamera scanner dinonaktifkan.
+              </span>
             </div>
-            <Button
-              type="submit"
-              disabled={scanning || !inputToken.trim()}
-              className="h-11 px-5 font-bold gap-2 cursor-pointer bg-primary text-primary-foreground shrink-0"
+          ) : (
+            <form
+              onSubmit={handleManualSubmit}
+              className="flex flex-col sm:flex-row gap-2"
             >
-              {scanning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Mengecek...</span>
-                </>
-              ) : (
-                <>
-                  <QrCode className="h-4 w-4" />
-                  <span>Klaim Huruf</span>
-                </>
-              )}
-            </Button>
-          </form>
+              <div className="relative flex-1">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Atau ketik manual token stiker (contoh: GBB-LET-A1)"
+                  value={inputToken}
+                  onChange={(e) => setInputToken(e.target.value)}
+                  className="w-full h-11 pl-9 pr-3 rounded-lg border border-border bg-background text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/40 uppercase"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={scanning || !inputToken.trim()}
+                className="h-11 px-5 font-bold gap-2 cursor-pointer bg-primary text-primary-foreground shrink-0"
+              >
+                {scanning ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Mengecek...</span>
+                  </>
+                ) : (
+                  <>
+                    <QrCode className="h-4 w-4" />
+                    <span>Klaim Huruf</span>
+                  </>
+                )}
+              </Button>
+            </form>
+          )}
 
           {/* Feedback Alert */}
           {scanFeedback && (
@@ -1046,31 +1061,38 @@ export default function PesertaQrHurufPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
             <div>
               <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground block">
-                Tebakan Kalimat Anda:
+                {isCompleted ? "Kalimat yang Berhasil Disusun:" : "Tebakan Kalimat Anda:"}
               </span>
-              <p className="font-mono text-xl font-black text-foreground tracking-widest">
-                {formedSentence || "(Kosong)"}
+              <p className="font-mono text-xl font-black text-foreground tracking-widest text-emerald-600 dark:text-emerald-400">
+                {formedSentence || (isCompleted && submissionsHistory.find((s) => s.isCorrect)?.submittedPhrase) || "(Kosong)"}
               </p>
             </div>
 
-            <Button
-              onClick={handleSubmitPhrase}
-              disabled={submitting || !formedSentence.trim()}
-              size="lg"
-              className="gap-2 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md cursor-pointer"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Memeriksa Jawaban...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  <span>Submit Susunan Kata</span>
-                </>
-              )}
-            </Button>
+            {isCompleted ? (
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold text-xs sm:text-sm">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                <span>Misi Selesai (+100 Poin Diterima)</span>
+              </div>
+            ) : (
+              <Button
+                onClick={handleSubmitPhrase}
+                disabled={submitting || !formedSentence.trim()}
+                size="lg"
+                className="gap-2 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md cursor-pointer"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Memeriksa Jawaban...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    <span>Submit Susunan Kata</span>
+                  </>
+                )}
+              </Button>
+            )}
           </div>
 
           {/* Submit Result Banner */}

@@ -15,6 +15,8 @@ import {
   getActiveJigsawPuzzle,
   getParticipantJigsawStatus,
 } from "@/app/actions/kepingan-puzzle";
+import { checkParticipantQrHurufStatus } from "@/app/actions/qr-huruf";
+import { getParticipantStandProgress } from "@/app/actions/stand-rewards";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -113,14 +115,25 @@ export default function PesertaChallengeListPage() {
     points: number;
     title: string;
   } | null>(null);
+  const [qrHurufStatus, setQrHurufStatus] = React.useState<{
+    hasCompleted: boolean;
+    score?: number;
+    submittedPhrase?: string;
+  } | null>(null);
+  const [standStatus, setStandStatus] = React.useState<{
+    allCompleted: boolean;
+    standsCompletedCount: number;
+    totalActiveStands: number;
+  } | null>(null);
 
-  // Periksa apakah peserta sudah pernah menyelesaikan challenge puzzle
+  // Periksa apakah peserta sudah pernah menyelesaikan challenge puzzle & misi lainnya
   React.useEffect(() => {
+    const pId = participant?.participantRowId || participant?.id || participant?.userId;
+
     // Periksa status Game Kepingan Puzzle
     getActiveJigsawPuzzle().then((res) => {
       if (res.success && res.puzzle && res.puzzle.isActive) {
         const pz = res.puzzle;
-        const pId = participant?.participantRowId || participant?.id || participant?.userId;
         if (pId) {
           getParticipantJigsawStatus(pId, pz.id).then((status) => {
             setJigsawStatus({
@@ -142,6 +155,23 @@ export default function PesertaChallengeListPage() {
         setJigsawStatus(null);
       }
     });
+
+    // Periksa status Misi QR Huruf
+    if (pId) {
+      checkParticipantQrHurufStatus(pId).then((res) => {
+        setQrHurufStatus(res);
+      });
+      // Periksa status Misi Scan QR Stand
+      getParticipantStandProgress(pId).then((res) => {
+        if (res.success) {
+          setStandStatus({
+            allCompleted: res.allCompleted,
+            standsCompletedCount: res.standsCompletedCount,
+            totalActiveStands: res.totalActiveStands,
+          });
+        }
+      });
+    }
 
     if (!participant?.id) return;
     checkParticipantPuzzleAttempt(participant.id)
@@ -244,10 +274,34 @@ export default function PesertaChallengeListPage() {
             <>
               <ChallengeItem
                 title="Scan QR Kode Stand"
-                meta="+10 poin per kunjungan stand"
+                meta={
+                  standStatus?.allCompleted
+                    ? `Seluruh ${standStatus.totalActiveStands} stand pameran budaya telah selesai dikunjungi`
+                    : standStatus && standStatus.standsCompletedCount > 0
+                      ? `${standStatus.standsCompletedCount} dari ${standStatus.totalActiveStands} stand telah diselesaikan`
+                      : "Jelajahi seluruh stand pameran budaya & tonton atraksi seni"
+                }
                 href="/peserta/scan"
-                actionLabel="Scan QR Kode Stand"
-                icon={QrCode}
+                actionLabel={
+                  standStatus?.allCompleted
+                    ? "Lihat Riwayat Stand"
+                    : standStatus && standStatus.standsCompletedCount > 0
+                      ? "Lanjutkan Jelajah Stand"
+                      : "Scan QR Kode Stand"
+                }
+                icon={standStatus?.allCompleted ? CheckCircle2 : QrCode}
+                variant={standStatus?.allCompleted ? "outline" : "accent"}
+                badge={
+                  standStatus?.allCompleted ? (
+                    <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                      Sudah Selesai
+                    </Badge>
+                  ) : standStatus && standStatus.standsCompletedCount > 0 ? (
+                    <Badge variant="info" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                      {standStatus.standsCompletedCount}/{standStatus.totalActiveStands} Stand
+                    </Badge>
+                  ) : null
+                }
               />
               <ChallengeItem
                 title="Tantangan Twibbon GebyarBulanBahasa"
@@ -334,10 +388,26 @@ export default function PesertaChallengeListPage() {
               /> */}
               <ChallengeItem
                 title="Misi QR Huruf: Jelajah Aksara & Susun Kata"
-                meta="+100 poin bila kalimat tersusun"
+                meta={
+                  qrHurufStatus?.hasCompleted
+                    ? `Perolehan Skor: +${qrHurufStatus.score ?? 100} Poin (Kalimat Berhasil Tersusun)`
+                    : "+100 poin bila kalimat tersusun"
+                }
                 href="/peserta/challenge/qr-huruf"
-                actionLabel="Mulai Berburu QR"
-                icon={QrCode}
+                actionLabel={
+                  qrHurufStatus?.hasCompleted
+                    ? "Lihat Hasil Misi"
+                    : "Mulai Berburu QR"
+                }
+                icon={qrHurufStatus?.hasCompleted ? CheckCircle2 : QrCode}
+                variant={qrHurufStatus?.hasCompleted ? "outline" : "accent"}
+                badge={
+                  qrHurufStatus?.hasCompleted ? (
+                    <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                      Sudah Selesai
+                    </Badge>
+                  ) : null
+                }
               />
 
               {challenges.map((ch) => {

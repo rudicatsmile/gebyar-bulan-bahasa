@@ -458,6 +458,10 @@ function PesertaScanContent() {
   // Handle Check-in Action
   const handleCheckIn = React.useCallback(
     async (codeString: string) => {
+      if (isAllStandsCompleted) {
+        setErrorMsg("Anda telah menyelesaikan kunjungan di seluruh stand pameran budaya.");
+        return;
+      }
       const cleanCode = processCodeString(codeString);
       if (!cleanCode) return;
 
@@ -523,7 +527,7 @@ function PesertaScanContent() {
         setActionLoading(false);
       }
     },
-    [processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera]
+    [processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera, isAllStandsCompleted]
   );
 
   // Handle Checkout Action
@@ -1272,9 +1276,39 @@ function PesertaScanContent() {
               </div>
             )}
           </Card>
+        ) : isAllStandsCompleted ? (
+          /* ========================================================================= */
+          /* KONDISI 2B: SELURUH STAND TELAH SELESAI (CEGAH PENGERJAAN ULANG)          */
+          /* ========================================================================= */
+          <Card className="p-6 text-center space-y-4 border-2 border-emerald-500/40 bg-emerald-500/5">
+            <div className="mx-auto w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+              <CheckCircle2 className="h-8 w-8" />
+            </div>
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                <Check className="h-3.5 w-3.5" />
+                <span>Misi Jelajah Stand Selesai</span>
+              </div>
+              <h3 className="font-heading text-lg font-bold text-foreground">
+                Seluruh Stand Pameran Telah Tuntas
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+                Hebat! Anda telah menyelesaikan kunjungan dan menonton di seluruh {totalStandsTarget} stand pameran budaya.
+                Misi ini telah selesai dan Anda tidak perlu melakukan scan QR lagi.
+              </p>
+            </div>
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+              <Link href="/peserta/challenge">
+                <Button variant="outline" className="text-xs font-semibold gap-1.5">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span>Kembali ke Daftar Misi</span>
+                </Button>
+              </Link>
+            </div>
+          </Card>
         ) : (
           /* ========================================================================= */
-          /* KONDISI 2: BELUM ADA SESI -> SCAN QR MASUK (CHECK-IN)                    */
+          /* KONDISI 2A: BELUM ADA SESI -> SCAN QR MASUK (CHECK-IN)                    */
           /* ========================================================================= */
           <div className="space-y-5">
             {/* Viewfinder Camera Card */}

@@ -660,6 +660,21 @@ export async function scanQrLetterToken(
   try {
     const supabase = createAdminClient();
 
+    // 0. Cegah scan jika peserta sudah pernah menyelesaikan tantangan kata ini
+    const { data: alreadyCompleted } = await supabase
+      .from("qr_letter_submissions")
+      .select("id")
+      .eq("participant_id", parsed.data.participantId)
+      .eq("is_correct", true)
+      .limit(1);
+
+    if (alreadyCompleted && alreadyCompleted.length > 0) {
+      return {
+        success: false,
+        error: "Misi QR Huruf ini sudah Anda selesaikan sebelumnya dan poin reward sudah diterima.",
+      };
+    }
+
     // 1. Cari QR code dari token (case-insensitive)
     const { data: code, error: codeErr } = await supabase
       .from("qr_letter_codes")
@@ -801,6 +816,31 @@ export async function submitWordArrangement(
 
   try {
     const supabase = createAdminClient();
+
+    // 0. Cegah pengerjaan ulang jika peserta sudah pernah menyelesaikan (is_correct = true)
+    const { data: alreadyDone } = await supabase
+      .from("qr_letter_submissions")
+      .select("id")
+      .eq("participant_id", parsed.data.participantId)
+      .eq("is_correct", true)
+      .limit(1);
+
+    if (alreadyDone && alreadyDone.length > 0) {
+      return {
+        success: false,
+        error: "Anda sudah pernah menyelesaikan misi QR Huruf ini dan memperoleh poin sebelumnya.",
+      };
+    }
+
+    const memDone = fallbackSubmissions.some(
+      (s) => s.participantId === parsed.data.participantId && s.isCorrect
+    );
+    if (memDone) {
+      return {
+        success: false,
+        error: "Anda sudah pernah menyelesaikan misi QR Huruf ini dan memperoleh poin sebelumnya.",
+      };
+    }
 
     // 1. Ambil target phrase dari DB
     let target = "";
@@ -953,5 +993,107 @@ export async function getMyQrSubmissions(
         submittedAt: s.submittedAt,
       }));
     return { success: true, submissions: filtered };
+  }
+}
+
+// =============================================================================
+// PESERTA — CHECK STATUS PENYELESAIAN (UNTUK CARD DAFTAR CHALLENGE)
+// =============================================================================
+export async function checkParticipantQrHurufStatus(
+  participantId: string,
+  challengeId?: string
+): Promise<{
+  hasCompleted: boolean;
+  score?: number;
+  submittedPhrase?: string;
+  completedAt?: string;
+}> {
+  if (!participantId) {
+    return { hasCompleted: false };
+  }
+
+  try {
+    const supabase = createAdminClient();
+
+    // Kumpulkan target ID (menangani jika input adalah participantRowId atau auth user_id)
+    const targetIds = [participantId];
+    try {
+      const { data: pLookup } = await supabase
+        .from("participants")
+        .select("id")
+        .eq("user_id", participantId)
+        .maybeSingle();
+      if (pLookup?.id && !targetIds.includes(pLookup.id)) {
+        targetIds.push(pLookup.id);
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    // 1. Cek tabel qr_letter_submissions di Supabase
+    try {
+      let query = supabase
+        .from("qr_letter_submissions")
+        .select("id, submitted_phrase, is_correct, score, submitted_at, challenge_id")
+        .in("participant_id", targetIds)
+        .eq("is_correct", true)
+        .order("submitted_at", { ascending: false });
+
+      if (challengeId) {
+        query = query.eq("challenge_id", challengeId);
+      }
+
+      const { data: subs, error: subErr } = await query.limit(1);
+
+      if (!subErr && subs && subs.length > 0) {
+        return {
+          hasCompleted: true,
+          score: subs[0].score,
+          submittedPhrase: subs[0].submitted_phrase,
+          completedAt: subs[0].submitted_at,
+        };
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    // 2. Cek tabel point_transactions (sebagai audit trail cadangan)
+    try {
+      const { data: ptRows, error: ptErr } = await supabase
+        .from("point_transactions")
+        .select("id, points, note, created_at")
+        .in("participant_id", targetIds)
+        .ilike("note", "%QR Huruf%")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (!ptErr && ptRows && ptRows.length > 0) {
+        return {
+          hasCompleted: true,
+          score: ptRows[0].points,
+          completedAt: ptRows[0].created_at,
+        };
+      }
+    } catch {
+      // Non-fatal
+    }
+
+    // 3. Fallback memory
+    const memMatch = fallbackSubmissions.find(
+      (s) => targetIds.includes(s.participantId) && s.isCorrect && (!challengeId || s.challengeId === challengeId)
+    );
+    if (memMatch) {
+      return {
+        hasCompleted: true,
+        score: memMatch.score,
+        submittedPhrase: memMatch.submittedPhrase,
+        completedAt: memMatch.submittedAt,
+      };
+    }
+
+    return { hasCompleted: false };
+  } catch (err) {
+    console.warn("checkParticipantQrHurufStatus error:", err);
+    return { hasCompleted: false };
   }
 }
