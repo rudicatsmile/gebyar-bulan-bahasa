@@ -758,6 +758,10 @@ export async function getParticipantStandSession(participantId: string) {
       .eq("key", "stand_viewer_sessions")
       .maybeSingle();
 
+    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
+      ? (sessionRow.value as unknown as StandViewerSession[])
+      : [];
+
     // Dapatkan semua ID terkait peserta (id dan user_id)
     const validIds = new Set<string>([participantId]);
     try {
@@ -976,6 +980,10 @@ export async function checkInStandSession(payload: {
       .select("value")
       .eq("key", "stand_viewer_sessions")
       .maybeSingle();
+
+    const allSessions: StandViewerSession[] = Array.isArray(sessionRow?.value)
+      ? (sessionRow.value as unknown as StandViewerSession[])
+      : [];
 
     // Dapatkan semua ID terkait peserta (id dan user_id)
     const validIds = new Set<string>([payload.participantId]);
