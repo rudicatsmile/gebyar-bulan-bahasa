@@ -30,6 +30,7 @@ import {
   updateReward,
   deleteReward,
   handoverRedemption,
+  resetRewardStock,
   DbRewardItem,
   RedemptionQueueItem,
 } from "@/app/actions/rewards";
@@ -48,6 +49,7 @@ import {
   Sparkles,
   Radio,
   XCircle,
+  RotateCcw,
 } from "lucide-react";
 
 export default function DashboardKelolaRewardPage() {
@@ -83,6 +85,14 @@ export default function DashboardKelolaRewardPage() {
 
   // Modal State Hapus Reward
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+
+  // Modal State Reset Stok Reward
+  const [resetModal, setResetModal] = React.useState<{
+    isOpen: boolean;
+    rewardId?: string;
+    rewardName?: string;
+    isAll: boolean;
+  }>({ isOpen: false, isAll: false });
 
   // Load Data dengan opsi silent refresh agar tidak berkedip saat update realtime
   const loadData = React.useCallback(async (showLoading = true) => {
@@ -260,6 +270,32 @@ export default function DashboardKelolaRewardPage() {
     }
   };
 
+  // Handle Reset Stok Reward
+  const handleResetStockConfirm = async () => {
+    setIsSubmitting(true);
+    setFeedback(null);
+    try {
+      const res = await resetRewardStock(resetModal.rewardId);
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          message: res.message || "Stok reward berhasil di-reset kembali ke kuota penuh!",
+        });
+        setResetModal({ isOpen: false, isAll: false });
+        await loadData();
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal mereset stok reward.",
+        });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", message: err.message || "Terjadi kesalahan saat mereset stok." });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Handle Penyerahan Hadiah
   const handleHandover = async (id: string) => {
     try {
@@ -318,13 +354,26 @@ export default function DashboardKelolaRewardPage() {
               </p>
             </div>
 
-            <Button
-              onClick={() => setIsCreateOpen(true)}
-              className="text-xs font-semibold gap-2 shadow-xs shrink-0"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Tambah Hadiah Baru</span>
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                onClick={() => setResetModal({ isOpen: true, isAll: true })}
+                className="text-xs font-semibold gap-2 border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                disabled={loading || rewards.length === 0}
+                title="Kembalikan klaim terpakai semua hadiah ke 0"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>Reset Semua Stok</span>
+              </Button>
+
+              <Button
+                onClick={() => setIsCreateOpen(true)}
+                className="text-xs font-semibold gap-2 shadow-xs cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Tambah Hadiah Baru</span>
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -583,13 +632,32 @@ export default function DashboardKelolaRewardPage() {
                           </Button>
                         </div>
 
-                        {/* Edit & Delete Action Buttons */}
+                        {/* Edit, Reset & Delete Action Buttons */}
                         <div className="flex items-center gap-1.5">
+                          {rew.claimedCount > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setResetModal({
+                                  isOpen: true,
+                                  rewardId: rew.id,
+                                  rewardName: rew.name,
+                                  isAll: false,
+                                })
+                              }
+                              className="h-7 px-2 text-xs gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                              title="Reset klaim terpakai ke 0 agar stok kembali penuh"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              <span>Reset</span>
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenEdit(rew)}
-                            className="h-7 px-2.5 text-xs gap-1"
+                            className="h-7 px-2.5 text-xs gap-1 cursor-pointer"
                           >
                             <Edit2 className="h-3 w-3" />
                             <span>Edit Stok</span>
@@ -598,7 +666,7 @@ export default function DashboardKelolaRewardPage() {
                             size="sm"
                             variant="destructive"
                             onClick={() => setDeletingId(rew.id)}
-                            className="h-7 px-2 text-xs"
+                            className="h-7 px-2 text-xs cursor-pointer"
                             title="Hapus reward"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -825,6 +893,66 @@ export default function DashboardKelolaRewardPage() {
                 disabled={isSubmitting}
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ya, Hapus"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </Dialog>
+
+        {/* MODAL: Konfirmasi Reset Stok */}
+        <Dialog
+          open={resetModal.isOpen}
+          onOpenChange={(open) => !open && setResetModal({ isOpen: false, isAll: false })}
+        >
+          <div className="p-6 space-y-4 max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-amber-500 flex items-center gap-2">
+                <RotateCcw className="h-5 w-5" />
+                <span>
+                  {resetModal.isAll ? "Reset Seluruh Stok Hadiah?" : "Reset Stok Hadiah Ini?"}
+                </span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                {resetModal.isAll ? (
+                  <>
+                    Jumlah klaim terpakai pada <strong>seluruh merchandise katalog</strong> dan kuota reward jelajah stand akan dikembalikan ke <strong>0</strong>.
+                    <br />
+                    <br />
+                    Sisa stok hadiah akan kembali penuh sesuai kuota master masing-masing.
+                  </>
+                ) : (
+                  <>
+                    Klaim terpakai untuk hadiah <strong>{resetModal.rewardName}</strong> akan dikembalikan ke <strong>0</strong>.
+                    <br />
+                    <br />
+                    Sisa stok hadiah ini akan kembali utuh sesuai kuota total.
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter className="pt-2 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setResetModal({ isOpen: false, isAll: false })}
+                disabled={isSubmitting}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleResetStockConfirm}
+                disabled={isSubmitting}
+                className="gap-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" />
+                )}
+                <span>Ya, Reset Stok</span>
               </Button>
             </DialogFooter>
           </div>

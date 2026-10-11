@@ -247,6 +247,125 @@ export async function handoverRedemption(id: string) {
   }
 }
 
+/**
+ * Reset stok reward (mengembalikan claimed_count ke 0 sehingga sisa stok kembali 100%)
+ * Dapat mereset 1 reward spesifik ataupun seluruh reward katalog sekaligus.
+ */
+export async function resetRewardStock(rewardId?: string): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const userClient = await createClient();
+    const { data: { user } } = await userClient.auth.getUser();
+
+    if (rewardId) {
+      const { data: targetReward, error: fetchErr } = await supabase
+        .from("rewards")
+        .select("name, quota")
+        .eq("id", rewardId)
+        .maybeSingle();
+
+      if (fetchErr || !targetReward) {
+        return { success: false, error: "Hadiah tidak ditemukan di database." };
+      }
+
+      const { error } = await supabase
+        .from("rewards")
+        .update({ claimed_count: 0 })
+        .eq("id", rewardId);
+
+      if (error) return { success: false, error: error.message };
+
+      // Catat log aktivitas
+      try {
+        await supabase.from("activity_logs").insert({
+          actor_id: user?.id || null,
+          actor_role: "seksi_acara",
+          action: "reset_reward_stock",
+          entity: "rewards",
+          entity_id: rewardId,
+          description: `Reset stok hadiah "${targetReward.name}". Kuota terpakai dikembalikan ke 0 (Sisa: ${targetReward.quota} unit).`,
+        });
+      } catch {
+        // Non-fatal
+      }
+    } else {
+      // Reset semua reward di katalog
+      const { error } = await supabase
+        .from("rewards")
+        .update({ claimed_count: 0 })
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+
+      if (error) return { success: false, error: error.message };
+
+      // Sekaligus reset penerima reward stand di event_settings agar kuota stand juga pulih
+      try {
+        await supabase.from("event_settings").upsert(
+          [
+            {
+              key: "stand_special_reward_recipients",
+              value: [],
+              description: "Daftar peserta penerima reward khusus jelajah stand",
+              updated_at: new Date().toISOString(),
+            },
+          ],
+          { onConflict: "key" }
+        );
+      } catch {
+        // Non-fatal
+      }
+
+      // Catat log aktivitas
+      try {
+        await supabase.from("activity_logs").insert({
+          actor_id: user?.id || null,
+          actor_role: "seksi_acara",
+          action: "reset_all_reward_stock",
+          entity: "rewards",
+          entity_id: null,
+          description: "Reset seluruh stok katalog hadiah dan kuota reward stand menjadi kembali penuh 100%.",
+        });
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // Broadcast realtime update
+    try {
+      const channel = supabase.channel("reward-redemptions-channel");
+      await channel.send({
+        type: "broadcast",
+        event: "queue_updated",
+        payload: { action: "stock_reset", rewardId, timestamp: new Date().toISOString() },
+      });
+      supabase.removeChannel(channel);
+    } catch (realtimeErr) {
+      console.warn("Realtime broadcast stock reset error:", realtimeErr);
+    }
+
+    revalidatePath("/dashboard/challenge/reward");
+    revalidatePath("/dashboard/challenge/stand");
+    revalidatePath("/peserta/reward");
+    revalidatePath("/peserta/scan");
+
+    return {
+      success: true,
+      message: rewardId
+        ? "Stok hadiah berhasil di-reset kembali ke kuota penuh!"
+        : "Seluruh stok hadiah berhasil di-reset kembali ke kuota penuh!",
+    };
+  } catch (err: unknown) {
+    console.error("Error resetRewardStock:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal mereset stok hadiah.",
+    };
+  }
+}
+
 export async function getParticipantRedemptions(participantId?: string): Promise<{
   success: boolean;
   redemptions: ParticipantRedemptionItem[];

@@ -266,6 +266,28 @@ export async function executeDataResetAction(
       // e. Reset total points on remaining participants
       await admin.from("participants").update({ total_points: 0 }).neq("id", "00000000-0000-0000-0000-000000000000");
 
+      // f. Reset stok reward katalog merchandise (kembalikan claimed_count ke 0 sehingga sisa stok kembali 100%)
+      await admin.from("rewards").update({ claimed_count: 0 }).neq("id", "00000000-0000-0000-0000-000000000000");
+
+      // g. Reset penerima & sesi reward khusus keliling stand di event_settings
+      await admin.from("event_settings").upsert(
+        [
+          {
+            key: "stand_special_reward_recipients",
+            value: [],
+            description: "Daftar peserta penerima reward khusus jelajah stand",
+            updated_at: new Date().toISOString(),
+          },
+          {
+            key: "stand_viewer_sessions",
+            value: [],
+            description: "Riwayat sesi menonton stand pameran budaya",
+            updated_at: new Date().toISOString(),
+          },
+        ],
+        { onConflict: "key" }
+      );
+
       deletedCounts["dataGamifikasi"] = 1;
     }
 
@@ -421,11 +443,15 @@ export async function executeDataResetAction(
     revalidatePath("/dashboard/penilaian");
     revalidatePath("/dashboard/kriteria");
     revalidatePath("/dashboard/challenge");
+    revalidatePath("/dashboard/challenge/reward");
+    revalidatePath("/dashboard/challenge/stand");
     revalidatePath("/dashboard/challenge/verifikasi");
     revalidatePath("/dashboard/twibbon");
     revalidatePath("/dashboard/pengaturan");
     revalidatePath("/dashboard/pengaturan/reset-data");
     revalidatePath("/peserta");
+    revalidatePath("/peserta/reward");
+    revalidatePath("/peserta/scan");
     revalidatePath("/peserta/pendaftaran");
     revalidatePath("/juri");
     revalidatePath("/monitor");

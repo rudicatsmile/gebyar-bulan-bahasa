@@ -475,7 +475,7 @@ export default function ResetDataPage() {
                   Gamifikasi, Challenge & Twibbon
                 </span>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Menghapus bukti submit challenge, klaim reward/merchandise, transaksi poin bazar stand, dan foto twibbon peserta.
+                  Menghapus bukti submit challenge, riwayat klaim reward/merchandise, transaksi poin bazar stand, foto twibbon, serta memulihkan stok reward dan kuota merchandise kembali penuh (100%).
                 </p>
               </div>
             </label>
