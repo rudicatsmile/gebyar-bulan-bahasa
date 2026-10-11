@@ -302,7 +302,7 @@ export default function DashboardChallengePage() {
           <div>
             <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
               <Sparkles className="h-7 w-7 text-accent" />
-              <span>Manajemen Challenge Peserta Non-Lomba</span>
+              <span>Manajemen Misi Peserta Non-Lomba</span>
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Konfigurasi tantangan interaktif, mini game edukasi, perolehan reward poin, dan lencana kehormatan peserta.
@@ -334,7 +334,7 @@ export default function DashboardChallengePage() {
               className="text-xs gap-1.5 cursor-pointer font-bold"
             >
               <Plus className="h-4 w-4" />
-              <span>Tambah Challenge</span>
+              <span>Tambah Misi</span>
             </Button>
           </div>
         </div>
@@ -443,10 +443,10 @@ export default function DashboardChallengePage() {
           <div className="flex items-center justify-between">
             <h2 className="font-heading text-base font-bold text-foreground flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
-              <span>Daftar Seluruh Challenge Partisipasi (Tabel Database)</span>
+              <span>Daftar Seluruh Misi Partisipasi (Tabel Database)</span>
             </h2>
             <span className="text-xs text-muted-foreground font-mono">
-              Total {challenges.length} Challenge Terdaftar
+              Total {challenges.length} Misi Terdaftar
             </span>
           </div>
 
@@ -508,7 +508,7 @@ export default function DashboardChallengePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nama Challenge</TableHead>
+                  <TableHead>Nama Misi</TableHead>
                   <TableHead>Tipe Misi</TableHead>
                   <TableHead className="text-center">Hadiah Poin</TableHead>
                   <TableHead className="text-center">Lencana Kehormatan</TableHead>
