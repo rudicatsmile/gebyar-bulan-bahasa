@@ -80,25 +80,25 @@ const SPECIAL_CHALLENGES: SpecialChallengeItem[] = [
     btnLabel: "Kelola Gambar & Poin",
     tag: "KEPINGAN PUZZLE",
   },
-  {
-    id: "sp-puzzle",
-    title: "Puzzle Baju Daerah",
-    subtitle: "Mencocokkan Busana Adat Nusantara",
-    description:
-      "Tantangan edukatif mencocokkan baju adat nusantara dengan daerah asalnya. Kelola bank soal, gambar pakaian adat, petunjuk/hint, dan pantau leaderboard skor peserta.",
-    type: "Game Interaktif",
-    pointReward: 100,
-    badge: "Pelestari Budaya",
-    href: "/dashboard/challenge/puzzle",
-    icon: Puzzle,
-    borderHover:
-      "border-primary/40 bg-gradient-to-br from-primary/10 via-card to-card hover:border-primary",
-    btnLabel: "Kelola Soal & Leaderboard",
-    tag: "GAME INTERAKTIF",
-  },
+  // {
+  //   id: "sp-puzzle",
+  //   title: "Puzzle Baju Daerah",
+  //   subtitle: "Mencocokkan Busana Adat Nusantara",
+  //   description:
+  //     "Tantangan edukatif mencocokkan baju adat nusantara dengan daerah asalnya. Kelola bank soal, gambar pakaian adat, petunjuk/hint, dan pantau leaderboard skor peserta.",
+  //   type: "Game Interaktif",
+  //   pointReward: 100,
+  //   badge: "Pelestari Budaya",
+  //   href: "/dashboard/challenge/puzzle",
+  //   icon: Puzzle,
+  //   borderHover:
+  //     "border-primary/40 bg-gradient-to-br from-primary/10 via-card to-card hover:border-primary",
+  //   btnLabel: "Kelola Soal & Leaderboard",
+  //   tag: "GAME INTERAKTIF",
+  // },
   {
     id: "sp-qr-huruf",
-    title: "Challenge QR Huruf",
+    title: "Misi QR Huruf Bermakna",
     subtitle: "Jelajah Aksara & Susun Kata",
     description:
       "Tantangan berburu stiker QR code huruf yang ditempel di berbagai lokasi acara untuk disusun menjadi kalimat bermakna. Kelola kata target, cetak kartu QR, dan pantau submisi kata.",
@@ -114,7 +114,7 @@ const SPECIAL_CHALLENGES: SpecialChallengeItem[] = [
   },
   {
     id: "sp-stand",
-    title: "Keliling 8 Stand Pameran",
+    title: "Keliling Stand Pameran",
     subtitle: "Scan QR Token Lokasi Stand",
     description:
       "Kunjungan ke seluruh stand pameran cabang lomba nusantara. Kelola kode unik 6 karakter (PUISI01 s/d MEDIA08) dan cetak stiker QR tiap stand.",
@@ -342,11 +342,10 @@ export default function DashboardChallengePage() {
         {/* Feedback Alert */}
         {feedback && (
           <div
-            className={`p-4 rounded-xl text-xs flex items-center justify-between gap-3 border ${
-              feedback.type === "success"
-                ? "border-success/40 bg-success/10 text-success"
-                : "border-danger/40 bg-danger/10 text-danger"
-            }`}
+            className={`p-4 rounded-xl text-xs flex items-center justify-between gap-3 border ${feedback.type === "success"
+              ? "border-success/40 bg-success/10 text-success"
+              : "border-danger/40 bg-danger/10 text-danger"
+              }`}
           >
             <div className="flex items-center gap-2">
               {feedback.type === "success" ? (
