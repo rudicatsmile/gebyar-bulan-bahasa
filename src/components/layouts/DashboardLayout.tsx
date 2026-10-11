@@ -79,8 +79,8 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "KOMUNIKASI", href: "#", icon: Megaphone, isHeader: true },
   { title: "Kelola Pengumuman", href: "/dashboard/pengumuman", icon: Megaphone },
   { title: "Broadcast Darurat", href: "/dashboard/broadcast", icon: Radio },
-  { title: "CHALLENGE & STAND", href: "#", icon: Sparkles, isHeader: true },
-  { title: "Daftar Challenge", href: "/dashboard/challenge", icon: Sparkles },
+  { title: "MISI & STAND", href: "#", icon: Sparkles, isHeader: true },
+  { title: "Daftar Misi", href: "/dashboard/challenge", icon: Sparkles },
   { title: "Kepingan Puzzle", href: "/dashboard/challenge/kepingan-puzzle", icon: Puzzle },
   { title: "Kelola 8 Stand", href: "/dashboard/challenge/stand", icon: Store },
   { title: "Verifikasi Bukti", href: "/dashboard/challenge/verifikasi", icon: CheckCircle2 },
@@ -252,8 +252,8 @@ export function DashboardLayout({
     participantPoints !== undefined
       ? participantPoints
       : internalPoints !== null
-      ? internalPoints
-      : 0;
+        ? internalPoints
+        : 0;
 
   const handleLogout = async () => {
     try {
@@ -270,10 +270,10 @@ export function DashboardLayout({
       role === "seksi_acara"
         ? SEKSI_ACARA_NAV
         : role === "juri"
-        ? JURI_NAV
-        : role === "media_center"
-        ? MEDIA_NAV
-        : PESERTA_NAV;
+          ? JURI_NAV
+          : role === "media_center"
+            ? MEDIA_NAV
+            : PESERTA_NAV;
 
     return rawItems.map((item) => {
       // 1. Verifikasi Berkas Peserta (/dashboard/peserta/verifikasi)
@@ -350,19 +350,19 @@ export function DashboardLayout({
     role === "seksi_acara"
       ? "Seksi Acara (Admin)"
       : role === "juri"
-      ? "Dewan Juri"
-      : role === "media_center"
-      ? "Media Center"
-      : "Peserta Acara";
+        ? "Dewan Juri"
+        : role === "media_center"
+          ? "Media Center"
+          : "Peserta Acara";
 
   const roleBadgeVariant =
     role === "seksi_acara"
       ? "warning"
       : role === "juri"
-      ? "gold"
-      : role === "media_center"
-      ? "info"
-      : "success";
+        ? "gold"
+        : role === "media_center"
+          ? "info"
+          : "success";
 
   return (
     <div className="min-h-screen bg-background flex text-foreground">

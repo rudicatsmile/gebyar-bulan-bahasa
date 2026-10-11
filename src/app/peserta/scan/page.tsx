@@ -112,7 +112,16 @@ function PesertaScanContent() {
   } | null>(null);
 
   const [copiedPickupCode, setCopiedPickupCode] = React.useState(false);
-  const [showCheckoutCamera, setShowCheckoutCamera] = React.useState(false);
+  const [checkoutMode, setCheckoutMode] = React.useState<"qr" | "code">("qr");
+
+  // Status komputasi penyelesaian seluruh stand
+  const totalStandsTarget = totalActiveStands > 0 ? totalActiveStands : activeStandsList.length;
+  const isAllStandsCompleted = Boolean(
+    allCompleted || (totalStandsTarget > 0 && standsCompletedCount >= totalStandsTarget)
+  );
+  const showCompletionRewardBanner = Boolean(
+    isAllStandsCompleted && ((specialRewardResult && specialRewardResult.qualified) || existingRecipient)
+  );
 
   // Camera & QR Scanner States
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -178,6 +187,14 @@ function PesertaScanContent() {
           setAllCompleted(res.allCompleted);
           setRemainingRewardQuota(res.remainingQuota);
           setExistingRecipient(res.existingRecipient);
+
+          const isFullyDone = Boolean(
+            res.allCompleted ||
+            (res.totalActiveStands > 0 && res.standsCompletedCount >= res.totalActiveStands)
+          );
+          if (!isFullyDone) {
+            setSpecialRewardResult(null);
+          }
 
           if (res.config) {
             setRewardConfig({
@@ -531,20 +548,29 @@ function PesertaScanContent() {
         });
 
         if (res.success) {
+          const completedCount = res.standsCompletedCount ?? (standsCompletedCount + 1);
+          const totalStands = res.totalActiveStands ?? totalActiveStands;
+          const isFinishedAll = Boolean(res.allCompleted || (totalStands > 0 && completedCount >= totalStands));
+
           setSuccessInfo({
             type: "checkout",
             standName: res.standName || "Stand Lomba",
-            message: `🎉 Selamat! Stand ${res.standName} telah selesai ditonton. Tidak ada poin per stand yang diberikan. Terus jelajahi stand lainnya!`,
+            message: isFinishedAll
+              ? `🎉 Luar biasa! Stand ${res.standName} selesai dan Anda telah menuntaskan seluruh ${totalStands} stand pameran budaya!`
+              : `Stand ${res.standName} selesai ditonton. Progres: ${completedCount}/${totalStands} stand diselesaikan. Silakan lanjutkan ke stand berikutnya!`,
           });
           setScanStatus({
             status: "success",
-            message: `🎉 Stand ${res.standName} Selesai!`,
+            message: isFinishedAll
+              ? `🎉 Seluruh ${totalStands} Stand Selesai!`
+              : `🎉 Stand ${res.standName} Selesai!`,
           });
           setCheckoutCodeInput("");
-          setShowCheckoutCamera(false);
 
-          if (res.specialReward) {
+          if (isFinishedAll && res.specialReward?.qualified) {
             setSpecialRewardResult(res.specialReward);
+          } else {
+            setSpecialRewardResult(null);
           }
 
           await loadSessionData(false);
@@ -645,8 +671,11 @@ function PesertaScanContent() {
 
   // Start Camera when appropriate
   React.useEffect(() => {
-    // Only start camera automatically if not in active session OR if user explicitly toggled checkout camera
-    if (!activeSession || showCheckoutCamera) {
+    // Jalankan kamera jika:
+    // 1. Belum ada sesi aktif (mode scan check-in pintu masuk)
+    // 2. ATAU sedang ada sesi aktif, durasi minimal sudah terpenuhi, dan mode checkout adalah "qr"
+    const shouldCameraRun = !activeSession || (isDurationMet && checkoutMode === "qr");
+    if (shouldCameraRun) {
       startCamera();
     } else {
       stopCamera();
@@ -655,7 +684,7 @@ function PesertaScanContent() {
     return () => {
       stopCamera();
     };
-  }, [activeSession, showCheckoutCamera, startCamera, stopCamera]);
+  }, [activeSession, isDurationMet, checkoutMode, startCamera, stopCamera]);
 
   // QR Scanning Loop
   React.useEffect(() => {
@@ -788,7 +817,7 @@ function PesertaScanContent() {
               Aturan Penting Challenge Stand:
             </span>
             <span>
-              Menyelesaikan 1 stand <strong>tidak memberikan poin</strong>. Reward merchandise khusus hanya terbuka setelah Anda menuntaskan <strong>seluruh {totalActiveStands || 8} stand</strong>.
+              Menyelesaikan 1 stand <strong>tidak memberikan poin</strong>. Reward merchandise khusus hanya terbuka setelah Anda menuntaskan <strong>seluruh {totalStandsTarget > 0 ? `${totalStandsTarget} stand` : "stand"}</strong>.
             </span>
           </div>
         </div>
@@ -858,8 +887,8 @@ function PesertaScanContent() {
           </div>
         )}
 
-        {/* Special Reward Feedback Box (Saat Semua Stand Tuntas) */}
-        {(specialRewardResult || existingRecipient) && (
+        {/* Special Reward Feedback Box (HANYA Ditampilkan Saat SELURUH Stand Selesai) */}
+        {showCompletionRewardBanner && (
           <div className="p-5 rounded-2xl border-2 border-amber-500/50 bg-amber-500/10 space-y-3 shadow-md animate-in fade-in">
             <div className="flex items-center gap-2 text-amber-500 font-bold text-xs uppercase tracking-wider">
               <Trophy className="h-4 w-4" />
@@ -870,7 +899,7 @@ function PesertaScanContent() {
             </div>
 
             <p className="text-xs text-foreground leading-relaxed">
-              🎉 Luar biasa! Anda telah berhasil menuntaskan seluruh <strong>{totalActiveStands} stand pameran budaya</strong>!
+              🎉 Luar biasa! Anda telah berhasil menuntaskan seluruh <strong>{totalStandsTarget} stand pameran budaya</strong>!
             </p>
 
             {(specialRewardResult?.granted || existingRecipient?.status === "diterima") && (
@@ -1001,36 +1030,51 @@ function PesertaScanContent() {
                 <div className="p-4 rounded-xl border border-success/40 bg-success/10 space-y-1.5 text-xs">
                   <div className="flex items-center gap-1.5 font-bold text-success text-sm">
                     <CheckCheck className="h-4.5 w-4.5" />
-                    <span>Waktu Menonton 15 Menit Terpenuhi!</span>
+                    <span>Waktu Menonton {activeSession.minDurationMinutes || 15} Menit Terpenuhi!</span>
                   </div>
                   <p className="text-muted-foreground leading-relaxed">
-                    Silakan lakukan validasi kehadiran di dalam stand dengan <strong>memasukkan kode yang terpajang di panggung/area dalam stand</strong> atau <strong>scan QR Checkout</strong>.
+                    Silakan lakukan validasi kehadiran di dalam stand dengan <strong>memindai QR Checkout</strong> atau <strong>memasukkan kode yang terpajang di panggung/area dalam stand</strong>.
                   </p>
                 </div>
 
-                {/* Form Validasi Checkout di Dalam Stand */}
-                <div className="p-4 rounded-xl border border-border bg-background space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                {/* Tab Switcher: Scan QR Checkout vs Input Kode Manual */}
+                {rewardConfig.validationMode !== "code" && (
+                  <div className="flex items-center p-1 bg-muted/60 rounded-xl border border-border gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutMode("qr")}
+                      className={cn(
+                        "flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                        checkoutMode === "qr"
+                          ? "bg-card text-foreground shadow-xs border border-border"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Camera className="h-4 w-4 text-accent" />
+                      <span>Scan QR Checkout</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutMode("code")}
+                      className={cn(
+                        "flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                        checkoutMode === "code"
+                          ? "bg-card text-foreground shadow-xs border border-border"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
                       <KeyRound className="h-4 w-4 text-accent" />
-                      <span>Validasi Checkout Dalam Stand</span>
-                    </h4>
-                    {rewardConfig.validationMode !== "code" && (
-                      <button
-                        type="button"
-                        onClick={() => setShowCheckoutCamera((prev) => !prev)}
-                        className="text-xs text-accent hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <QrCode className="h-3.5 w-3.5" />
-                        <span>{showCheckoutCamera ? "Tutup Kamera" : "Scan QR Checkout"}</span>
-                      </button>
-                    )}
+                      <span>Ketik Kode Manual</span>
+                    </button>
                   </div>
+                )}
 
-                  {/* Opsi Kamera Checkout */}
-                  {showCheckoutCamera && (
-                    <div className="space-y-2 pt-1 pb-3">
-                      <div className="relative aspect-video max-w-sm mx-auto rounded-xl bg-black flex flex-col items-center justify-center text-white overflow-hidden shadow-inner">
+                {/* Pilihan 1: Scanner Kamera QR Checkout (Ukuran Penuh & Kualitas Setara Check-in) */}
+                {checkoutMode === "qr" && rewardConfig.validationMode !== "code" ? (
+                  <div className="space-y-3">
+                    <Card className="overflow-hidden border-2 border-dashed border-accent/50 p-4 text-center space-y-3 bg-muted/20 shadow-xs">
+                      <div className="relative aspect-square max-w-xs mx-auto rounded-xl bg-black flex flex-col items-center justify-center text-white overflow-hidden shadow-inner">
+                        {/* HTML5 Live Video Stream */}
                         <video
                           ref={videoRef}
                           playsInline
@@ -1038,50 +1082,193 @@ function PesertaScanContent() {
                           muted
                           className={`w-full h-full object-cover ${cameraStatus === "active" ? "block" : "hidden"}`}
                         />
-                        <div className="absolute inset-4 border-2 border-accent/70 rounded-lg pointer-events-none flex items-center justify-center">
-                          <span className="text-[10px] bg-black/70 px-2 py-0.5 rounded text-white font-mono">
-                            Scan QR Checkout Dalam Stand
-                          </span>
-                        </div>
+
+                        {/* Viewfinder Target Framing Overlay */}
+                        {cameraStatus === "active" && (
+                          <div
+                            className={cn(
+                              "absolute inset-6 border-2 rounded-lg pointer-events-none flex flex-col justify-between p-2 shadow-2xl transition-all duration-300",
+                              scanStatus.status === "success" && "border-emerald-500 bg-emerald-500/10",
+                              scanStatus.status === "processing" && "border-amber-400 bg-amber-500/10",
+                              scanStatus.status === "info" && "border-amber-500 bg-amber-500/10",
+                              scanStatus.status === "error" && "border-rose-500 bg-rose-500/10",
+                              scanStatus.status === "scanning" && "border-accent/70"
+                            )}
+                          >
+                            <div className="flex justify-between">
+                              <span className="h-5 w-5 border-t-2 border-l-2 border-accent" />
+                              <span className="h-5 w-5 border-t-2 border-r-2 border-accent" />
+                            </div>
+
+                            {scanStatus.status === "processing" ? (
+                              <div className="self-center flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/85 text-amber-300 text-xs font-semibold shadow-lg backdrop-blur-sm animate-pulse border border-amber-500/30">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                                <span>Membaca QR Checkout...</span>
+                              </div>
+                            ) : scanStatus.status === "success" ? (
+                              <div className="self-center flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-xs font-semibold shadow-lg backdrop-blur-sm">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                <span>Checkout Sukses!</span>
+                              </div>
+                            ) : (
+                              <div className="w-full h-0.5 bg-accent/80 animate-pulse shadow-sm" />
+                            )}
+
+                            <div className="flex justify-between">
+                              <span className="h-5 w-5 border-b-2 border-l-2 border-accent" />
+                              <span className="h-5 w-5 border-b-2 border-r-2 border-accent" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Camera Requesting / Permission Loading */}
+                        {cameraStatus === "requesting" && (
+                          <div className="space-y-3 p-6 text-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-accent mx-auto" />
+                            <p className="text-xs text-white/80 font-medium">
+                              Meminta izin akses kamera perangkat...
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Camera Denied / Error State */}
+                        {(cameraStatus === "denied" || cameraStatus === "error" || cameraStatus === "unsupported") && (
+                          <div className="space-y-3 p-6 text-center bg-black/95">
+                            <VideoOff className="h-10 w-10 text-danger mx-auto" />
+                            <h4 className="font-heading text-sm font-bold text-white">
+                              {cameraStatus === "denied" ? "Akses Kamera Ditolak" : "Kamera Tidak Tersedia"}
+                            </h4>
+                            <p className="text-[11px] text-white/70">
+                              {cameraErrorDetail || "Izinkan akses kamera di pengaturan browser Anda untuk memindai QR secara otomatis."}
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={startCamera}
+                              className="text-xs gap-1 border-white/30 text-white hover:bg-white/10 cursor-pointer"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              <span>Coba Kamera Lagi</span>
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Camera Controls Bar (Torch & Switch Facing) */}
+                        {cameraStatus === "active" && (
+                          <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+                            {hasTorch && (
+                              <button
+                                type="button"
+                                onClick={toggleTorch}
+                                className={`p-2 rounded-full backdrop-blur-md transition-colors ${
+                                  torchOn ? "bg-amber-400 text-black" : "bg-black/60 text-white hover:bg-black/80"
+                                }`}
+                                title="Senter Kamera"
+                              >
+                                <Zap className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={toggleFacingMode}
+                              className="p-2 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/80 transition-colors"
+                              title="Ganti Kamera Depan/Belakang"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Dev Quick Test Button */}
+                        {isDev && activeSession && (
+                          <div className="absolute bottom-2 left-2 right-2 flex flex-wrap justify-center gap-1 z-20">
+                            <button
+                              type="button"
+                              onClick={() => handleCheckOut(`IN-${activeSession.standCode}`)}
+                              className="px-2 py-0.5 rounded text-[9px] font-mono bg-black/80 text-accent border border-accent/40 hover:bg-accent hover:text-black transition-colors cursor-pointer"
+                            >
+                              Test Out: IN-{activeSession.standCode}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-[11px] text-center text-muted-foreground">
-                        Arahkan kamera ke stiker QR bertuliskan <strong>&ldquo;DI DALAM STAND (CHECKOUT)&rdquo;</strong>.
+
+                      <div className="space-y-1">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                          <span>{scanStatus.message}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Arahkan kamera ke stiker QR bertuliskan <strong>&ldquo;DI DALAM STAND (CHECKOUT)&rdquo;</strong>.
+                        </p>
+                      </div>
+                    </Card>
+
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={() => setCheckoutMode("code")}
+                        className="text-xs text-accent hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        <span>Kamera bermasalah? Masukkan kode stand secara manual</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Pilihan 2: Form Input Manual Kode di Dalam Stand */
+                  <Card className="p-5 space-y-3.5 border border-border bg-card shadow-xs">
+                    <div className="space-y-0.5">
+                      <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <KeyRound className="h-4 w-4 text-accent" />
+                        <span>Input Kode di Dalam Stand</span>
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        Ketik kode unik yang terpajang di panggung/area pameran stand (contoh: IN-{activeSession.standCode}).
                       </p>
                     </div>
-                  )}
 
-                  {/* Form Input Kode Dalam Stand */}
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleCheckOut(checkoutCodeInput);
-                    }}
-                    className="space-y-2.5"
-                  >
-                    <div className="space-y-1">
-                      <label htmlFor="checkout-input" className="text-xs font-semibold text-foreground">
-                        Ketik Kode di Dalam Stand *
-                      </label>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleCheckOut(checkoutCodeInput);
+                      }}
+                      className="space-y-3"
+                    >
                       <Input
-                        id="checkout-input"
-                        placeholder={`Contoh: IN-${activeSession.standCode} atau kode di dalam stand`}
+                        label="Kode di Dalam Stand *"
+                        placeholder={`Contoh: IN-${activeSession.standCode}`}
                         value={checkoutCodeInput}
                         onChange={(e) => setCheckoutCodeInput(e.target.value.toUpperCase())}
                         className="font-mono text-sm tracking-wider"
                         required
                       />
-                    </div>
 
-                    <Button
-                      type="submit"
-                      disabled={actionLoading || !checkoutCodeInput.trim()}
-                      className="w-full text-xs font-bold gap-1.5 cursor-pointer"
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                      <span>{actionLoading ? "Memvalidasi..." : "Selesaikan Stand Ini"}</span>
-                    </Button>
-                  </form>
-                </div>
+                      <Button
+                        type="submit"
+                        size="lg"
+                        disabled={actionLoading || !checkoutCodeInput.trim()}
+                        className="w-full text-xs font-bold gap-1.5 cursor-pointer"
+                      >
+                        {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                        <span>{actionLoading ? "Memvalidasi..." : "Selesaikan Stand Ini"}</span>
+                      </Button>
+                    </form>
+
+                    {rewardConfig.validationMode !== "code" && (
+                      <div className="text-center pt-1 border-t border-border">
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutMode("qr")}
+                          className="text-xs text-accent hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Camera className="h-3.5 w-3.5" />
+                          <span>Gunakan pemindai kamera (Scan QR Checkout)</span>
+                        </button>
+                      </div>
+                    )}
+                  </Card>
+                )}
               </div>
             )}
           </Card>
