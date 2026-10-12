@@ -599,23 +599,6 @@ export function PesertaPendaftaranClient() {
               </Card>
             )}
 
-            {/* Bagian Unggah Berkas Persyaratan */}
-            {participant?.participantRowId && (
-              <div id="berkas-upload-section" className="pt-2">
-                <BerkasUploadSection
-                  participantId={participant.participantRowId}
-                  competitionName={target?.name}
-                  requireDocument={target ? target.requireDocument : true}
-                  uploadMode={target?.documentUploadMode || "single"}
-                  requiredDocumentList={target?.requiredDocumentList}
-                  onUploadSuccess={() => {
-                    refetch();
-                    fetchUserDocuments();
-                  }}
-                />
-              </div>
-            )}
-
             {/* Panel pendaftaran lomba tujuan (dari ?lomba=slug) */}
             {lombaSlug && (
               <div className="space-y-3">
@@ -630,85 +613,104 @@ export function PesertaPendaftaranClient() {
                     <p className="text-xs text-muted-foreground">{targetError}</p>
                   </div>
                 ) : target ? (
-                  <Card className="p-6 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-mono text-accent uppercase font-bold tracking-wider">
-                          Pendaftaran {target.type === "kelompok" ? "Tim" : "Individu"}
-                        </span>
-                        <h2 className="font-heading text-lg font-bold text-foreground truncate">
-                          {target.name}
-                        </h2>
-                      </div>
-                      <Badge
-                        variant={target.status === "pendaftaran" ? "gold" : "warning"}
-                        className="text-[10px]"
-                      >
-                        {target.status.toUpperCase()}
-                      </Badge>
-                    </div>
-
-                    {isEnrolledIn(target.id) ? (
-                      <p className="text-xs text-muted-foreground flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                        <span>Anda sudah terdaftar pada cabang lomba ini.</span>
-                      </p>
-                    ) : target.status !== "pendaftaran" ? (
-                      <p className="text-xs text-muted-foreground">
-                        Pendaftaran cabang lomba ini sedang tidak dibuka (status:{" "}
-                        <strong className="text-foreground">{target.status}</strong>). Pembaruan status
-                        diumumkan melalui halaman pengumuman panitia.
-                      </p>
-                    ) : quotaFull ? (
-                      <p className="text-xs text-muted-foreground">
-                        Kuota pendaftaran Anda penuh ({totalLomba} cabang lomba).
-                      </p>
-                    ) : target.requireDocument !== false && userDocCount === 0 && !participant?.isDemoFallback ? (
-                      <div className="space-y-3">
-                        <div className="p-3.5 rounded-xl border border-warning/40 bg-warning/5 flex items-start gap-2.5 text-xs text-foreground">
-                          <AlertCircle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
-                          <div className="space-y-1">
-                            <p className="font-semibold text-warning-foreground">Wajib Upload Berkas Persyaratan</p>
-                            <p className="text-muted-foreground text-[11px] leading-relaxed">
-                              Cabang lomba ini mewajibkan unggah berkas persyaratan. Silakan unggah berkas persyaratan Anda pada bagian <strong>Berkas Persyaratan</strong> di bawah terlebih dahulu sebelum mendaftar.
-                            </p>
-                          </div>
+                  <>
+                    <Card className="p-6 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-mono text-accent uppercase font-bold tracking-wider">
+                            Pendaftaran {target.type === "kelompok" ? "Tim" : "Individu"}
+                          </span>
+                          <h2 className="font-heading text-lg font-bold text-foreground truncate">
+                            {target.name}
+                          </h2>
                         </div>
-                        <Button
-                          type="button"
-                          onClick={() => {
-                            setErrorMsg(
-                              `Cabang lomba "${target.name}" mewajibkan berkas persyaratan. Silakan unggah berkas persyaratan Anda pada bagian Berkas Persyaratan di bawah.`
-                            );
-                            const el = document.getElementById("berkas-upload-section");
-                            if (el) el.scrollIntoView({ behavior: "smooth" });
-                          }}
-                          variant="outline"
-                          className="text-xs font-semibold gap-1.5 border-warning/40 text-warning hover:bg-warning/10"
+                        <Badge
+                          variant={target.status === "pendaftaran" ? "gold" : "warning"}
+                          className="text-[10px]"
                         >
-                          <FileText className="h-4 w-4" />
-                          <span>Unggah Berkas Dulu</span>
-                        </Button>
+                          {target.status.toUpperCase()}
+                        </Badge>
                       </div>
-                    ) : (
-                      <Button
-                        onClick={handleOpenForm}
-                        disabled={!canEnrollTarget}
-                        className="text-xs font-semibold gap-1.5"
-                      >
-                        <UserPlus className="h-4 w-4" />
-                        <span>Daftar Cabang Lomba Ini</span>
-                      </Button>
-                    )}
 
-                    {/* Arahkan lanjutan bagi peserta yang baru saja membuat akun */}
-                    {autoParam === "1" && canEnrollTarget && (
-                      <p className="text-[11px] text-muted-foreground">
-                        Akun peserta Anda baru saja dibuat. Klik tombol di atas untuk menyelesaikan
-                        pendaftaran pada cabang lomba ini.
-                      </p>
+                      {isEnrolledIn(target.id) ? (
+                        <p className="text-xs text-muted-foreground flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-success" />
+                          <span>Anda sudah terdaftar pada cabang lomba ini.</span>
+                        </p>
+                      ) : target.status !== "pendaftaran" ? (
+                        <p className="text-xs text-muted-foreground">
+                          Pendaftaran cabang lomba ini sedang tidak dibuka (status:{" "}
+                          <strong className="text-foreground">{target.status}</strong>). Pembaruan status
+                          diumumkan melalui halaman pengumuman panitia.
+                        </p>
+                      ) : quotaFull ? (
+                        <p className="text-xs text-muted-foreground">
+                          Kuota pendaftaran Anda penuh ({totalLomba} cabang lomba).
+                        </p>
+                      ) : target.requireDocument !== false && userDocCount === 0 && !participant?.isDemoFallback ? (
+                        <div className="space-y-3">
+                          <div className="p-3.5 rounded-xl border border-warning/40 bg-warning/5 flex items-start gap-2.5 text-xs text-foreground">
+                            <AlertCircle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="font-semibold text-warning-foreground">Wajib Upload Berkas Persyaratan</p>
+                              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                Cabang lomba ini mewajibkan unggah berkas persyaratan. Silakan unggah berkas persyaratan Anda pada bagian <strong>Berkas Persyaratan</strong> di bawah terlebih dahulu sebelum mendaftar.
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              setErrorMsg(
+                                `Cabang lomba "${target.name}" mewajibkan berkas persyaratan. Silakan unggah berkas persyaratan Anda pada bagian Berkas Persyaratan di bawah.`
+                              );
+                              const el = document.getElementById("berkas-upload-section");
+                              if (el) el.scrollIntoView({ behavior: "smooth" });
+                            }}
+                            variant="outline"
+                            className="text-xs font-semibold gap-1.5 border-warning/40 text-warning hover:bg-warning/10"
+                          >
+                            <FileText className="h-4 w-4" />
+                            <span>Unggah Berkas Dulu</span>
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={handleOpenForm}
+                          disabled={!canEnrollTarget}
+                          className="text-xs font-semibold gap-1.5"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          <span>Daftar Cabang Lomba Ini</span>
+                        </Button>
+                      )}
+
+                      {/* Arahkan lanjutan bagi peserta yang baru saja membuat akun */}
+                      {autoParam === "1" && canEnrollTarget && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Akun peserta Anda baru saja dibuat. Klik tombol di atas untuk menyelesaikan
+                          pendaftaran pada cabang lomba ini.
+                        </p>
+                      )}
+                    </Card>
+
+                    {/* Bagian Unggah Berkas Persyaratan (Hanya muncul jika lomba yang dipilih mewajibkan unggah berkas) */}
+                    {participant?.participantRowId && target.requireDocument && (
+                      <div id="berkas-upload-section" className="pt-2">
+                        <BerkasUploadSection
+                          participantId={participant.participantRowId}
+                          competitionName={target.name}
+                          requireDocument={true}
+                          uploadMode={target.documentUploadMode || "single"}
+                          requiredDocumentList={target.requiredDocumentList}
+                          onUploadSuccess={() => {
+                            refetch();
+                            fetchUserDocuments();
+                          }}
+                        />
+                      </div>
                     )}
-                  </Card>
+                  </>
                 ) : null}
               </div>
             )}
