@@ -7,10 +7,11 @@ import { AuthLayout } from "@/components/layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowRight, Loader2, CheckCircle2, AlertCircle, Lock, Calendar } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { registerUser } from "@/app/actions/auth";
 import { getActiveInstitutions, type InstitutionItem } from "@/app/actions/institutions";
+import { getParticipantAccessStatus, type ParticipantAccessStatus } from "@/app/actions/settings";
 
 function DaftarForm() {
   const router = useRouter();
@@ -28,6 +29,8 @@ function DaftarForm() {
 
   const [institutions, setInstitutions] = React.useState<InstitutionItem[]>([]);
   const [loadingInstitutions, setLoadingInstitutions] = React.useState(true);
+  const [accessStatus, setAccessStatus] = React.useState<ParticipantAccessStatus | null>(null);
+  const [checkingAccess, setCheckingAccess] = React.useState(true);
 
   React.useEffect(() => {
     getActiveInstitutions().then((res) => {
@@ -36,10 +39,28 @@ function DaftarForm() {
       }
       setLoadingInstitutions(false);
     });
+
+    getParticipantAccessStatus()
+      .then((status) => {
+        setAccessStatus(status);
+      })
+      .finally(() => {
+        setCheckingAccess(false);
+      });
   }, []);
+
+  const isAccessLocked = Boolean(accessStatus && !accessStatus.isOpen);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isAccessLocked) {
+      setErrorMsg(
+        `Pendaftaran peserta belum dibuka. Akses akan dibuka pada ${accessStatus?.formattedStartDate || "jadwal yang ditentukan"}.`
+      );
+      return;
+    }
+
     setIsLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -98,6 +119,26 @@ function DaftarForm() {
       subtitle="Buat akun peserta resmi untuk mengikuti challenge festival, scan QR booth stand budaya, dan menukar poin reward."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Banner Kunci Pendaftaran Berdasarkan Tanggal Admin */}
+        {isAccessLocked && (
+          <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2.5 animate-in fade-in">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider">
+              <Lock className="h-4 w-4" />
+              <span>Pendaftaran Belum Dibuka</span>
+            </div>
+            <p className="text-xs text-foreground leading-relaxed">
+              Mohon maaf, pendaftaran akun peserta Gebyar Bulan Bahasa baru akan dibuka pada:
+            </p>
+            <div className="p-3 rounded-lg bg-card border border-border flex items-center gap-2.5 font-semibold text-xs text-accent shadow-xs">
+              <Calendar className="h-4 w-4 shrink-0" />
+              <span>{accessStatus?.formattedStartDate}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Silakan kembali lagi pada tanggal dan waktu tersebut untuk mendaftarkan akun peserta.
+            </p>
+          </div>
+        )}
+
         {errorMsg && (
           <div className="p-3.5 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-xs flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -117,6 +158,7 @@ function DaftarForm() {
           placeholder="Nama Lengkap Anda"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
+          disabled={isAccessLocked || isLoading}
           required
         />
 
@@ -124,6 +166,7 @@ function DaftarForm() {
           label="Asal Sekolah / Kampus / Instansi *"
           value={institution}
           onChange={(e) => setInstitution(e.target.value)}
+          disabled={isAccessLocked || isLoading}
           required
           helperText="Pilih nama sekolah, kampus, atau instansi Anda dari daftar resmi."
         >
@@ -145,6 +188,7 @@ function DaftarForm() {
           placeholder="Contoh: 081234567890"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          disabled={isAccessLocked || isLoading}
           helperText="Digunakan panitia untuk konfirmasi kegiatan dan penyerahan hadiah reward."
         />
 
@@ -154,6 +198,7 @@ function DaftarForm() {
           placeholder="nama@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          disabled={isAccessLocked || isLoading}
           required
         />
 
@@ -163,31 +208,44 @@ function DaftarForm() {
           placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          disabled={isAccessLocked || isLoading}
           helperText="Gunakan minimal 8 karakter dengan kombinasi huruf dan angka."
           required
         />
 
-        <Button
-          type="submit"
-          size="lg"
-          disabled={isLoading || !!successMsg}
-          className="w-full text-xs font-semibold gap-2 cursor-pointer"
-        >
-          {isLoading ? (
-            <span className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Memproses Akun Peserta...</span>
-            </span>
-          ) : (
-            <>
-              <span>Daftar Akun Sekarang</span>
-              <ArrowRight className="h-4 w-4" />
-            </>
-          )}
-        </Button>
+        {isAccessLocked ? (
+          <Button
+            type="button"
+            size="lg"
+            disabled
+            className="w-full text-xs font-semibold gap-2 opacity-60 cursor-not-allowed"
+          >
+            <Lock className="h-4 w-4" />
+            <span>Pendaftaran Dibuka {accessStatus?.formattedStartDate}</span>
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            size="lg"
+            disabled={isLoading || !!successMsg || checkingAccess}
+            className="w-full text-xs font-semibold gap-2 cursor-pointer"
+          >
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Memproses Akun Peserta...</span>
+              </span>
+            ) : (
+              <>
+                <span>Daftar Akun Sekarang</span>
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+        )}
 
         <div className="text-center pt-2 text-xs text-muted-foreground">
-          Sudah memiliki akun terdaftar?{" "}
+          {isAccessLocked ? "Sudah memiliki akun panitia atau juri? " : "Sudah memiliki akun terdaftar? "}
           <Link href="/masuk" className="font-semibold text-foreground underline hover:text-accent">
             Masuk di Sini
           </Link>
@@ -205,3 +263,4 @@ export default function DaftarPage() {
     </React.Suspense>
   );
 }
+

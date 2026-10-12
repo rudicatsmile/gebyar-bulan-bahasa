@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getParticipantAccessStatus } from "@/app/actions/settings";
 
 const RegisterInputSchema = z.object({
   fullName: z.string().min(3, "Nama lengkap minimal 3 karakter"),
@@ -25,6 +26,16 @@ export async function registerUser(formData: {
   }
 
   const { fullName, institution, email, phone, password } = parsed.data;
+
+  // 0. Cek apakah akses pendaftaran peserta sudah dibuka berdasarkan tanggal admin
+  const accessStatus = await getParticipantAccessStatus();
+  if (!accessStatus.isOpen) {
+    return {
+      success: false,
+      error: `Pendaftaran akun peserta belum dibuka. Akses pendaftaran akan dibuka pada ${accessStatus.formattedStartDate || "jadwal yang ditentukan panitia"}.`,
+    };
+  }
+
   const adminSupabase = createAdminClient();
 
   try {

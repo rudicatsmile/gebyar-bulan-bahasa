@@ -41,6 +41,9 @@ export async function GET() {
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
       autoApproveTwibbon,
+      participantAccessStartDate:
+        (typeof registration.participantAccessStartDate === "string" ? registration.participantAccessStartDate : "") ||
+        (typeof map["participant_access_start_date"] === "string" ? map["participant_access_start_date"] : ""),
       contactLocation: contact.location || "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A.",
       contactHours: contact.hours || "07.30 - 21.00 WIB (Selama Acara Berlangsung)",
       contactEmail: contact.email || "panitia@gebyarbulanbahasa.id",
@@ -74,6 +77,7 @@ export async function POST(request: Request) {
       maxCompetitions,
       rotationInterval,
       autoApproveTwibbon,
+      participantAccessStartDate,
       contactLocation,
       contactHours,
       contactEmail,
@@ -153,6 +157,7 @@ export async function POST(request: Request) {
       scoreGapThreshold: Number(scoreGapThreshold) || 20,
       maxCompetitions: Number(maxCompetitions) || 3,
       maxTeamsPerSchool: Number(maxCompetitions) || 3,
+      participantAccessStartDate: String(participantAccessStartDate || "").trim(),
     };
 
     const { error: errReg } = await supabase.from("event_settings").upsert(
@@ -172,6 +177,17 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Simpan key 'participant_access_start_date'
+    await supabase.from("event_settings").upsert(
+      {
+        key: "participant_access_start_date",
+        value: String(participantAccessStartDate || "").trim(),
+        description: "Tanggal dan waktu buka akses pendaftaran serta login untuk peserta",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
 
     // 4. Simpan key 'monitor'
     const rotIntervalNum = Number(rotationInterval) || 15;

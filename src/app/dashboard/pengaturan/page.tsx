@@ -15,6 +15,7 @@ import {
   getMonitorScoreboardSettings,
   updateMonitorScoreboardSettings,
 } from "@/app/actions/settings";
+import { parseDateInWib } from "@/lib/utils";
 import { getCompetitions, type Competition } from "@/lib/supabase/queries";
 import {
   Settings,
@@ -30,6 +31,8 @@ import {
   Trophy,
   CheckSquare,
   Square,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 
 export default function DashboardPengaturanPage() {
@@ -53,6 +56,7 @@ export default function DashboardPengaturanPage() {
   const [maxCompetitions, setMaxCompetitions] = React.useState("3");
   const [rotationInterval, setRotationInterval] = React.useState("15");
   const [autoApproveTwibbon, setAutoApproveTwibbon] = React.useState(false);
+  const [participantAccessStartDate, setParticipantAccessStartDate] = React.useState("");
 
   // Pengaturan modul Papan Skor Layar Monitor TV
   const [competitionsList, setCompetitionsList] = React.useState<Competition[]>([]);
@@ -120,6 +124,7 @@ export default function DashboardPengaturanPage() {
           setMaxCompetitions(String(data.settings.maxCompetitions));
           setRotationInterval(String(data.settings.rotationInterval));
           if (data.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(data.settings.autoApproveTwibbon));
+          if (data.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(data.settings.participantAccessStartDate || "");
           if (data.settings.contactLocation) setContactLocation(data.settings.contactLocation);
           if (data.settings.contactHours) setContactHours(data.settings.contactHours);
           if (data.settings.contactEmail) setContactEmail(data.settings.contactEmail);
@@ -145,6 +150,7 @@ export default function DashboardPengaturanPage() {
         setMaxCompetitions(String(actionRes.settings.maxCompetitions));
         setRotationInterval(String(actionRes.settings.rotationInterval));
         if (actionRes.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(actionRes.settings.autoApproveTwibbon));
+        if (actionRes.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(actionRes.settings.participantAccessStartDate || "");
         if (actionRes.settings.contactLocation) setContactLocation(actionRes.settings.contactLocation);
         if (actionRes.settings.contactHours) setContactHours(actionRes.settings.contactHours);
         if (actionRes.settings.contactEmail) setContactEmail(actionRes.settings.contactEmail);
@@ -168,6 +174,7 @@ export default function DashboardPengaturanPage() {
           setMaxCompetitions(String(actionRes.settings.maxCompetitions));
           setRotationInterval(String(actionRes.settings.rotationInterval));
           if (actionRes.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(actionRes.settings.autoApproveTwibbon));
+          if (actionRes.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(actionRes.settings.participantAccessStartDate || "");
           if (actionRes.settings.contactLocation) setContactLocation(actionRes.settings.contactLocation);
           if (actionRes.settings.contactHours) setContactHours(actionRes.settings.contactHours);
           if (actionRes.settings.contactEmail) setContactEmail(actionRes.settings.contactEmail);
@@ -301,6 +308,7 @@ export default function DashboardPengaturanPage() {
       maxCompetitions: Number(maxCompetitions) || 3,
       rotationInterval: Number(rotationInterval) || 15,
       autoApproveTwibbon: Boolean(autoApproveTwibbon),
+      participantAccessStartDate: participantAccessStartDate.trim(),
       contactLocation: contactLocation.trim(),
       contactHours: contactHours.trim(),
       contactEmail: contactEmail.trim(),
@@ -691,6 +699,97 @@ export default function DashboardPengaturanPage() {
                     helperText="Jumlah cabang lomba individu maksimal yang boleh diikuti 1 peserta."
                     required
                   />
+                </div>
+
+                {/* Jadwal Buka Akses Register & Login Peserta */}
+                <div className="p-4 sm:p-5 rounded-xl border border-border bg-card/60 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="space-y-1 max-w-xl">
+                      <div className="flex items-center gap-2">
+                        <Lock className="h-4 w-4 text-accent" />
+                        <span className="font-heading text-sm sm:text-base font-bold text-foreground">
+                          Jadwal Buka Akses Register &amp; Login Peserta
+                        </span>
+                        <Badge
+                          variant={
+                            !participantAccessStartDate
+                              ? "success"
+                              : new Date().getTime() >= parseDateInWib(participantAccessStartDate).getTime()
+                              ? "success"
+                              : "warning"
+                          }
+                          className="text-[10px]"
+                        >
+                          {!participantAccessStartDate
+                            ? "BEBAS AKSES (Tanpa Batasan)"
+                            : new Date().getTime() >= parseDateInWib(participantAccessStartDate).getTime()
+                            ? "SUDAH DIBUKA (Normal)"
+                            : "TERKUNCI (Belum Dibuka)"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Tentukan tanggal dan jam mulai dibukanya akses pendaftaran akun baru (<code className="text-[11px] font-mono">/daftar</code>) serta login peserta (<code className="text-[11px] font-mono">/masuk</code>).
+                      </p>
+                      <div className="p-2.5 rounded-lg bg-accent/5 border border-accent/20 text-[11px] text-muted-foreground space-y-1">
+                        <p className="flex items-center gap-1.5 font-medium text-foreground">
+                          <ShieldCheck className="h-3.5 w-3.5 text-accent shrink-0" />
+                          <span>Pengecualian Penting Role Non-Peserta:</span>
+                        </p>
+                        <p>
+                          User dengan role selain peserta (<strong>Superadmin</strong>, <strong>Seksi Acara</strong>, <strong>Juri</strong>, <strong>Media Center</strong>) <strong>selalu bebas login kapan saja</strong> untuk keperluan persiapan operasional dan penjurian, meskipun tanggal mulai belum tiba.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                    <Input
+                      name="participantAccessStartDate"
+                      label="Tanggal & Waktu Mulai Buka Akses Peserta (WIB) *"
+                      type="datetime-local"
+                      value={participantAccessStartDate}
+                      onChange={(e) => setParticipantAccessStartDate(e.target.value)}
+                      helperText="Sebelum waktu ini, register & login peserta diblokir. Kosongkan jika ingin membuka akses tanpa batas tanggal."
+                    />
+
+                    <div className="flex flex-wrap items-center gap-2 pb-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setParticipantAccessStartDate("")}
+                        className="text-xs gap-1 cursor-pointer"
+                        title="Buka akses tanpa batasan tanggal"
+                      >
+                        <span>Buka Bebas (Kosongkan)</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const now = new Date();
+                          const pad = (n: number) => String(n).padStart(2, "0");
+                          const currentFormatted = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                          setParticipantAccessStartDate(currentFormatted);
+                        }}
+                        className="text-xs gap-1 cursor-pointer"
+                        title="Setel buka akses mulai jam sekarang"
+                      >
+                        <span>Buka Sekarang</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setParticipantAccessStartDate("2026-11-11T00:00")}
+                        className="text-xs gap-1 cursor-pointer"
+                        title="Kunci hingga hari H acara (11 Nov 2026 00:00 WIB)"
+                      >
+                        <span>Kunci s.d. 11 Nov 2026</span>
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -5,6 +5,7 @@ import path from "path";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseDateInWib } from "@/lib/utils";
 
 export interface EventSettingsMap {
   eventName: string;
@@ -19,6 +20,7 @@ export interface EventSettingsMap {
   maxCompetitions: string;
   rotationInterval: string;
   autoApproveTwibbon: boolean;
+  participantAccessStartDate: string;
   contactLocation: string;
   contactHours: string;
   contactEmail: string;
@@ -39,6 +41,7 @@ const SaveEventSettingsSchema = z.object({
   maxCompetitions: z.coerce.number().min(1, "Batas maksimal lomba minimal 1").max(10, "Batas maksimal lomba maksimal 10"),
   rotationInterval: z.coerce.number().min(5, "Durasi rotasi monitor minimal 5 detik").max(120, "Durasi rotasi monitor maksimal 120 detik"),
   autoApproveTwibbon: z.boolean().optional().default(false),
+  participantAccessStartDate: z.string().optional().default(""),
   contactLocation: z.string().optional().default("Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A."),
   contactHours: z.string().optional().default("07.30 - 21.00 WIB (Selama Acara Berlangsung)"),
   contactEmail: z.string().optional().default("panitia@gebyarbulanbahasa.id"),
@@ -90,6 +93,9 @@ export async function getEventSettings(): Promise<{
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
       autoApproveTwibbon,
+      participantAccessStartDate:
+        (typeof registration.participantAccessStartDate === "string" ? registration.participantAccessStartDate : "") ||
+        (typeof map["participant_access_start_date"] === "string" ? map["participant_access_start_date"] : ""),
       contactLocation: contact.location || "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A.",
       contactHours: contact.hours || "07.30 - 21.00 WIB (Selama Acara Berlangsung)",
       contactEmail: contact.email || "panitia@gebyarbulanbahasa.id",
@@ -134,6 +140,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
     maxCompetitions,
     rotationInterval,
     autoApproveTwibbon,
+    participantAccessStartDate,
     contactLocation,
     contactHours,
     contactEmail,
@@ -206,6 +213,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       scoreGapThreshold,
       maxCompetitions,
       maxTeamsPerSchool: maxCompetitions,
+      participantAccessStartDate: (participantAccessStartDate || "").trim(),
     };
 
     const { error: errReg } = await supabase
@@ -224,6 +232,17 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       console.error("Gagal update registration settings:", errReg);
       return { success: false, error: "Gagal menyimpan aturan penjurian/peserta: " + errReg.message };
     }
+
+    // Update key 'participant_access_start_date' secara khusus untuk lookup cepat
+    await supabase.from("event_settings").upsert(
+      {
+        key: "participant_access_start_date",
+        value: (participantAccessStartDate || "").trim(),
+        description: "Tanggal dan waktu buka akses pendaftaran serta login untuk peserta",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
 
     // 4. Update key 'monitor'
     const updatedMonitor = {
@@ -636,3 +655,104 @@ export async function updateMonitorScoreboardSettings(input: {
     return { success: false, error: message };
   }
 }
+
+export interface ParticipantAccessStatus {
+  isOpen: boolean;
+  startDate: string | null;
+  formattedStartDate: string | null;
+  message: string;
+}
+
+
+
+/**
+ * Mengecek apakah akses pendaftaran (/daftar) dan login (/masuk) untuk peserta sudah dibuka
+ * berdasarkan tanggal yang ditentukan oleh administrator.
+ */
+export async function getParticipantAccessStatus(): Promise<ParticipantAccessStatus> {
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Cek key khusus 'participant_access_start_date'
+    const { data: row } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "participant_access_start_date")
+      .maybeSingle();
+
+    let rawDate = typeof row?.value === "string" ? row.value.trim() : "";
+
+    // 2. Fallback cek key 'registration'
+    if (!rawDate) {
+      const { data: regRow } = await supabase
+        .from("event_settings")
+        .select("value")
+        .eq("key", "registration")
+        .maybeSingle();
+      if (regRow?.value && typeof (regRow.value as any).participantAccessStartDate === "string") {
+        rawDate = ((regRow.value as any).participantAccessStartDate || "").trim();
+      }
+    }
+
+    // Jika admin tidak mengatur tanggal (kosong), akses dibuka bebas secara default
+    if (!rawDate) {
+      return {
+        isOpen: true,
+        startDate: null,
+        formattedStartDate: null,
+        message: "Akses peserta terbuka normal.",
+      };
+    }
+
+    const targetDate = parseDateInWib(rawDate);
+    if (isNaN(targetDate.getTime())) {
+      return {
+        isOpen: true,
+        startDate: null,
+        formattedStartDate: null,
+        message: "Akses peserta terbuka normal.",
+      };
+    }
+
+    const now = new Date();
+    const isOpen = now.getTime() >= targetDate.getTime();
+
+    const hasTime = rawDate.includes("T") || rawDate.includes(":");
+    const dateFormatted = targetDate.toLocaleDateString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+
+    const timeFormatted = hasTime
+      ? targetDate.toLocaleTimeString("id-ID", {
+          timeZone: "Asia/Jakarta",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }) + " WIB"
+      : "";
+
+    const formattedStartDate = hasTime ? `${dateFormatted} pukul ${timeFormatted}` : dateFormatted;
+
+    return {
+      isOpen,
+      startDate: rawDate,
+      formattedStartDate,
+      message: isOpen
+        ? "Akses pendaftaran dan login peserta telah dibuka."
+        : `Akses pendaftaran dan login peserta baru akan dibuka pada ${formattedStartDate}.`,
+    };
+  } catch (err: unknown) {
+    console.error("Error getParticipantAccessStatus:", err);
+    // Jika terjadi kendala database, default buka agar tidak lockout sistem
+    return {
+      isOpen: true,
+      startDate: null,
+      formattedStartDate: null,
+      message: "Akses peserta terbuka normal.",
+    };
+  }
+}
+

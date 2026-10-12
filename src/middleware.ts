@@ -96,6 +96,37 @@ export async function middleware(request: NextRequest) {
       url.pathname = "/peserta";
       return NextResponse.redirect(url);
     }
+
+    // Khusus role peserta: Blokir akses panel /peserta jika tanggal buka akses belum tiba
+    if (pathname.startsWith("/peserta") && role === "peserta") {
+      const { data: accessSetting } = await supabase
+        .from("event_settings")
+        .select("value")
+        .eq("key", "participant_access_start_date")
+        .maybeSingle();
+
+      const rawDate = typeof accessSetting?.value === "string" ? accessSetting.value.trim() : "";
+      if (rawDate) {
+        let targetMs = NaN;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+          targetMs = new Date(`${rawDate}T00:00:00+07:00`).getTime();
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(rawDate)) {
+          targetMs = new Date(
+            rawDate.includes("+") || rawDate.endsWith("Z") ? rawDate : `${rawDate}:00+07:00`.slice(0, 25)
+          ).getTime();
+        } else {
+          targetMs = new Date(rawDate).getTime();
+        }
+
+        if (!isNaN(targetMs) && Date.now() < targetMs) {
+          await supabase.auth.signOut();
+          const url = request.nextUrl.clone();
+          url.pathname = "/masuk";
+          url.searchParams.set("error", "belum_dibuka");
+          return NextResponse.redirect(url);
+        }
+      }
+    }
   }
 
   // If logged in and visiting auth pages (/masuk, /daftar), redirect to respective home
@@ -107,6 +138,35 @@ export async function middleware(request: NextRequest) {
       .single();
 
     const role = profile?.role || "peserta";
+
+    // Jika role peserta dan akses belum dibuka, sign out dan jangan redirect ke /peserta
+    if (role === "peserta") {
+      const { data: accessSetting } = await supabase
+        .from("event_settings")
+        .select("value")
+        .eq("key", "participant_access_start_date")
+        .maybeSingle();
+
+      const rawDate = typeof accessSetting?.value === "string" ? accessSetting.value.trim() : "";
+      if (rawDate) {
+        let targetMs = NaN;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+          targetMs = new Date(`${rawDate}T00:00:00+07:00`).getTime();
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(rawDate)) {
+          targetMs = new Date(
+            rawDate.includes("+") || rawDate.endsWith("Z") ? rawDate : `${rawDate}:00+07:00`.slice(0, 25)
+          ).getTime();
+        } else {
+          targetMs = new Date(rawDate).getTime();
+        }
+
+        if (!isNaN(targetMs) && Date.now() < targetMs) {
+          await supabase.auth.signOut();
+          return response;
+        }
+      }
+    }
+
     const url = request.nextUrl.clone();
     url.pathname =
       role === "seksi_acara" || role === "super_admin"
@@ -118,6 +178,7 @@ export async function middleware(request: NextRequest) {
         : "/peserta";
     return NextResponse.redirect(url);
   }
+
 
   return response;
 }

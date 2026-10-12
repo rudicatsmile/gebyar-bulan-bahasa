@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { getParticipantAccessStatus, type ParticipantAccessStatus } from "@/app/actions/settings";
 
 function LoginForm() {
   const router = useRouter();
@@ -15,18 +16,27 @@ function LoginForm() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [accessStatus, setAccessStatus] = React.useState<ParticipantAccessStatus | null>(null);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(() => {
     return null; // diisi oleh useEffect setelah mount
   });
 
-  // Tampilkan pesan error dari middleware (misal: akun nonaktif diarahkan ke /masuk?error=nonaktif)
+  // Tampilkan pesan error dari middleware (misal: akun nonaktif atau belum dibuka)
   React.useEffect(() => {
     const errorParam = searchParams.get("error");
     if (errorParam === "nonaktif") {
       setErrorMsg(
         "Akun Anda telah dinonaktifkan oleh administrator. Silakan hubungi panitia untuk informasi lebih lanjut."
       );
+    } else if (errorParam === "belum_dibuka") {
+      setErrorMsg(
+        "Akses masuk panel peserta belum dibuka oleh panitia. Silakan periksa jadwal pembukaan di bawah."
+      );
     }
+
+    getParticipantAccessStatus().then((status) => {
+      setAccessStatus(status);
+    });
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,6 +72,21 @@ function LoginForm() {
           return;
         }
 
+        // KHUSUS ROLE PESERTA: Cek apakah tanggal buka akses sudah tercapai
+        if (userRole === "peserta") {
+          const access = await getParticipantAccessStatus();
+          if (!access.isOpen) {
+            await supabase.auth.signOut();
+            setErrorMsg(
+              `Mohon maaf, akses masuk untuk peserta belum dibuka. Akses akan dibuka pada ${access.formattedStartDate}. Silakan coba kembali saat tanggal pembukaan tiba.`
+            );
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // User dengan role selain peserta (super_admin, seksi_acara, juri, media_center, dll.)
+        // TETAP DIPERBOLEHKAN LOGIN meskipun belum masuk tanggal mulai!
         const targetUrl =
           userRole === "seksi_acara" || userRole === "super_admin"
             ? "/dashboard"
@@ -95,11 +120,28 @@ function LoginForm() {
       subtitle="Gunakan akun terdaftar untuk mengakses dashboard operasional atau panel peserta."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Banner informasi jika akses peserta belum dibuka */}
+        {accessStatus && !accessStatus.isOpen && (
+          <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-foreground text-xs flex items-start gap-2.5 animate-in fade-in">
+            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-semibold block text-amber-700 dark:text-amber-300">
+                Pemberitahuan Akses Peserta:
+              </span>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Akses masuk untuk peserta baru akan dibuka pada <strong>{accessStatus.formattedStartDate}</strong>.
+                Panitia dan dewan juri tetap dapat masuk menggunakan akun masing-masing seperti biasa.
+              </p>
+            </div>
+          </div>
+        )}
+
         {errorMsg && (
           <div className="p-3 rounded-lg border border-danger/30 bg-danger/10 text-danger text-xs">
             {errorMsg}
           </div>
         )}
+
 
         <Input
           label="Alamat Email *"

@@ -21,3 +21,33 @@ export function formatDate(dateString: string): string {
     dateStyle: "medium",
   }).format(new Date(dateString));
 }
+
+/**
+ * Parsing string tanggal/waktu dengan asumsi zona waktu Asia/Jakarta (WIB / UTC+7).
+ */
+export function parseDateInWib(rawDate: string): Date {
+  const clean = rawDate.trim();
+  if (!clean) return new Date(NaN);
+
+  if (clean.includes("+") || clean.endsWith("Z")) {
+    return new Date(clean);
+  }
+
+  // Format Tanggal Saja: YYYY-MM-DD -> 00:00:00 WIB
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return new Date(`${clean}T00:00:00+07:00`);
+  }
+
+  // Format Datetime Local: YYYY-MM-DDTHH:mm -> HH:mm:00 WIB
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(clean)) {
+    return new Date(`${clean}:00+07:00`);
+  }
+
+  // Format Datetime Local lengkap: YYYY-MM-DDTHH:mm:ss
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(clean)) {
+    return new Date(`${clean}+07:00`);
+  }
+
+  return new Date(clean);
+}
+
