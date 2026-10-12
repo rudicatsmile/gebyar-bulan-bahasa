@@ -1641,3 +1641,23 @@ export async function getJudgeDashboardData(): Promise<{
   }
 }
 
+/**
+ * Mengambil total jumlah cabang lomba aktif dari database secara dinamis.
+ */
+export async function getTotalCompetitionsCount(): Promise<number> {
+  try {
+    const supabase = createAdminClient();
+    const { count, error } = await supabase
+      .from("competitions")
+      .select("*", { count: "exact", head: true })
+      .neq("status", "dibatalkan");
+
+    if (error || typeof count !== "number" || count <= 0) {
+      return 9;
+    }
+    return count;
+  } catch (err) {
+    console.error("Error getTotalCompetitionsCount:", err);
+    return 9;
+  }
+}

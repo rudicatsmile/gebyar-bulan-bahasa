@@ -19,6 +19,7 @@ import {
 import { useCurrentParticipant, Enrollment } from "@/lib/hooks/useCurrentParticipant";
 import { enrollCompetition } from "@/app/actions/participants";
 import { getActiveInstitutions, type InstitutionItem } from "@/app/actions/institutions";
+import { getTotalCompetitionsCount } from "@/app/actions/competitions";
 import { createClient } from "@/lib/supabase/client";
 import { getCompetitionBySlug } from "@/lib/supabase/queries";
 import { COMPETITIONS, PARTICIPANTS } from "@/lib/dummy-data";
@@ -41,8 +42,8 @@ import {
   Info,
 } from "lucide-react";
 
-/** Batas cabang lomba per peserta — 8 cabang lomba */
-const MAX_LOMBA = 8;
+/** Nilai fallback jumlah cabang lomba jika data belum terambil */
+const DEFAULT_TOTAL_LOMBA = 9;
 
 /** registrations.participant_id adalah FK ke public.participants.id, jadi id fallback
  *  (profiles.id / user.id / id demo "part-1") tidak boleh dikirim ke server action. */
@@ -106,6 +107,23 @@ export function PesertaPendaftaranClient() {
   const [institutions, setInstitutions] = React.useState<InstitutionItem[]>([]);
   const [loadingInstitutions, setLoadingInstitutions] = React.useState(true);
   const [userDocCount, setUserDocCount] = React.useState<number>(0);
+  const [totalLomba, setTotalLomba] = React.useState<number>(DEFAULT_TOTAL_LOMBA);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    getTotalCompetitionsCount()
+      .then((count) => {
+        if (isMounted && typeof count === "number" && count > 0) {
+          setTotalLomba(count);
+        }
+      })
+      .catch((err) => {
+        console.error("Gagal mengambil total cabang lomba:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     getActiveInstitutions().then((res) => {
@@ -226,10 +244,10 @@ export function PesertaPendaftaranClient() {
         targetComp.requiredDocumentList && targetComp.requiredDocumentList.length > 0
           ? targetComp.requiredDocumentList
           : [
-              { name: "Kartu Pelajar / Mahasiswa / KTP", required: true },
-              { name: "Surat Rekomendasi / Izin Sekolah", required: true },
-              { name: "Naskah Karya / Dokumen Pendukung", required: false },
-            ];
+            { name: "Kartu Pelajar / Mahasiswa / KTP", required: true },
+            { name: "Surat Rekomendasi / Izin Sekolah", required: true },
+            { name: "Naskah Karya / Dokumen Pendukung", required: false },
+          ];
 
       const requiredItems = rawList
         .map((item) => (typeof item === "string" ? { name: item, required: true } : item))
@@ -353,7 +371,7 @@ export function PesertaPendaftaranClient() {
     setMembers((prev) => prev.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
   };
 
-  const quotaFull = enrollments.length >= MAX_LOMBA;
+  const quotaFull = enrollments.length >= totalLomba;
   const canEnrollTarget =
     !!target &&
     target.status === "pendaftaran" &&
@@ -403,7 +421,7 @@ export function PesertaPendaftaranClient() {
             <div className="flex items-center gap-2">
               {statusBadge}
               <Badge variant="default" className="text-xs font-mono">
-                {enrollments.length}/{MAX_LOMBA} CABANG
+                {enrollments.length}/{totalLomba} CABANG
               </Badge>
             </div>
           </div>
@@ -466,7 +484,7 @@ export function PesertaPendaftaranClient() {
               <div className="p-4 rounded-xl border border-border bg-muted/40 flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                 <p className="text-xs text-muted-foreground">
-                  Anda telah mencapai batas maksimal <strong>{MAX_LOMBA}</strong> cabang lomba per
+                  Anda telah mencapai batas maksimal <strong>{totalLomba}</strong> cabang lomba per
                   peserta. Batalkan salah satu pendaftaran untuk mengganti cabang lomba.
                 </p>
               </div>
@@ -567,7 +585,7 @@ export function PesertaPendaftaranClient() {
                     Akun peserta Anda memiliki nomor registrasi{" "}
                     <strong className="text-accent font-mono">{participant?.registrationNumber}</strong>.
                     Silakan pilih dan daftarkan diri pada salah satu cabang perlombaan Gebyar Bulan Bahasa
-                    (maks. {MAX_LOMBA} cabang per peserta).
+                    (maks. {totalLomba} cabang per peserta).
                   </p>
                 </div>
                 <div className="pt-2">
@@ -643,7 +661,7 @@ export function PesertaPendaftaranClient() {
                       </p>
                     ) : quotaFull ? (
                       <p className="text-xs text-muted-foreground">
-                        Kuota pendaftaran Anda penuh ({MAX_LOMBA} cabang lomba).
+                        Kuota pendaftaran Anda penuh ({totalLomba} cabang lomba).
                       </p>
                     ) : target.requireDocument !== false && userDocCount === 0 && !participant?.isDemoFallback ? (
                       <div className="space-y-3">

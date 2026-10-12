@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCompetitionRequireDocumentsMap } from "@/app/actions/competitions";
 
-const MAX_COMPETITION_PER_PARTICIPANT = 8;
+const DEFAULT_MAX_COMPETITION = 9;
 
 const ParticipantSchema = z.object({
   fullName: z.string().min(3, "Nama lengkap minimal 3 karakter"),
@@ -196,6 +196,14 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
       }
     }
 
+    // Hitung batas maksimal cabang lomba secara dinamis dari database (total lomba aktif)
+    const { count: totalActiveComps } = await supabase
+      .from("competitions")
+      .select("*", { count: "exact", head: true })
+      .neq("status", "dibatalkan");
+
+    const maxAllowed = totalActiveComps && totalActiveComps > 0 ? totalActiveComps : DEFAULT_MAX_COMPETITION;
+
     // Validasi batas maksimal lomba per peserta
     const { count, error: countErr } = await supabase
       .from("registrations")
@@ -206,10 +214,10 @@ export async function enrollCompetition(data: z.infer<typeof RegistrationSchema>
       return { success: false, error: countErr.message };
     }
 
-    if ((count || 0) >= MAX_COMPETITION_PER_PARTICIPANT) {
+    if ((count || 0) >= maxAllowed) {
       return {
         success: false,
-        error: `Peserta telah mencapai batas maksimal pendaftaran (${MAX_COMPETITION_PER_PARTICIPANT} cabang lomba).`,
+        error: `Peserta telah mencapai batas maksimal pendaftaran (${maxAllowed} cabang lomba).`,
       };
     }
 
