@@ -14,6 +14,8 @@ import {
   uploadLogoImageAction,
   getMonitorScoreboardSettings,
   updateMonitorScoreboardSettings,
+  getWelcomeModalSettings,
+  saveWelcomeModalSettings,
 } from "@/app/actions/settings";
 import { parseDateInWib } from "@/lib/utils";
 import { getCompetitions, type Competition } from "@/lib/supabase/queries";
@@ -33,6 +35,7 @@ import {
   Square,
   Lock,
   ShieldCheck,
+  MessageSquareText,
 } from "lucide-react";
 
 export default function DashboardPengaturanPage() {
@@ -76,6 +79,12 @@ export default function DashboardPengaturanPage() {
     "• Panggung Utama (Stage A): Puisi, MC Formal, Vokal Grup\n• Ruang Bioskop Mini Lt. 2: Lomba Film Pendek\n• Aula Serbaguna: Pidato Bahasa Indonesia\n• Area Kreatif Selasar: Melukis Tas Kanvas\n• Ruang Teater A: Seni Teater Monolog\n• Pelataran Budaya: Seni Tradisi Palang Pintu Betawi"
   );
 
+  // Welcome Modal
+  const [wmTitle, setWmTitle] = React.useState("");
+  const [wmContent, setWmContent] = React.useState("");
+  const [wmActive, setWmActive] = React.useState(false);
+  const [isSavingWm, setIsSavingWm] = React.useState(false);
+
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
   // Penanda sudah ter-hydrate di client. Menjamin render pertama di client
@@ -105,6 +114,18 @@ export default function DashboardPengaturanPage() {
         }
       } catch (errSb) {
         console.error("Gagal memuat konfigurasi scoreboard monitor:", errSb);
+      }
+
+      // Muat konfigurasi Welcome Modal
+      try {
+        const wmRes = await getWelcomeModalSettings();
+        if (wmRes.success && wmRes.settings) {
+          setWmTitle(wmRes.settings.title);
+          setWmContent(wmRes.settings.content);
+          setWmActive(wmRes.settings.active);
+        }
+      } catch (errWm) {
+        console.error("Gagal memuat konfigurasi welcome modal:", errWm);
       }
 
       // Prioritaskan direct API route
@@ -1082,6 +1103,150 @@ export default function DashboardPengaturanPage() {
                   helperText="Daftar lokasi lomba panggung/ruangan yang ditampilkan pada denah mini halaman /kontak."
                   required
                 />
+              </div>
+
+              {/* Bagian 6: Welcome Modal */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <h3 className="font-heading text-base font-bold text-foreground border-b border-border pb-2 flex items-center justify-between">
+                  <span>6. Welcome Modal Beranda</span>
+                  <span className="text-[10px] font-mono text-muted-foreground font-normal">Tabel: event_settings (key: welcome_modal)</span>
+                </h3>
+
+                <div className="p-4 sm:p-5 rounded-xl border border-border bg-card/60 space-y-4">
+                  {/* Toggle aktif/nonaktif */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1.5 max-w-xl">
+                      <div className="flex items-center gap-2">
+                        <MessageSquareText className="h-4 w-4 text-accent" />
+                        <span className="font-heading text-sm sm:text-base font-bold text-foreground">
+                          Welcome Modal
+                        </span>
+                        <Badge
+                          variant={wmActive ? "success" : "warning"}
+                          className="text-[10px]"
+                        >
+                          {wmActive ? "AKTIF (Ditampilkan)" : "NONAKTIF (Tersembunyi)"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {wmActive ? (
+                          <>
+                            <strong className="text-foreground">Mode Aktif:</strong> Modal selamat datang akan tampil otomatis saat pengunjung membuka halaman beranda. Modal hanya muncul sekali per sesi browser (tidak muncul berulang setelah ditutup).
+                          </>
+                        ) : (
+                          <>
+                            <strong className="text-foreground">Mode Nonaktif:</strong> Modal tidak ditampilkan di halaman beranda. Konten tersimpan dan siap ditampilkan kapan saja saat diaktifkan kembali.
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+                      <span className="text-xs font-semibold text-muted-foreground hidden sm:inline">
+                        {wmActive ? "Aktif" : "Nonaktif"}
+                      </span>
+                      <button
+                        id="toggle-welcome-modal"
+                        type="button"
+                        role="switch"
+                        aria-checked={wmActive}
+                        onClick={() => setWmActive(!wmActive)}
+                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
+                          wmActive ? "bg-accent" : "bg-muted-foreground/30"
+                        }`}
+                      >
+                        <span className="sr-only">Toggle Welcome Modal</span>
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            wmActive ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Form fields */}
+                  <div className="pt-3 border-t border-border space-y-4">
+                    <Input
+                      name="wmTitle"
+                      label="Judul Welcome Modal *"
+                      value={wmTitle}
+                      onChange={(e) => setWmTitle(e.target.value)}
+                      placeholder="Contoh: Selamat Datang di Gebyar Bulan Bahasa 2026!"
+                      helperText="Judul besar yang tampil di bagian atas modal."
+                    />
+
+                    <Textarea
+                      name="wmContent"
+                      label="Konten / Isi Informasi Modal *"
+                      value={wmContent}
+                      onChange={(e) => setWmContent(e.target.value)}
+                      rows={5}
+                      placeholder={"Selamat datang di portal resmi Gebyar Bulan Bahasa dan Kebudayaan!\n\nAcara ini menghadirkan 8 cabang lomba kebudayaan..."}
+                      helperText="Isi pesan/informasi yang ditampilkan di dalam modal. Mendukung baris baru (enter)."
+                    />
+                  </div>
+
+                  {/* Tombol Simpan khusus Welcome Modal */}
+                  <div className="pt-3 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <Button
+                      id="btn-simpan-welcome-modal"
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSavingWm || isLoading}
+                      onClick={async () => {
+                        setIsSavingWm(true);
+                        setFeedback(null);
+                        try {
+                          const res = await saveWelcomeModalSettings({
+                            title: wmTitle.trim(),
+                            content: wmContent.trim(),
+                            active: wmActive,
+                          });
+                          if (res.success) {
+                            setFeedback({
+                              type: "success",
+                              message: "Pengaturan Welcome Modal berhasil disimpan!",
+                            });
+                            setTimeout(() => {
+                              setFeedback((prev) => (prev?.type === "success" ? null : prev));
+                            }, 4500);
+                          } else {
+                            setFeedback({
+                              type: "error",
+                              message: res.error || "Gagal menyimpan pengaturan Welcome Modal.",
+                            });
+                          }
+                        } catch (err: unknown) {
+                          setFeedback({
+                            type: "error",
+                            message: err instanceof Error ? err.message : "Terjadi kendala saat menyimpan welcome modal.",
+                          });
+                        } finally {
+                          setIsSavingWm(false);
+                        }
+                      }}
+                      className="text-xs font-semibold gap-2 min-w-[200px] cursor-pointer"
+                    >
+                      {isSavingWm ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-3.5 w-3.5" />
+                          <span>Simpan Welcome Modal</span>
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground italic">
+                      * Perubahan pada Welcome Modal disimpan secara terpisah dan langsung berlaku di halaman beranda.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Action Button & Bottom Feedback */}

@@ -7,6 +7,7 @@ import { PublicFooter } from "@/components/layouts/PublicFooter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { WelcomeModal, type WelcomeModalData } from "@/components/ui/WelcomeModal";
 import type { Competition, ScheduleItem, Announcement } from "@/lib/dummy-data";
 import {
   Sparkles,
@@ -39,6 +40,7 @@ interface HomeClientProps {
   heroImageUrl?: string;
   verifiedParticipantsCount?: number;
   judgesCount?: number;
+  welcomeModal?: WelcomeModalData;
 }
 
 /**
@@ -203,6 +205,7 @@ export function HomeClient({
   heroImageUrl = "",
   verifiedParticipantsCount,
   judgesCount,
+  welcomeModal,
 }: HomeClientProps) {
   const [currentEventName, setCurrentEventName] = React.useState(eventName);
   const [currentEventTheme, setCurrentEventTheme] = React.useState(eventTheme);
@@ -211,6 +214,9 @@ export function HomeClient({
   const [currentHeroImageUrl, setCurrentHeroImageUrl] = React.useState(heroImageUrl);
   const [currentSchedules, setCurrentSchedules] = React.useState<ScheduleItem[]>(schedules);
   const [currentLeaderboard, setCurrentLeaderboard] = React.useState(leaderboard);
+  const [currentWelcomeModal, setCurrentWelcomeModal] = React.useState<WelcomeModalData>(
+    welcomeModal || { title: "", content: "", active: false }
+  );
 
   React.useEffect(() => {
     setCurrentEventName(eventName);
@@ -260,6 +266,9 @@ export function HomeClient({
           }
           if (typeof data.settings.heroImageUrl === "string") {
             setCurrentHeroImageUrl(data.settings.heroImageUrl);
+          }
+          if (data.settings.welcomeModal) {
+            setCurrentWelcomeModal(data.settings.welcomeModal);
           }
         }
       })
@@ -339,6 +348,7 @@ export function HomeClient({
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <PublicNavbar />
+      <WelcomeModal data={currentWelcomeModal} />
 
       <main className="flex-1">
         {/* ============================================================= */}

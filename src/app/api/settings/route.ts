@@ -28,6 +28,13 @@ export async function GET() {
         : general.autoApproveTwibbon ?? false
     );
 
+    const welcomeModalRaw = map["welcome_modal"] || {};
+    const welcomeModal = {
+      title: typeof welcomeModalRaw.title === "string" ? welcomeModalRaw.title : "",
+      content: typeof welcomeModalRaw.content === "string" ? welcomeModalRaw.content : "",
+      active: Boolean(welcomeModalRaw.active),
+    };
+
     const settings = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
       eventShortName: general.shortName || "GebyarBulanBahasa",
@@ -51,9 +58,11 @@ export async function GET() {
       contactStageMap:
         contact.stageMap ||
         "• Panggung Utama (Stage A): Puisi, MC Formal, Vokal Grup\n• Ruang Bioskop Mini Lt. 2: Lomba Film Pendek\n• Aula Serbaguna: Pidato Bahasa Indonesia\n• Area Kreatif Selasar: Melukis Tas Kanvas\n• Ruang Teater A: Seni Teater Monolog\n• Pelataran Budaya: Seni Tradisi Palang Pintu Betawi",
+      welcomeModal,
     };
 
     return NextResponse.json({ success: true, settings });
+
   } catch (err: unknown) {
     console.error("API GET /api/settings exception:", err);
     const message = err instanceof Error ? err.message : "Gagal membaca pengaturan.";

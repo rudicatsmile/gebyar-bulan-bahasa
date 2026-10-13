@@ -5,13 +5,13 @@ import {
   getChallengeLeaderboard,
   getHomeStats,
 } from "@/lib/supabase/queries";
-import { getEventSettings } from "@/app/actions/settings";
+import { getEventSettings, getWelcomeModalSettings } from "@/app/actions/settings";
 import { HomeClient } from "./home-client";
 
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [competitions, schedules, announcements, leaderboard, settingsRes, homeStats] =
+  const [competitions, schedules, announcements, leaderboard, settingsRes, homeStats, welcomeModalRes] =
     await Promise.all([
       getCompetitions(),
       getSchedules(),
@@ -19,6 +19,7 @@ export default async function HomePage() {
       getChallengeLeaderboard(),
       getEventSettings(),
       getHomeStats(),
+      getWelcomeModalSettings(),
     ]);
 
   const eventName =
@@ -46,6 +47,10 @@ export default async function HomePage() {
       ? settingsRes.settings.heroImageUrl
       : "";
 
+  const welcomeModal = welcomeModalRes.success
+    ? welcomeModalRes.settings
+    : { title: "", content: "", active: false };
+
   return (
     <HomeClient
       competitions={competitions}
@@ -59,6 +64,8 @@ export default async function HomePage() {
       heroImageUrl={heroImageUrl}
       verifiedParticipantsCount={homeStats.verifiedParticipantsCount}
       judgesCount={homeStats.judgesCount}
+      welcomeModal={welcomeModal}
     />
   );
 }
+

@@ -756,3 +756,109 @@ export async function getParticipantAccessStatus(): Promise<ParticipantAccessSta
   }
 }
 
+// ========================================================================================
+// Welcome Modal Settings
+// ========================================================================================
+
+export interface WelcomeModalSettings {
+  title: string;
+  content: string;
+  active: boolean;
+}
+
+/**
+ * Mengambil konfigurasi Welcome Modal dari tabel event_settings (key: welcome_modal).
+ */
+export async function getWelcomeModalSettings(): Promise<{
+  success: boolean;
+  settings: WelcomeModalSettings;
+  error?: string;
+}> {
+  const defaultSettings: WelcomeModalSettings = {
+    title: "",
+    content: "",
+    active: false,
+  };
+
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "welcome_modal")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Gagal mengambil welcome_modal settings:", error);
+      return { success: false, settings: defaultSettings, error: error.message };
+    }
+
+    if (data?.value && typeof data.value === "object") {
+      const val = data.value as Record<string, unknown>;
+      return {
+        success: true,
+        settings: {
+          title: typeof val.title === "string" ? val.title : "",
+          content: typeof val.content === "string" ? val.content : "",
+          active: Boolean(val.active),
+        },
+      };
+    }
+
+    return { success: true, settings: defaultSettings };
+  } catch (err: unknown) {
+    console.error("Error getWelcomeModalSettings:", err);
+    return {
+      success: false,
+      settings: defaultSettings,
+      error: err instanceof Error ? err.message : "Gagal membaca pengaturan welcome modal.",
+    };
+  }
+}
+
+/**
+ * Menyimpan konfigurasi Welcome Modal ke tabel event_settings (key: welcome_modal).
+ */
+export async function saveWelcomeModalSettings(input: WelcomeModalSettings): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
+
+    const { error } = await supabase.from("event_settings").upsert(
+      {
+        key: "welcome_modal",
+        value: {
+          title: (input.title || "").trim(),
+          content: (input.content || "").trim(),
+          active: Boolean(input.active),
+        },
+        description: "Konfigurasi Welcome Modal yang tampil di halaman beranda",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
+    if (error) {
+      console.error("Gagal menyimpan welcome_modal settings:", error);
+      return { success: false, error: error.message };
+    }
+
+    try {
+      revalidatePath("/");
+      revalidatePath("/dashboard/pengaturan");
+    } catch {
+      // safe fallback
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("Error saveWelcomeModalSettings:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal menyimpan pengaturan welcome modal.",
+    };
+  }
+}
