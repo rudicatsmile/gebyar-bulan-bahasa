@@ -28,6 +28,7 @@ import {
   Award,
   AlertCircle,
   HelpCircle,
+  ShieldAlert,
 } from "lucide-react";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import {
@@ -37,13 +38,15 @@ import {
   type JigsawConfig,
   type JigsawAttempt,
 } from "@/app/actions/kepingan-puzzle";
+import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
 
-type GamePhase = "loading" | "ready" | "playing" | "completed" | "inactive" | "already_done";
+type GamePhase = "loading" | "ready" | "playing" | "completed" | "inactive" | "already_done" | "blocked";
 
 export default function PesertaKepinganPuzzlePage() {
   const { participant } = useCurrentParticipant();
 
   const [phase, setPhase] = React.useState<GamePhase>("loading");
+  const [blockedCompetitionNames, setBlockedCompetitionNames] = React.useState<string[]>([]);
   const [puzzle, setPuzzle] = React.useState<JigsawConfig | null>(null);
   const [pastAttempt, setPastAttempt] = React.useState<JigsawAttempt | null>(null);
 
@@ -69,6 +72,23 @@ export default function PesertaKepinganPuzzlePage() {
   const loadGame = React.useCallback(async () => {
     setPhase("loading");
     try {
+      // Cek apakah peserta terdaftar lomba dan kebijakan melarangnya
+      const eligSettings = await getChallengeParticipationSettings();
+      const enrolled: string[] = [];
+      if (participant?.enrollments && participant.enrollments.length > 0) {
+        participant.enrollments.forEach((e) => {
+          if (e.competitionName) enrolled.push(e.competitionName);
+        });
+      }
+      if (enrolled.length === 0 && participant?.competitionName) {
+        enrolled.push(participant.competitionName);
+      }
+      if (!eligSettings.allowCompetitionParticipants && enrolled.length > 0) {
+        setBlockedCompetitionNames(enrolled);
+        setPhase("blocked");
+        return;
+      }
+
       const res = await getActiveJigsawPuzzle();
       if (!res.success || !res.puzzle || !res.puzzle.isActive) {
         setPhase("inactive");
@@ -312,6 +332,42 @@ export default function PesertaKepinganPuzzlePage() {
           <Card className="p-16 text-center text-muted-foreground flex flex-col items-center justify-center gap-3 border-border">
             <Loader2 className="h-8 w-8 animate-spin text-accent" />
             <span className="text-sm">Menyiapkan kepingan puzzle...</span>
+          </Card>
+        )}
+
+        {/* ============================================================= */}
+        {/* KONDISI BLOCKED: AKSES DITOLAK UNTUK PESERTA LOMBA */}
+        {/* ============================================================= */}
+        {phase === "blocked" && (
+          <Card className="p-8 sm:p-10 text-center space-y-6 border-destructive/40 bg-destructive/5 max-w-lg mx-auto">
+            <div className="h-14 w-14 rounded-full bg-destructive/20 text-destructive flex items-center justify-center mx-auto ring-4 ring-destructive/10">
+              <ShieldAlert className="h-8 w-8" />
+            </div>
+
+            <div className="space-y-2">
+              <Badge variant="danger" className="text-xs px-2.5 py-0.5">
+                Akses Challenge Dibatasi
+              </Badge>
+              <h2 className="font-heading text-xl sm:text-2xl font-bold text-foreground">
+                Khusus Peserta Non-Lomba
+              </h2>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Berdasarkan kebijakan panitia acara saat ini, peserta yang terdaftar pada cabang lomba{" "}
+                <strong className="text-foreground">
+                  {blockedCompetitionNames.length > 0 ? `(${blockedCompetitionNames.join(", ")})` : ""}
+                </strong>{" "}
+                tidak diperkenankan mengikuti challenge/misi agar dapat berkonsentrasi penuh pada kompetisi lomba Anda.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <Link href="/peserta/challenge">
+                <Button size="lg" className="text-xs gap-1.5 cursor-pointer shadow-xs">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Kembali ke Daftar Challenge</span>
+                </Button>
+              </Link>
+            </div>
           </Card>
         )}
 

@@ -26,6 +26,7 @@ export interface EventSettingsMap {
   contactEmail: string;
   contactPhone: string;
   contactStageMap: string;
+  allowCompetitionParticipantsInChallenges?: boolean;
 }
 
 const SaveEventSettingsSchema = z.object({
@@ -42,6 +43,7 @@ const SaveEventSettingsSchema = z.object({
   rotationInterval: z.coerce.number().min(5, "Durasi rotasi monitor minimal 5 detik").max(120, "Durasi rotasi monitor maksimal 120 detik"),
   autoApproveTwibbon: z.boolean().optional().default(false),
   participantAccessStartDate: z.string().optional().default(""),
+  allowCompetitionParticipantsInChallenges: z.boolean().optional().default(true),
   contactLocation: z.string().optional().default("Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A."),
   contactHours: z.string().optional().default("07.30 - 21.00 WIB (Selama Acara Berlangsung)"),
   contactEmail: z.string().optional().default("panitia@gebyarbulanbahasa.id"),
@@ -79,6 +81,13 @@ export async function getEventSettings(): Promise<{
         ? map["auto_approve_twibbon"]
         : general.autoApproveTwibbon ?? false
     );
+    const allowCompetitionParticipantsInChallenges = Boolean(
+      map["allow_competition_participants_in_challenges"] !== undefined
+        ? (typeof map["allow_competition_participants_in_challenges"] === "object" && map["allow_competition_participants_in_challenges"] !== null
+            ? map["allow_competition_participants_in_challenges"].allowed ?? true
+            : map["allow_competition_participants_in_challenges"])
+        : registration.allowCompetitionParticipantsInChallenges ?? true
+    );
 
     const settings: EventSettingsMap = {
       eventName: general.name || "Gebyar Bulan Bahasa dan Kebudayaan",
@@ -93,6 +102,7 @@ export async function getEventSettings(): Promise<{
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
       autoApproveTwibbon,
+      allowCompetitionParticipantsInChallenges,
       participantAccessStartDate:
         (typeof registration.participantAccessStartDate === "string" ? registration.participantAccessStartDate : "") ||
         (typeof map["participant_access_start_date"] === "string" ? map["participant_access_start_date"] : ""),
@@ -141,6 +151,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
     rotationInterval,
     autoApproveTwibbon,
     participantAccessStartDate,
+    allowCompetitionParticipantsInChallenges,
     contactLocation,
     contactHours,
     contactEmail,
@@ -207,6 +218,17 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       { onConflict: "key" }
     );
 
+    // Update key 'allow_competition_participants_in_challenges'
+    await supabase.from("event_settings").upsert(
+      {
+        key: "allow_competition_participants_in_challenges",
+        value: Boolean(allowCompetitionParticipantsInChallenges),
+        description: "Menentukan apakah peserta yang terdaftar di cabang lomba boleh mengikuti challenge/misi",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
     // 3. Update key 'registration'
     const updatedRegistration = {
       ...currentRegistration,
@@ -214,6 +236,7 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       maxCompetitions,
       maxTeamsPerSchool: maxCompetitions,
       participantAccessStartDate: (participantAccessStartDate || "").trim(),
+      allowCompetitionParticipantsInChallenges: Boolean(allowCompetitionParticipantsInChallenges),
     };
 
     const { error: errReg } = await supabase
@@ -318,6 +341,9 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       revalidatePath("/monitor");
       revalidatePath("/media/monitor");
       revalidatePath("/kontak");
+      revalidatePath("/peserta/challenge");
+      revalidatePath("/peserta/scan");
+      revalidatePath("/peserta");
       revalidatePath("/");
     } catch {
       // Safe fallback
@@ -862,3 +888,4 @@ export async function saveWelcomeModalSettings(input: WelcomeModalSettings): Pro
     };
   }
 }
+

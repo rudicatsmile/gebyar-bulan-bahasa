@@ -27,6 +27,13 @@ export async function GET() {
         ? map["auto_approve_twibbon"]
         : general.autoApproveTwibbon ?? false
     );
+    const allowCompetitionParticipantsInChallenges = Boolean(
+      map["allow_competition_participants_in_challenges"] !== undefined
+        ? (typeof map["allow_competition_participants_in_challenges"] === "object" && map["allow_competition_participants_in_challenges"] !== null
+            ? map["allow_competition_participants_in_challenges"].allowed ?? true
+            : map["allow_competition_participants_in_challenges"])
+        : registration.allowCompetitionParticipantsInChallenges ?? true
+    );
 
     const welcomeModalRaw = map["welcome_modal"] || {};
     const welcomeModal = {
@@ -48,6 +55,7 @@ export async function GET() {
       maxCompetitions: String(registration.maxCompetitions ?? registration.maxTeamsPerSchool ?? 3),
       rotationInterval: String(monitor.refreshIntervalSeconds ?? 15),
       autoApproveTwibbon,
+      allowCompetitionParticipantsInChallenges,
       participantAccessStartDate:
         (typeof registration.participantAccessStartDate === "string" ? registration.participantAccessStartDate : "") ||
         (typeof map["participant_access_start_date"] === "string" ? map["participant_access_start_date"] : ""),
@@ -87,6 +95,7 @@ export async function POST(request: Request) {
       rotationInterval,
       autoApproveTwibbon,
       participantAccessStartDate,
+      allowCompetitionParticipantsInChallenges,
       contactLocation,
       contactHours,
       contactEmail,
@@ -160,6 +169,17 @@ export async function POST(request: Request) {
       { onConflict: "key" }
     );
 
+    // Simpan key 'allow_competition_participants_in_challenges'
+    await supabase.from("event_settings").upsert(
+      {
+        key: "allow_competition_participants_in_challenges",
+        value: Boolean(allowCompetitionParticipantsInChallenges ?? true),
+        description: "Menentukan apakah peserta yang terdaftar di cabang lomba boleh mengikuti challenge/misi",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
     // 3. Simpan key 'registration'
     const updatedRegistration = {
       ...currentRegistration,
@@ -167,6 +187,7 @@ export async function POST(request: Request) {
       maxCompetitions: Number(maxCompetitions) || 3,
       maxTeamsPerSchool: Number(maxCompetitions) || 3,
       participantAccessStartDate: String(participantAccessStartDate || "").trim(),
+      allowCompetitionParticipantsInChallenges: Boolean(allowCompetitionParticipantsInChallenges ?? true),
     };
 
     const { error: errReg } = await supabase.from("event_settings").upsert(
@@ -275,6 +296,9 @@ export async function POST(request: Request) {
       revalidatePath("/monitor");
       revalidatePath("/media/monitor");
       revalidatePath("/kontak");
+      revalidatePath("/peserta/challenge");
+      revalidatePath("/peserta/scan");
+      revalidatePath("/peserta");
       revalidatePath("/");
     } catch {
       // Safe fallback

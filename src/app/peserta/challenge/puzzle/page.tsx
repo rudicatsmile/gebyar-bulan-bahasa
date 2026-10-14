@@ -19,6 +19,7 @@ import {
   GripVertical,
   MapPin,
   Shirt,
+  ShieldAlert,
 } from "lucide-react";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import {
@@ -27,9 +28,10 @@ import {
   getMyPuzzleAttempts,
   type PuzzleAttemptResult,
 } from "@/app/actions/puzzle";
+import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
 import { cn } from "@/lib/utils";
 
-type GamePhase = "loading" | "ready" | "playing" | "result" | "completed";
+type GamePhase = "loading" | "ready" | "playing" | "result" | "completed" | "blocked";
 
 interface CostumeData {
   id: string;
@@ -49,6 +51,7 @@ interface AnswerDetail {
 export default function PesertaPuzzlePage() {
   const { participant } = useCurrentParticipant();
   const [phase, setPhase] = React.useState<GamePhase>("loading");
+  const [blockedCompetitionNames, setBlockedCompetitionNames] = React.useState<string[]>([]);
   const [costumes, setCostumes] = React.useState<CostumeData[]>([]);
   const [regions, setRegions] = React.useState<string[]>([]);
   
@@ -95,6 +98,22 @@ export default function PesertaPuzzlePage() {
   const loadPuzzle = React.useCallback(async () => {
     setPhase("loading");
     try {
+      const eligSettings = await getChallengeParticipationSettings();
+      const enrolled: string[] = [];
+      if (participant?.enrollments && participant.enrollments.length > 0) {
+        participant.enrollments.forEach((e) => {
+          if (e.competitionName) enrolled.push(e.competitionName);
+        });
+      }
+      if (enrolled.length === 0 && participant?.competitionName) {
+        enrolled.push(participant.competitionName);
+      }
+      if (!eligSettings.allowCompetitionParticipants && enrolled.length > 0) {
+        setBlockedCompetitionNames(enrolled);
+        setPhase("blocked");
+        return;
+      }
+
       const [res, historyRes] = await Promise.all([
         getActivePuzzleItems(),
         participant?.participantRowId
@@ -130,7 +149,7 @@ export default function PesertaPuzzlePage() {
     } catch {
       setPhase("ready");
     }
-  }, [participant?.participantRowId]);
+  }, [participant?.participantRowId, participant?.enrollments, participant?.competitionName]);
 
   const loadHistory = React.useCallback(async () => {
     if (!participant?.participantRowId) return;
@@ -262,6 +281,10 @@ export default function PesertaPuzzlePage() {
   };
 
   const handleSubmit = async (isTimeoutOrEvent?: boolean | React.MouseEvent) => {
+    if (phase === "blocked") {
+      alert("Partisipasi ditolak: Berdasarkan regulasi panitia, peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti challenge ini.");
+      return;
+    }
     const isTimeout = typeof isTimeoutOrEvent === "boolean" ? isTimeoutOrEvent : false;
     if (!participant?.participantRowId) {
       alert("Data peserta tidak ditemukan. Pastikan Anda sudah login.");
@@ -411,6 +434,40 @@ export default function PesertaPuzzlePage() {
             <Loader2 className="h-8 w-8 animate-spin text-accent" />
             <p className="text-xs">Memuat soal puzzle...</p>
           </div>
+        )}
+
+        {/* ============ PHASE: BLOCKED ============ */}
+        {phase === "blocked" && (
+          <Card className="p-8 sm:p-10 text-center space-y-6 border-destructive/40 bg-destructive/5 max-w-lg mx-auto">
+            <div className="h-14 w-14 rounded-full bg-destructive/20 text-destructive flex items-center justify-center mx-auto ring-4 ring-destructive/10">
+              <ShieldAlert className="h-8 w-8" />
+            </div>
+
+            <div className="space-y-2">
+              <Badge variant="danger" className="text-xs px-2.5 py-0.5">
+                Akses Challenge Dibatasi
+              </Badge>
+              <h2 className="font-heading text-xl sm:text-2xl font-bold text-foreground">
+                Khusus Peserta Non-Lomba
+              </h2>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Berdasarkan kebijakan panitia acara saat ini, peserta yang terdaftar pada cabang lomba{" "}
+                <strong className="text-foreground">
+                  {blockedCompetitionNames.length > 0 ? `(${blockedCompetitionNames.join(", ")})` : ""}
+                </strong>{" "}
+                tidak diperkenankan mengikuti challenge puzzle ini agar dapat berkonsentrasi penuh pada kompetisi lomba Anda.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <Link href="/peserta/challenge">
+                <Button size="lg" className="text-xs gap-1.5 cursor-pointer shadow-xs">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Kembali ke Daftar Challenge</span>
+                </Button>
+              </Link>
+            </div>
+          </Card>
         )}
 
         {/* ============ PHASE: READY ============ */}

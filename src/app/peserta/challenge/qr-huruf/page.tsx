@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Loader2,
   KeyRound,
+  ShieldAlert,
 } from "lucide-react";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import {
@@ -35,6 +36,7 @@ import {
   getMyQrSubmissions,
   type CollectedLetter,
 } from "@/app/actions/qr-huruf";
+import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
 import { cn } from "@/lib/utils";
 import jsQR from "jsqr";
 
@@ -50,6 +52,34 @@ interface ActiveChallengeState {
 export default function PesertaQrHurufPage() {
   const { participant, refetch: refetchParticipant } = useCurrentParticipant();
   const [loading, setLoading] = React.useState(true);
+
+  // Status pengaturan partisipasi challenge untuk peserta lomba
+  const [allowCompetitionParticipants, setAllowCompetitionParticipants] = React.useState(true);
+
+  React.useEffect(() => {
+    getChallengeParticipationSettings().then((res) => {
+      if (res.success) {
+        setAllowCompetitionParticipants(res.allowCompetitionParticipants);
+      }
+    });
+  }, []);
+
+  const enrolledCompetitionNames: string[] = React.useMemo(() => {
+    if (!participant) return [];
+    const names: string[] = [];
+    if (participant.enrollments && participant.enrollments.length > 0) {
+      participant.enrollments.forEach((e) => {
+        if (e.competitionName) names.push(e.competitionName);
+      });
+    }
+    if (names.length === 0 && participant.competitionName) {
+      names.push(participant.competitionName);
+    }
+    return Array.from(new Set(names));
+  }, [participant]);
+
+  const isCompetitionParticipant = enrolledCompetitionNames.length > 0;
+  const isChallengeBlocked = !allowCompetitionParticipants && isCompetitionParticipant;
 
   // Challenge data
   const [challenge, setChallenge] = React.useState<ActiveChallengeState | null>(null);
@@ -284,6 +314,10 @@ export default function PesertaQrHurufPage() {
   }, []);
 
   const openCameraModal = () => {
+    if (isChallengeBlocked) {
+      alert("Akses terkunci: Berdasarkan kebijakan panitia, peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti challenge ini.");
+      return;
+    }
     setModalFeedback({ status: "scanning", message: "Arahkan kamera ke stiker QR" });
     setCameraModalOpen(true);
     startCamera();
@@ -302,6 +336,13 @@ export default function PesertaQrHurufPage() {
   // Auto-Scan Handler (Instant detection without pressing buttons)
   const handleAutoScan = React.useCallback(
     async (rawCode: string) => {
+      if (isChallengeBlocked) {
+        setModalFeedback({
+          status: "error",
+          message: "Partisipasi ditolak: Peserta cabang lomba tidak diperkenankan mengikuti challenge ini.",
+        });
+        return;
+      }
       const cleanToken = extractToken(rawCode);
       if (!cleanToken) return;
 
@@ -480,6 +521,13 @@ export default function PesertaQrHurufPage() {
   // Handle Manual Token Input
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isChallengeBlocked) {
+      setScanFeedback({
+        type: "error",
+        message: "Partisipasi ditolak: Berdasarkan regulasi panitia, peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti challenge ini.",
+      });
+      return;
+    }
     const cleanToken = extractToken(inputToken);
     if (!cleanToken) return;
 
@@ -551,6 +599,10 @@ export default function PesertaQrHurufPage() {
 
   // Submit word arrangement
   const handleSubmitPhrase = async () => {
+    if (isChallengeBlocked) {
+      alert("Partisipasi ditolak: Berdasarkan regulasi panitia, peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti challenge ini.");
+      return;
+    }
     if (isCompleted) {
       alert("Misi QR Huruf ini sudah Anda selesaikan sebelumnya dan poin reward sudah diterima!");
       return;
@@ -648,6 +700,34 @@ export default function PesertaQrHurufPage() {
           </div>
         </div>
 
+        {/* Banner Penolakan / Pembatasan jika peserta lomba tidak diizinkan mengikuti challenge */}
+        {isChallengeBlocked && (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="p-2 rounded-lg bg-destructive/20 text-destructive shrink-0 mt-0.5">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-heading text-sm sm:text-base font-bold text-destructive">
+                  Partisipasi Challenge Dinonaktifkan untuk Peserta Lomba
+                </h2>
+                <Badge variant="danger" className="text-[10px]">
+                  Akses Terkunci
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Berdasarkan regulasi panitia, peserta yang telah terdaftar pada cabang lomba{" "}
+                <strong className="text-foreground">
+                  {enrolledCompetitionNames.length > 0
+                    ? `(${enrolledCompetitionNames.join(", ")})`
+                    : "(Peserta Cabang Lomba)"}
+                </strong>{" "}
+                tidak diperkenankan mengikuti challenge/misi QR Huruf ini. Anda diprioritaskan fokus pada kompetisi cabang lomba Anda.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* COMPLETED BANNER (If solved) */}
         {isCompleted && (
           <Card className="p-5 border-emerald-500/50 bg-gradient-to-r from-emerald-500/10 via-card to-card space-y-2">
@@ -680,10 +760,11 @@ export default function PesertaQrHurufPage() {
               <Button
                 type="button"
                 onClick={openCameraModal}
-                className="text-xs h-9 px-4 gap-2 font-bold bg-amber-500 hover:bg-amber-600 text-white cursor-pointer shadow-sm shrink-0"
+                disabled={isChallengeBlocked}
+                className="text-xs h-9 px-4 gap-2 font-bold bg-amber-500 hover:bg-amber-600 text-white cursor-pointer shadow-sm shrink-0 disabled:opacity-60"
               >
-                <Camera className="h-4 w-4" />
-                <span>Buka Kamera Pemindai HP</span>
+                {isChallengeBlocked ? <ShieldAlert className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+                <span>{isChallengeBlocked ? "Kamera Terkunci" : "Buka Kamera Pemindai HP"}</span>
               </Button>
             )}
           </div>
@@ -704,18 +785,24 @@ export default function PesertaQrHurufPage() {
                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Atau ketik manual token stiker (contoh: GBB-LET-A1)"
+                  placeholder={isChallengeBlocked ? "Terkunci untuk peserta cabang lomba" : "Atau ketik manual token stiker (contoh: GBB-LET-A1)"}
                   value={inputToken}
                   onChange={(e) => setInputToken(e.target.value)}
-                  className="w-full h-11 pl-9 pr-3 rounded-lg border border-border bg-background text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/40 uppercase"
+                  disabled={isChallengeBlocked || scanning}
+                  className="w-full h-11 pl-9 pr-3 rounded-lg border border-border bg-background text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/40 uppercase disabled:opacity-60"
                 />
               </div>
               <Button
                 type="submit"
-                disabled={scanning || !inputToken.trim()}
+                disabled={isChallengeBlocked || scanning || !inputToken.trim()}
                 className="h-11 px-5 font-bold gap-2 cursor-pointer bg-primary text-primary-foreground shrink-0"
               >
-                {scanning ? (
+                {isChallengeBlocked ? (
+                  <>
+                    <ShieldAlert className="h-4 w-4" />
+                    <span>Terkunci</span>
+                  </>
+                ) : scanning ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Mengecek...</span>

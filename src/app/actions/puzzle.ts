@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { Database } from "@/types/database.types";
+import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
 
 function safeRevalidate(path: string) {
   try {
@@ -677,6 +678,17 @@ export async function submitPuzzleAnswers(
   const parsed = SubmitPuzzleSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message };
+  }
+
+  // Validasi aturan keikutsertaan lomba vs partisipasi challenge
+  const eligibility = await checkParticipantChallengeEligibility(parsed.data.participantId);
+  if (!eligibility.allowed) {
+    return {
+      success: false,
+      error:
+        eligibility.reason ||
+        "Peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti misi tantangan.",
+    };
   }
 
   try {

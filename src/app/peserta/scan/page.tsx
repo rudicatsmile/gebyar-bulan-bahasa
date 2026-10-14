@@ -39,6 +39,7 @@ import {
   cancelStandSession,
   type StandViewerSession,
 } from "@/app/actions/stand-rewards";
+import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,34 @@ function PesertaScanContent() {
   const urlCode = searchParams?.get("code") || searchParams?.get("stand") || searchParams?.get("token") || "";
 
   const { participant, refetch } = useCurrentParticipant();
+
+  // Status pengaturan partisipasi challenge untuk peserta lomba
+  const [allowCompetitionParticipants, setAllowCompetitionParticipants] = React.useState(true);
+
+  React.useEffect(() => {
+    getChallengeParticipationSettings().then((res) => {
+      if (res.success) {
+        setAllowCompetitionParticipants(res.allowCompetitionParticipants);
+      }
+    });
+  }, []);
+
+  const enrolledCompetitionNames: string[] = React.useMemo(() => {
+    if (!participant) return [];
+    const names: string[] = [];
+    if (participant.enrollments && participant.enrollments.length > 0) {
+      participant.enrollments.forEach((e) => {
+        if (e.competitionName) names.push(e.competitionName);
+      });
+    }
+    if (names.length === 0 && participant.competitionName) {
+      names.push(participant.competitionName);
+    }
+    return Array.from(new Set(names));
+  }, [participant]);
+
+  const isCompetitionParticipant = enrolledCompetitionNames.length > 0;
+  const isChallengeBlocked = !allowCompetitionParticipants && isCompetitionParticipant;
 
   // Session & Stand Data
   const [sessionLoading, setSessionLoading] = React.useState(true);
@@ -458,6 +487,12 @@ function PesertaScanContent() {
   // Handle Check-in Action
   const handleCheckIn = React.useCallback(
     async (codeString: string) => {
+      if (isChallengeBlocked) {
+        setErrorMsg(
+          `Partisipasi challenge ditolak: Berdasarkan kebijakan panitia, peserta yang mengikuti cabang lomba (${enrolledCompetitionNames.join(", ") || "Lomba"}) tidak diperkenankan mengikuti challenge ini.`
+        );
+        return;
+      }
       if (isAllStandsCompleted) {
         setErrorMsg("Anda telah menyelesaikan kunjungan di seluruh stand pameran budaya.");
         return;
@@ -527,12 +562,18 @@ function PesertaScanContent() {
         setActionLoading(false);
       }
     },
-    [processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera, isAllStandsCompleted]
+    [isChallengeBlocked, enrolledCompetitionNames, processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera, isAllStandsCompleted]
   );
 
   // Handle Checkout Action
   const handleCheckOut = React.useCallback(
     async (validationCodeString: string) => {
+      if (isChallengeBlocked) {
+        setErrorMsg(
+          `Partisipasi challenge ditolak: Berdasarkan kebijakan panitia, peserta yang mengikuti cabang lomba (${enrolledCompetitionNames.join(", ") || "Lomba"}) tidak diperkenankan mengikuti challenge ini.`
+        );
+        return;
+      }
       const cleanCode = processCodeString(validationCodeString);
       if (!cleanCode) return;
 
@@ -613,7 +654,7 @@ function PesertaScanContent() {
         setActionLoading(false);
       }
     },
-    [processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera]
+    [isChallengeBlocked, enrolledCompetitionNames, processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera, standsCompletedCount, totalActiveStands]
   );
 
   // Handle Cancel Active Session
@@ -646,6 +687,12 @@ function PesertaScanContent() {
   // General Scan Processor (Checkin vs Checkout)
   const handleUniversalScan = React.useCallback(
     async (code: string) => {
+      if (isChallengeBlocked) {
+        setErrorMsg(
+          `Partisipasi challenge ditolak: Berdasarkan kebijakan panitia, peserta yang mengikuti cabang lomba (${enrolledCompetitionNames.join(", ") || "Lomba"}) tidak diperkenankan mengikuti challenge ini.`
+        );
+        return;
+      }
       if (activeSession) {
         // Sedang menonton: apakah sudah memenuhi waktu?
         if (!isDurationMet) {
@@ -662,7 +709,7 @@ function PesertaScanContent() {
         await handleCheckIn(code);
       }
     },
-    [activeSession, isDurationMet, remainingSeconds, handleCheckOut, handleCheckIn]
+    [isChallengeBlocked, enrolledCompetitionNames, activeSession, isDurationMet, remainingSeconds, handleCheckOut, handleCheckIn]
   );
 
   // Auto handle URL code parameter
@@ -675,6 +722,10 @@ function PesertaScanContent() {
 
   // Start Camera when appropriate
   React.useEffect(() => {
+    if (isChallengeBlocked) {
+      stopCamera();
+      return;
+    }
     // Jalankan kamera jika:
     // 1. Belum ada sesi aktif (mode scan check-in pintu masuk)
     // 2. ATAU sedang ada sesi aktif, durasi minimal sudah terpenuhi, dan mode checkout adalah "qr"
@@ -688,7 +739,7 @@ function PesertaScanContent() {
     return () => {
       stopCamera();
     };
-  }, [activeSession, isDurationMet, checkoutMode, startCamera, stopCamera]);
+  }, [isChallengeBlocked, activeSession, isDurationMet, checkoutMode, startCamera, stopCamera]);
 
   // QR Scanning Loop
   React.useEffect(() => {
@@ -812,6 +863,34 @@ function PesertaScanContent() {
             </p>
           </div>
         </div>
+
+        {/* Banner Penolakan / Pembatasan jika peserta lomba tidak diizinkan mengikuti challenge */}
+        {isChallengeBlocked && (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="p-2 rounded-lg bg-destructive/20 text-destructive shrink-0 mt-0.5">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-heading text-sm sm:text-base font-bold text-destructive">
+                  Partisipasi Challenge Dinonaktifkan untuk Peserta Lomba
+                </h2>
+                <Badge variant="danger" className="text-[10px]">
+                  Akses Terkunci
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Berdasarkan regulasi panitia, peserta yang telah terdaftar pada cabang lomba{" "}
+                <strong className="text-foreground">
+                  {enrolledCompetitionNames.length > 0
+                    ? `(${enrolledCompetitionNames.join(", ")})`
+                    : "(Peserta Cabang Lomba)"}
+                </strong>{" "}
+                tidak diperkenankan mengikuti challenge/misi keliling stand. Anda diprioritaskan untuk fokus pada cabang lomba yang Anda ikuti.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Info Banner Aturan Utama */}
         <div className="p-3 rounded-xl border border-border bg-card/60 flex items-start gap-2.5 text-xs text-muted-foreground">
@@ -1471,22 +1550,35 @@ function PesertaScanContent() {
               >
                 <Input
                   label="Kode Masuk Stand *"
-                  placeholder="Contoh: PUISI01"
+                  placeholder={isChallengeBlocked ? "Terkunci untuk peserta lomba" : "Contoh: PUISI01"}
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value.toUpperCase())}
                   maxLength={15}
                   className="font-mono"
+                  disabled={isChallengeBlocked || actionLoading}
                   required
                 />
 
                 <Button
                   type="submit"
                   size="lg"
-                  disabled={actionLoading || !manualCode.trim()}
+                  disabled={isChallengeBlocked || actionLoading || !manualCode.trim()}
                   className="w-full text-xs font-bold gap-1.5 cursor-pointer"
                 >
-                  {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
-                  <span>{actionLoading ? "Memproses Check-in..." : "Check-in & Mulai Menonton"}</span>
+                  {isChallengeBlocked ? (
+                    <ShieldAlert className="h-4 w-4" />
+                  ) : actionLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Clock className="h-4 w-4" />
+                  )}
+                  <span>
+                    {isChallengeBlocked
+                      ? "Akses Terkunci (Peserta Lomba)"
+                      : actionLoading
+                      ? "Memproses Check-in..."
+                      : "Check-in & Mulai Menonton"}
+                  </span>
                 </Button>
               </form>
             </Card>

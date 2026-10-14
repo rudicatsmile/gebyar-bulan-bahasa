@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
+import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
 
 function safeRevalidate(path: string) {
   try {
@@ -521,6 +522,17 @@ export async function submitJigsawCompletion(
   }
 
   const { puzzleId, participantId, timeSeconds, movesCount } = parsed.data;
+
+  // Validasi aturan keikutsertaan lomba vs partisipasi challenge
+  const eligibility = await checkParticipantChallengeEligibility(participantId);
+  if (!eligibility.allowed) {
+    return {
+      success: false,
+      error:
+        eligibility.reason ||
+        "Peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti misi tantangan.",
+    };
+  }
 
   try {
     const supabase = createAdminClient();

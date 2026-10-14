@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { STANDS } from "@/lib/dummy-data";
 import { getStandCheckoutCode, getStandCheckoutToken } from "@/lib/stand-utils";
+import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
 
 export interface StandSpecialRewardConfig {
   enabled: boolean;
@@ -903,6 +904,17 @@ export async function checkInStandSession(payload: {
     return { success: false, error: "Peserta tidak valid." };
   }
 
+  // Validasi aturan keikutsertaan lomba vs partisipasi challenge
+  const eligibility = await checkParticipantChallengeEligibility(payload.participantId);
+  if (!eligibility.allowed) {
+    return {
+      success: false,
+      error:
+        eligibility.reason ||
+        "Peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti misi tantangan.",
+    };
+  }
+
   let cleanInput = (payload.standInput || "").trim();
 
   // Defensively extract if user passed JSON or URL payload
@@ -1126,6 +1138,17 @@ export async function checkOutStandSession(payload: {
 }> {
   if (!payload.participantId) {
     return { success: false, error: "Peserta tidak valid." };
+  }
+
+  // Validasi aturan keikutsertaan lomba vs partisipasi challenge
+  const eligibility = await checkParticipantChallengeEligibility(payload.participantId);
+  if (!eligibility.allowed) {
+    return {
+      success: false,
+      error:
+        eligibility.reason ||
+        "Peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti misi tantangan.",
+    };
   }
 
   let cleanInput = (payload.checkoutInput || payload.validationInput || "").trim();

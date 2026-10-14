@@ -18,6 +18,7 @@ import {
 import { checkParticipantQrHurufStatus } from "@/app/actions/qr-huruf";
 import { getParticipantStandProgress } from "@/app/actions/stand-rewards";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
+import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
 import { Badge } from "@/components/ui/badge";
 import {
   Sparkles,
@@ -27,6 +28,8 @@ import {
   AlertCircle,
   Camera,
   CheckCircle2,
+  ShieldAlert,
+  Lock,
 } from "lucide-react";
 
 // Tombol aksi disesuaikan dengan tipe challenge dan alur yang tersedia bagi peserta.
@@ -51,6 +54,7 @@ interface ChallengeItemProps {
   icon?: React.ComponentType<{ className?: string }>;
   badge?: React.ReactNode;
   variant?: "accent" | "outline" | "default";
+  disabled?: boolean;
 }
 
 /**
@@ -65,9 +69,12 @@ function ChallengeItem({
   icon: Icon,
   badge,
   variant = "accent",
+  disabled = false,
 }: ChallengeItemProps) {
+  const isDisabled = disabled || !href;
+
   return (
-    <Card className="flex flex-col justify-between gap-3 p-4">
+    <Card className={`flex flex-col justify-between gap-3 p-4 transition-all ${disabled ? "opacity-75 border-muted/70 bg-card/50" : ""}`}>
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-heading text-sm sm:text-base font-semibold leading-snug text-foreground line-clamp-2">
@@ -78,7 +85,7 @@ function ChallengeItem({
         {meta ? <p className="mt-1 text-xs text-muted-foreground">{meta}</p> : null}
       </div>
 
-      {href ? (
+      {!isDisabled && href ? (
         <Link href={href} className="block mt-auto">
           <Button variant={variant} className="h-11 w-full text-sm">
             {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
@@ -87,6 +94,7 @@ function ChallengeItem({
         </Link>
       ) : (
         <Button variant="outline" className="h-11 w-full text-sm mt-auto" disabled>
+          {disabled ? <Lock className="h-4 w-4 shrink-0 opacity-60 text-muted-foreground" /> : Icon ? <Icon className="h-4 w-4 shrink-0 opacity-50" /> : null}
           <span className="truncate">{actionLabel}</span>
         </Button>
       )}
@@ -125,6 +133,35 @@ export default function PesertaChallengeListPage() {
     standsCompletedCount: number;
     totalActiveStands: number;
   } | null>(null);
+
+  // Status pengaturan partisipasi challenge untuk peserta lomba
+  const [allowCompetitionParticipants, setAllowCompetitionParticipants] = React.useState(true);
+
+  React.useEffect(() => {
+    getChallengeParticipationSettings().then((res) => {
+      if (res.success) {
+        setAllowCompetitionParticipants(res.allowCompetitionParticipants);
+      }
+    });
+  }, []);
+
+  // Cek apakah peserta terdaftar di minimal satu lomba
+  const enrolledCompetitionNames: string[] = React.useMemo(() => {
+    if (!participant) return [];
+    const names: string[] = [];
+    if (participant.enrollments && participant.enrollments.length > 0) {
+      participant.enrollments.forEach((e) => {
+        if (e.competitionName) names.push(e.competitionName);
+      });
+    }
+    if (names.length === 0 && participant.competitionName) {
+      names.push(participant.competitionName);
+    }
+    return Array.from(new Set(names));
+  }, [participant]);
+
+  const isCompetitionParticipant = enrolledCompetitionNames.length > 0;
+  const isChallengeBlocked = !allowCompetitionParticipants && isCompetitionParticipant;
 
   // Periksa apakah peserta sudah pernah menyelesaikan challenge puzzle & misi lainnya
   React.useEffect(() => {
@@ -261,6 +298,34 @@ export default function PesertaChallengeListPage() {
           </div>
         </div>
 
+        {/* Banner Penolakan / Pembatasan jika peserta lomba tidak diizinkan mengikuti challenge */}
+        {isChallengeBlocked && (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="p-2 rounded-lg bg-destructive/20 text-destructive shrink-0 mt-0.5">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-heading text-sm sm:text-base font-bold text-destructive">
+                  Partisipasi Challenge Dinonaktifkan untuk Peserta Lomba
+                </h2>
+                <Badge variant="danger" className="text-[10px]">
+                  Akses Terkunci
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Berdasarkan regulasi panitia, peserta yang telah terdaftar pada cabang lomba{" "}
+                <strong className="text-foreground">
+                  {enrolledCompetitionNames.length > 0
+                    ? `(${enrolledCompetitionNames.join(", ")})`
+                    : "(Peserta Cabang Lomba)"}
+                </strong>{" "}
+                tidak diperkenankan mengikuti misi tantangan / challenge. Seluruh misi pada halaman ini dikunci. Silakan fokus pada persiapan cabang lomba Anda!
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
@@ -275,15 +340,19 @@ export default function PesertaChallengeListPage() {
               <ChallengeItem
                 title="Scan QR Kode Stand"
                 meta={
-                  standStatus?.allCompleted
+                  isChallengeBlocked
+                    ? "Terkunci: Misi jelajah stand hanya dapat diikuti peserta non-lomba"
+                    : standStatus?.allCompleted
                     ? `Seluruh ${standStatus.totalActiveStands} stand pameran budaya telah selesai dikunjungi`
                     : standStatus && standStatus.standsCompletedCount > 0
                       ? `${standStatus.standsCompletedCount} dari ${standStatus.totalActiveStands} stand telah diselesaikan`
                       : "Jelajahi seluruh stand pameran budaya & tonton atraksi seni"
                 }
-                href="/peserta/scan"
+                href={isChallengeBlocked ? null : "/peserta/scan"}
                 actionLabel={
-                  standStatus?.allCompleted
+                  isChallengeBlocked
+                    ? "Terkunci (Peserta Lomba)"
+                    : standStatus?.allCompleted
                     ? "Lihat Riwayat Stand"
                     : standStatus && standStatus.standsCompletedCount > 0
                       ? "Lanjutkan Jelajah Stand"
@@ -291,8 +360,13 @@ export default function PesertaChallengeListPage() {
                 }
                 icon={standStatus?.allCompleted ? CheckCircle2 : QrCode}
                 variant={standStatus?.allCompleted ? "outline" : "accent"}
+                disabled={isChallengeBlocked}
                 badge={
-                  standStatus?.allCompleted ? (
+                  isChallengeBlocked ? (
+                    <Badge variant="danger" className="shrink-0 text-[10px]">
+                      Khusus Non-Lomba
+                    </Badge>
+                  ) : standStatus?.allCompleted ? (
                     <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
                       Sudah Selesai
                     </Badge>
@@ -306,15 +380,19 @@ export default function PesertaChallengeListPage() {
               <ChallengeItem
                 title="Tantangan Twibbon GebyarBulanBahasa"
                 meta={
-                  twibbonStatus?.pointsAwarded
+                  isChallengeBlocked
+                    ? "Terkunci: Unggah twibbon dengan reward poin hanya untuk peserta non-lomba"
+                    : twibbonStatus?.pointsAwarded
                     ? "+20 Poin Diperoleh (Disetujui)"
                     : twibbonStatus?.hasSubmitted
                       ? "Menunggu verifikasi moderasi Media Center"
                       : "+20 poin per unggahan foto (setelah disetujui)"
                 }
-                href={twibbonStatus?.hasSubmitted ? "/peserta/twibbon" : "/twibbon/unggah"}
+                href={isChallengeBlocked ? null : (twibbonStatus?.hasSubmitted ? "/peserta/twibbon" : "/twibbon/unggah")}
                 actionLabel={
-                  twibbonStatus?.pointsAwarded
+                  isChallengeBlocked
+                    ? "Terkunci (Peserta Lomba)"
+                    : twibbonStatus?.pointsAwarded
                     ? "Lihat Twibbon Saya"
                     : twibbonStatus?.hasSubmitted
                       ? "Cek Status Moderasi"
@@ -322,8 +400,13 @@ export default function PesertaChallengeListPage() {
                 }
                 icon={twibbonStatus?.pointsAwarded ? CheckCircle2 : Camera}
                 variant={twibbonStatus?.pointsAwarded ? "outline" : "accent"}
+                disabled={isChallengeBlocked}
                 badge={
-                  twibbonStatus?.pointsAwarded ? (
+                  isChallengeBlocked ? (
+                    <Badge variant="danger" className="shrink-0 text-[10px]">
+                      Khusus Non-Lomba
+                    </Badge>
+                  ) : twibbonStatus?.pointsAwarded ? (
                     <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
                       Sudah Selesai
                     </Badge>
@@ -338,20 +421,29 @@ export default function PesertaChallengeListPage() {
                 <ChallengeItem
                   title={`Game Kepingan Puzzle: ${jigsawStatus.title}`}
                   meta={
-                    jigsawStatus.hasCompleted
+                    isChallengeBlocked
+                      ? "Terkunci: Permainan kepingan puzzle hanya untuk peserta non-lomba"
+                      : jigsawStatus.hasCompleted
                       ? `Perolehan Skor: +${jigsawStatus.points} Poin (Puzzle Selesai)`
                       : `+${jigsawStatus.points} poin saat seluruh kepingan tersusun`
                   }
-                  href="/peserta/challenge/kepingan-puzzle"
+                  href={isChallengeBlocked ? null : "/peserta/challenge/kepingan-puzzle"}
                   actionLabel={
-                    jigsawStatus.hasCompleted
+                    isChallengeBlocked
+                      ? "Terkunci (Peserta Lomba)"
+                      : jigsawStatus.hasCompleted
                       ? "Lihat Hasil Mahakarya"
                       : "Mulai Susun Kepingan"
                   }
                   icon={jigsawStatus.hasCompleted ? CheckCircle2 : Puzzle}
                   variant={jigsawStatus.hasCompleted ? "outline" : "accent"}
+                  disabled={isChallengeBlocked}
                   badge={
-                    jigsawStatus.hasCompleted ? (
+                    isChallengeBlocked ? (
+                      <Badge variant="danger" className="shrink-0 text-[10px]">
+                        Khusus Non-Lomba
+                      </Badge>
+                    ) : jigsawStatus.hasCompleted ? (
                       <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
                         Sudah Selesai
                       </Badge>
@@ -363,46 +455,32 @@ export default function PesertaChallengeListPage() {
                   }
                 />
               )}
-              {/* <ChallengeItem
-                title="Challenge Puzzle: Cocokkan Baju Daerah"
-                meta={
-                  puzzleAttempt?.hasAttempted
-                    ? `Perolehan Skor: ${puzzleAttempt.score ?? 0} Poin (1x Percobaan Selesai)`
-                    : "+10 poin tiap jawaban benar"
-                }
-                href="/peserta/challenge/puzzle"
-                actionLabel={
-                  puzzleAttempt?.hasAttempted
-                    ? "Lihat Hasil Percobaan"
-                    : "Mulai Main Puzzle"
-                }
-                icon={puzzleAttempt?.hasAttempted ? CheckCircle2 : Puzzle}
-                variant={puzzleAttempt?.hasAttempted ? "outline" : "accent"}
-                badge={
-                  puzzleAttempt?.hasAttempted ? (
-                    <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
-                      Sudah Selesai
-                    </Badge>
-                  ) : null
-                }
-              /> */}
               <ChallengeItem
                 title="Misi QR Huruf: Jelajah Aksara & Susun Kata"
                 meta={
-                  qrHurufStatus?.hasCompleted
+                  isChallengeBlocked
+                    ? "Terkunci: Misi berburu huruf aksara hanya untuk peserta non-lomba"
+                    : qrHurufStatus?.hasCompleted
                     ? `Perolehan Skor: +${qrHurufStatus.score ?? 100} Poin (Kalimat Berhasil Tersusun)`
                     : "+100 poin bila kalimat tersusun"
                 }
-                href="/peserta/challenge/qr-huruf"
+                href={isChallengeBlocked ? null : "/peserta/challenge/qr-huruf"}
                 actionLabel={
-                  qrHurufStatus?.hasCompleted
+                  isChallengeBlocked
+                    ? "Terkunci (Peserta Lomba)"
+                    : qrHurufStatus?.hasCompleted
                     ? "Lihat Hasil Misi"
                     : "Mulai Berburu QR"
                 }
                 icon={qrHurufStatus?.hasCompleted ? CheckCircle2 : QrCode}
                 variant={qrHurufStatus?.hasCompleted ? "outline" : "accent"}
+                disabled={isChallengeBlocked}
                 badge={
-                  qrHurufStatus?.hasCompleted ? (
+                  isChallengeBlocked ? (
+                    <Badge variant="danger" className="shrink-0 text-[10px]">
+                      Khusus Non-Lomba
+                    </Badge>
+                  ) : qrHurufStatus?.hasCompleted ? (
                     <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
                       Sudah Selesai
                     </Badge>
@@ -422,9 +500,17 @@ export default function PesertaChallengeListPage() {
                   <ChallengeItem
                     key={ch.id}
                     title={ch.title}
-                    meta={`+${ch.pointReward} poin`}
-                    href={action?.href ?? null}
-                    actionLabel={action?.label ?? "Poin diisi panitia"}
+                    meta={isChallengeBlocked ? "Terkunci untuk peserta lomba" : `+${ch.pointReward} poin`}
+                    href={isChallengeBlocked ? null : (action?.href ?? null)}
+                    actionLabel={isChallengeBlocked ? "Terkunci (Peserta Lomba)" : (action?.label ?? "Poin diisi panitia")}
+                    disabled={isChallengeBlocked}
+                    badge={
+                      isChallengeBlocked ? (
+                        <Badge variant="danger" className="shrink-0 text-[10px]">
+                          Khusus Non-Lomba
+                        </Badge>
+                      ) : undefined
+                    }
                   />
                 );
               })}

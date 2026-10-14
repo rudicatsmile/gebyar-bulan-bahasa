@@ -12,6 +12,7 @@ import {
   checkInStandSession,
   checkOutStandSession,
 } from "./stand-rewards";
+import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
 
 export interface AdminChallengeItem {
   id: string;
@@ -251,6 +252,17 @@ export async function claimStandVisit(data: z.infer<typeof ScanStandSchema>) {
   const parsed = ScanStandSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message };
+  }
+
+  // Validasi aturan keikutsertaan lomba vs partisipasi challenge
+  const eligibility = await checkParticipantChallengeEligibility(parsed.data.participantId);
+  if (!eligibility.allowed) {
+    return {
+      success: false,
+      error:
+        eligibility.reason ||
+        "Peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti misi tantangan.",
+    };
   }
 
   const rawInput = parsed.data.standCode.trim();

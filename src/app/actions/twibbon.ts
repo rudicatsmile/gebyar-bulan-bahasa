@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { TwibbonItem } from "@/lib/dummy-data";
+import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
 
 const UploadTwibbonSchema = z.object({
   uploaderName: z.string().min(3, "Nama pengunggah minimal 3 karakter"),
@@ -404,6 +405,19 @@ export async function submitTwibbon(data: z.infer<typeof UploadTwibbonSchema>) {
           .eq("email", user.email.toLowerCase().trim())
           .maybeSingle();
         if (pByEmail) participantId = pByEmail.id;
+      }
+
+      // Validasi apakah peserta ini ikut lomba dan dilarang mengikuti challenge
+      if (participantId) {
+        const eligibility = await checkParticipantChallengeEligibility(participantId);
+        if (!eligibility.allowed) {
+          return {
+            success: false,
+            error:
+              eligibility.reason ||
+              "Peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti misi tantangan twibbon.",
+          };
+        }
       }
     }
 

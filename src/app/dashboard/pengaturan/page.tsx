@@ -17,6 +17,10 @@ import {
   getWelcomeModalSettings,
   saveWelcomeModalSettings,
 } from "@/app/actions/settings";
+import {
+  getChallengeParticipationSettings,
+  saveChallengeParticipationSettings,
+} from "@/app/actions/challenge-eligibility";
 import { parseDateInWib } from "@/lib/utils";
 import { getCompetitions, type Competition } from "@/lib/supabase/queries";
 import {
@@ -36,6 +40,7 @@ import {
   Lock,
   ShieldCheck,
   MessageSquareText,
+  Sparkles,
 } from "lucide-react";
 
 export default function DashboardPengaturanPage() {
@@ -60,6 +65,10 @@ export default function DashboardPengaturanPage() {
   const [rotationInterval, setRotationInterval] = React.useState("15");
   const [autoApproveTwibbon, setAutoApproveTwibbon] = React.useState(false);
   const [participantAccessStartDate, setParticipantAccessStartDate] = React.useState("");
+
+  // Pengaturan Partisipasi Challenge untuk Peserta Lomba (ON = Boleh, OFF = Ditolak)
+  const [allowCompetitionChallenges, setAllowCompetitionChallenges] = React.useState(true);
+  const [isSavingChallengeSetting, setIsSavingChallengeSetting] = React.useState(false);
 
   // Pengaturan modul Papan Skor Layar Monitor TV
   const [competitionsList, setCompetitionsList] = React.useState<Competition[]>([]);
@@ -128,6 +137,16 @@ export default function DashboardPengaturanPage() {
         console.error("Gagal memuat konfigurasi welcome modal:", errWm);
       }
 
+      // Muat konfigurasi pembatasan challenge untuk peserta lomba
+      try {
+        const cpRes = await getChallengeParticipationSettings();
+        if (cpRes.success) {
+          setAllowCompetitionChallenges(cpRes.allowCompetitionParticipants);
+        }
+      } catch (errCp) {
+        console.error("Gagal memuat konfigurasi partisipasi challenge:", errCp);
+      }
+
       // Prioritaskan direct API route
       const res = await fetch("/api/settings", { cache: "no-store" });
       if (res.ok) {
@@ -146,6 +165,9 @@ export default function DashboardPengaturanPage() {
           setRotationInterval(String(data.settings.rotationInterval));
           if (data.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(data.settings.autoApproveTwibbon));
           if (data.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(data.settings.participantAccessStartDate || "");
+          if (data.settings.allowCompetitionParticipantsInChallenges !== undefined) {
+            setAllowCompetitionChallenges(Boolean(data.settings.allowCompetitionParticipantsInChallenges));
+          }
           if (data.settings.contactLocation) setContactLocation(data.settings.contactLocation);
           if (data.settings.contactHours) setContactHours(data.settings.contactHours);
           if (data.settings.contactEmail) setContactEmail(data.settings.contactEmail);
@@ -172,6 +194,9 @@ export default function DashboardPengaturanPage() {
         setRotationInterval(String(actionRes.settings.rotationInterval));
         if (actionRes.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(actionRes.settings.autoApproveTwibbon));
         if (actionRes.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(actionRes.settings.participantAccessStartDate || "");
+        if (actionRes.settings.allowCompetitionParticipantsInChallenges !== undefined) {
+          setAllowCompetitionChallenges(Boolean(actionRes.settings.allowCompetitionParticipantsInChallenges));
+        }
         if (actionRes.settings.contactLocation) setContactLocation(actionRes.settings.contactLocation);
         if (actionRes.settings.contactHours) setContactHours(actionRes.settings.contactHours);
         if (actionRes.settings.contactEmail) setContactEmail(actionRes.settings.contactEmail);
@@ -196,6 +221,9 @@ export default function DashboardPengaturanPage() {
           setRotationInterval(String(actionRes.settings.rotationInterval));
           if (actionRes.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(actionRes.settings.autoApproveTwibbon));
           if (actionRes.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(actionRes.settings.participantAccessStartDate || "");
+          if (actionRes.settings.allowCompetitionParticipantsInChallenges !== undefined) {
+            setAllowCompetitionChallenges(Boolean(actionRes.settings.allowCompetitionParticipantsInChallenges));
+          }
           if (actionRes.settings.contactLocation) setContactLocation(actionRes.settings.contactLocation);
           if (actionRes.settings.contactHours) setContactHours(actionRes.settings.contactHours);
           if (actionRes.settings.contactEmail) setContactEmail(actionRes.settings.contactEmail);
@@ -330,6 +358,7 @@ export default function DashboardPengaturanPage() {
       rotationInterval: Number(rotationInterval) || 15,
       autoApproveTwibbon: Boolean(autoApproveTwibbon),
       participantAccessStartDate: participantAccessStartDate.trim(),
+      allowCompetitionParticipantsInChallenges: Boolean(allowCompetitionChallenges),
       contactLocation: contactLocation.trim(),
       contactHours: contactHours.trim(),
       contactEmail: contactEmail.trim(),
@@ -810,6 +839,119 @@ export default function DashboardPengaturanPage() {
                         <span>Kunci s.d. 11 Nov 2026</span>
                       </Button>
                     </div>
+                  </div>
+                </div>
+
+                {/* Pengaturan Pembatasan Challenge untuk Peserta Lomba */}
+                <div className="p-4 sm:p-5 rounded-xl border border-border bg-card/60 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1.5 max-w-xl">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Sparkles className="h-4 w-4 text-accent" />
+                        <span className="font-heading text-sm sm:text-base font-bold text-foreground">
+                          Partisipasi Challenge untuk Peserta Lomba
+                        </span>
+                        <Badge
+                          variant={allowCompetitionChallenges ? "success" : "warning"}
+                          className="text-[10px]"
+                        >
+                          {allowCompetitionChallenges
+                            ? "ON (Peserta Lomba Boleh Ikut)"
+                            : "OFF (Ditolak / Khusus Non-Lomba)"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {allowCompetitionChallenges ? (
+                          <>
+                            <strong className="text-foreground">Status ON (Boleh Ikut):</strong> Peserta yang telah mendaftar/mengikuti cabang lomba tetap dapat mengikuti seluruh misi challenge (Scan Stand, Kepingan Puzzle, QR Huruf, dsb.) dan mengumpulkan poin reward.
+                          </>
+                        ) : (
+                          <>
+                            <strong className="text-foreground">Status OFF (Ditolak):</strong> Peserta yang terdeteksi <strong>sudah ikut lomba</strong> akan ditolak saat mencoba mengikuti challenge dengan pesan penolakan yang jelas. Misi challenge hanya dapat diikuti oleh peserta yang <strong>tidak ikut lomba</strong>.
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+                      <span className="text-xs font-semibold text-muted-foreground hidden sm:inline">
+                        {allowCompetitionChallenges ? "Boleh" : "Ditolak"}
+                      </span>
+                      <button
+                        id="toggle-allow-competition-challenges"
+                        type="button"
+                        role="switch"
+                        aria-checked={allowCompetitionChallenges}
+                        onClick={() => setAllowCompetitionChallenges(!allowCompetitionChallenges)}
+                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
+                          allowCompetitionChallenges ? "bg-accent" : "bg-muted-foreground/30"
+                        }`}
+                      >
+                        <span className="sr-only">Toggle Partisipasi Challenge Peserta Lomba</span>
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            allowCompetitionChallenges ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <Button
+                      id="btn-simpan-challenge-setting"
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSavingChallengeSetting || isLoading}
+                      onClick={async () => {
+                        setIsSavingChallengeSetting(true);
+                        setFeedback(null);
+                        try {
+                          const res = await saveChallengeParticipationSettings(allowCompetitionChallenges);
+                          if (res.success) {
+                            setFeedback({
+                              type: "success",
+                              message: `Pengaturan challenge berhasil disimpan! Peserta lomba sekarang ${
+                                allowCompetitionChallenges ? "diizinkan" : "dilarang"
+                              } mengikuti misi challenge.`,
+                            });
+                            setTimeout(() => {
+                              setFeedback((prev) => (prev?.type === "success" ? null : prev));
+                            }, 4500);
+                          } else {
+                            setFeedback({
+                              type: "error",
+                              message: res.error || "Gagal menyimpan pengaturan partisipasi challenge.",
+                            });
+                          }
+                        } catch (err: unknown) {
+                          setFeedback({
+                            type: "error",
+                            message: err instanceof Error ? err.message : "Terjadi kendala saat menyimpan pengaturan.",
+                          });
+                        } finally {
+                          setIsSavingChallengeSetting(false);
+                        }
+                      }}
+                      className="text-xs font-semibold gap-2 min-w-[200px] cursor-pointer"
+                    >
+                      {isSavingChallengeSetting ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-3.5 w-3.5" />
+                          <span>Simpan Aturan Challenge</span>
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground italic">
+                      * Perubahan disimpan ke database dan langsung membatasi akses challenge di seluruh halaman peserta.
+                    </p>
                   </div>
                 </div>
               </div>
