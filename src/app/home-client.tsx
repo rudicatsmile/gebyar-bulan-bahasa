@@ -384,7 +384,7 @@ export function HomeClient({
                 {currentEventTheme}
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-                Sistem Penilaian Digital &amp; Dashboard Operasional Terpadu untuk 8 Cabang Lomba Kebudayaan dan Challenge Interaktif Lapangan.
+                Sistem Penilaian Digital &amp; Dashboard Operasional Terpadu untuk {competitions.length} Cabang Lomba Kebudayaan dan Misi Interaktif Lapangan.
               </p>
             </div>
 
@@ -719,7 +719,7 @@ export function HomeClient({
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-heading text-sm font-bold text-foreground flex items-center gap-1.5">
                     <Trophy className="h-4 w-4 text-accent" />
-                    <span>5 Besar Challenge Stand</span>
+                    <span>5 Besar Misi Stand</span>
                   </h4>
                   <Link href="/leaderboard" className="text-xs text-accent hover:underline">
                     Peringkat Penuh →
@@ -728,7 +728,7 @@ export function HomeClient({
                 <div className="rounded-xl border border-border bg-card divide-y divide-border/60">
                   {topParticipants.length === 0 ? (
                     <div className="p-4 text-center text-xs text-muted-foreground">
-                      Belum ada poin terkumpul dari challenge stand.
+                      Belum ada poin terkumpul dari Misi stand.
                     </div>
                   ) : (
                     topParticipants.map((p) => (
@@ -781,7 +781,7 @@ export function HomeClient({
               </Link>
               <Link href="/challenge">
                 <Button variant="outline" size="lg" className="text-xs font-semibold text-white border-white/20 hover:bg-white/10">
-                  <span>Ikuti Challenge Berhadiah</span>
+                  <span>Ikuti Misi Berhadiah</span>
                 </Button>
               </Link>
             </div>
