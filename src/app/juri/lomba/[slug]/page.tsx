@@ -255,9 +255,21 @@ export default function JuriLombaPesertaPage() {
                     colSpan={competition?.roundType === "multi_stage" ? 6 : 5}
                     className="py-12 text-center text-xs text-muted-foreground"
                   >
-                    {notice
-                      ? notice
-                      : "Belum ada peserta yang aktif pada tahap ini atau memenuhi syarat penilaian."}
+                    <div className="max-w-md mx-auto space-y-2 py-4">
+                      <div className="h-10 w-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+                        <Clock className="h-5 w-5" />
+                      </div>
+                      <p className="font-semibold text-foreground text-sm">
+                        {notice?.includes("menunggu proses verifikasi")
+                          ? "Menunggu Verifikasi Panitia"
+                          : "Belum Ada Peserta yang Memenuhi Syarat"}
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {notice
+                          ? notice
+                          : "Belum ada peserta yang aktif pada tahap ini atau memenuhi syarat penilaian."}
+                      </p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -396,10 +408,20 @@ export default function JuriLombaPesertaPage() {
               </div>
             </div>
           ) : participants.length === 0 ? (
-            <div className="p-8 text-center text-xs text-muted-foreground border rounded-xl bg-card">
-              {notice
-                ? notice
-                : "Belum ada peserta yang aktif pada tahap ini atau memenuhi syarat penilaian."}
+            <div className="p-8 text-center text-xs text-muted-foreground border rounded-xl bg-card space-y-2">
+              <div className="h-10 w-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+                <Clock className="h-5 w-5" />
+              </div>
+              <p className="font-semibold text-foreground text-sm">
+                {notice?.includes("menunggu proses verifikasi")
+                  ? "Menunggu Verifikasi Panitia"
+                  : "Belum Ada Peserta yang Memenuhi Syarat"}
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {notice
+                  ? notice
+                  : "Belum ada peserta yang aktif pada tahap ini atau memenuhi syarat penilaian."}
+              </p>
             </div>
           ) : (
             participants.map((p) => {

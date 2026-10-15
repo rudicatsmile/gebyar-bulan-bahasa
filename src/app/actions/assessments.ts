@@ -163,6 +163,21 @@ export async function saveAssessment(data: SubmitAssessmentInput) {
       };
     }
 
+    // Pastikan peserta yang dinilai berstatus 'terverifikasi'
+    const { data: regCheck } = await adminSupabase
+      .from("registrations")
+      .select("id, participant:participants(status, full_name)")
+      .eq("id", parsed.data.registrationId)
+      .maybeSingle();
+
+    const partStatus = (regCheck?.participant as any)?.status;
+    if (partStatus !== "terverifikasi") {
+      return {
+        success: false,
+        error: "Penilaian gagal: Pendaftaran peserta belum disetujui (Terverifikasi) oleh panitia/admin.",
+      };
+    }
+
     // Ambil seluruh kriteria lomba untuk menghitung total terbobot
     const { data: criteriaList } = await adminSupabase
       .from("competition_criteria")
@@ -1259,25 +1274,34 @@ export async function getJudgeCompetitionRoster(
       }
 
       // Kasus B3: Tahap aktif PERLU JURI (requiresJudge === true)
-      // Filter peserta:
-      // - Harus berada di activeStage
-      // - Bukan peserta yang statusnya "tidak_lolos"
-      // - Tampilkan terutama "menunggu" (Menunggu Penilaian), "terdaftar", atau "lolos"
-      const eligibleStageParticipants = (multiRes.participants || []).filter((p) => {
-        const stageProg = p.progress[activeStage.id];
-        if (!stageProg) return false;
-        if (stageProg.status === "tidak_lolos" || p.overallStatus === "tereliminasi") {
-          return false;
-        }
-        return ["menunggu", "terdaftar", "lolos"].includes(stageProg.status);
-      });
-
       const regMapByPartId = new Map(
         (registrations || []).map((r) => [r.participant_id, r])
       );
       const regMapByRegNum = new Map(
         (registrations || []).map((r) => [(r.participant as any)?.registration_number, r])
       );
+
+      // Filter peserta:
+      // - Harus berada di activeStage
+      // - Bukan peserta yang statusnya "tidak_lolos"
+      // - Tampilkan terutama "menunggu" (Menunggu Penilaian), "terdaftar", atau "lolos"
+      // - Wajib berstatus 'terverifikasi' oleh panitia/admin
+      const eligibleStageParticipants = (multiRes.participants || []).filter((p) => {
+        const stageProg = p.progress[activeStage.id];
+        if (!stageProg) return false;
+        if (stageProg.status === "tidak_lolos" || p.overallStatus === "tereliminasi") {
+          return false;
+        }
+
+        const matchedReg =
+          regMapByPartId.get(p.participantId) || regMapByRegNum.get(p.registrationNumber);
+        const partStatus = (matchedReg?.participant as any)?.status;
+        if (partStatus && partStatus !== "terverifikasi") {
+          return false;
+        }
+
+        return ["menunggu", "terdaftar", "lolos"].includes(stageProg.status);
+      });
 
       // Ambil penilaian tahapan dari event_settings
       const stageAssessmentsMap = await getStageAssessmentsMap();
@@ -1362,9 +1386,38 @@ export async function getJudgeCompetitionRoster(
     }
 
     // =========================================================================
-    // LOGIKA SINGLE ROUND (EXISTING FLOW): Tampilkan semua peserta lomba
+    // LOGIKA SINGLE ROUND: Hanya tampilkan peserta yang SUDAH TERVERIFIKASI
     // =========================================================================
-    const participants: JudgeRosterParticipant[] = (registrations || []).map((r, index) => {
+    const allRegistrations = registrations || [];
+    const totalRegistrations = allRegistrations.length;
+
+    // Filter HANYA peserta dengan status 'terverifikasi'
+    const verifiedRegistrations = allRegistrations.filter(
+      (r) => (r.participant as any)?.status === "terverifikasi"
+    );
+
+    const pendingCount = allRegistrations.filter(
+      (r) => (r.participant as any)?.status === "menunggu_verifikasi"
+    ).length;
+    const rejectedCount = allRegistrations.filter(
+      (r) => (r.participant as any)?.status === "ditolak"
+    ).length;
+
+    let notice: string | undefined = undefined;
+
+    if (verifiedRegistrations.length === 0) {
+      if (pendingCount > 0) {
+        notice = `Terdapat ${pendingCount} peserta terdaftar yang masih dalam proses verifikasi berkas oleh panitia/admin. Peserta akan otomatis muncul di sini setelah diverifikasi.`;
+      } else if (totalRegistrations === 0) {
+        notice = "Belum ada peserta yang terdaftar pada cabang lomba ini.";
+      } else if (rejectedCount > 0) {
+        notice = `Seluruh pendaftaran peserta pada cabang lomba ini belum memenuhi syarat / berkas ditolak (${rejectedCount} peserta).`;
+      } else {
+        notice = "Belum ada peserta yang memenuhi syarat penilaian untuk cabang lomba ini.";
+      }
+    }
+
+    const participants: JudgeRosterParticipant[] = verifiedRegistrations.map((r, index) => {
       const part = r.participant as any;
       const myAssessment = assessments.find((a) => a.registration_id === r.id);
 
@@ -1405,6 +1458,7 @@ export async function getJudgeCompetitionRoster(
         name: judgeProfile?.full_name || "Dewan Juri",
       },
       participants,
+      notice,
     };
   } catch (err: unknown) {
     console.error("Error getJudgeCompetitionRoster:", err);
@@ -1504,6 +1558,25 @@ export async function getParticipantGradingSheet(
 
     const comp = reg.competition as any;
     const part = reg.participant as any;
+
+    // VALIDASI STATUS VERIFIKASI PESERTA
+    if (part?.status !== "terverifikasi") {
+      const statusLabel =
+        part?.status === "menunggu_verifikasi"
+          ? "masih menunggu proses verifikasi berkas oleh panitia/admin"
+          : part?.status === "ditolak"
+          ? "telah ditolak dalam proses verifikasi berkas"
+          : "belum berstatus Terverifikasi";
+      return {
+        success: false,
+        criteria: [],
+        existingScores: {},
+        existingComments: {},
+        existingNotes: "",
+        status: "belum_dinilai",
+        error: `Peserta ini ${statusLabel}. Dewan juri hanya diperkenankan menilai peserta yang telah resmi disetujui (Terverifikasi) oleh panitia/admin.`,
+      };
+    }
 
     // 2. Ambil kriteria penilaian lomba
     const { data: criteriaList, error: critErr } = await adminSupabase

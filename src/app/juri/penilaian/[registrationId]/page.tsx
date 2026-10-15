@@ -25,6 +25,7 @@ import {
   UserCheck,
   Lock,
   Layers,
+  ShieldAlert,
 } from "lucide-react";
 
 export default function FormPenilaianDigitalPage() {
@@ -36,6 +37,7 @@ export default function FormPenilaianDigitalPage() {
 
   const [loading, setLoading] = React.useState(true);
   const [notFoundState, setNotFoundState] = React.useState(false);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
 
   const [participant, setParticipant] = React.useState<{
@@ -84,8 +86,13 @@ export default function FormPenilaianDigitalPage() {
     try {
       const res = await getParticipantGradingSheet(regId, stageId);
       if (!res.success || !res.participant || !res.competition) {
-        setNotFoundState(true);
+        if (res.error) {
+          setErrorMessage(res.error);
+        } else {
+          setNotFoundState(true);
+        }
       } else {
+        setErrorMessage(null);
         setParticipant(res.participant);
         setCompetition(res.competition);
         setCriteria(res.criteria);
@@ -105,6 +112,44 @@ export default function FormPenilaianDigitalPage() {
   React.useEffect(() => {
     loadSheet();
   }, [loadSheet]);
+
+  if (errorMessage) {
+    return (
+      <DashboardLayout role="juri">
+        <div className="max-w-xl mx-auto py-12 px-4 space-y-4">
+          <Link
+            href="/juri"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Kembali ke Beranda Penilaian</span>
+          </Link>
+
+          <Card className="p-8 border-warning/40 bg-warning/5 text-center space-y-4">
+            <div className="h-12 w-12 rounded-full bg-warning/15 text-warning flex items-center justify-center mx-auto">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h2 className="font-heading text-lg font-bold text-foreground">
+                Penilaian Belum Dapat Dilakukan
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
+                {errorMessage}
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link href="/juri">
+                <Button variant="outline" size="sm" className="text-xs gap-1.5 cursor-pointer">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span>Kembali ke Daftar Lomba</span>
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (notFoundState) {
     return notFound();
