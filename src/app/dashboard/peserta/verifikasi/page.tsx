@@ -61,12 +61,9 @@ export default function DashboardVerifikasiBerkasPage() {
     fetchParticipants();
   }, [fetchParticipants]);
 
-  // HANYA tampilkan peserta yang statusnya 'menunggu_verifikasi' DAN SUDAH UPLOAD BERKAS (documents.length > 0)
+  // Tampilkan seluruh peserta yang statusnya 'menunggu_verifikasi'
   const pendingList = participants.filter(
-    (p) =>
-      p.status === "menunggu_verifikasi" &&
-      Array.isArray(p.documents) &&
-      p.documents.length > 0
+    (p) => p.status === "menunggu_verifikasi"
   );
 
   const filteredPendingList = pendingList.filter((p) => {

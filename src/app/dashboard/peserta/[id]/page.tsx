@@ -13,6 +13,7 @@ import {
   Phone,
   School,
   FileText,
+  FileCheck,
   Coins,
   Trophy,
   CheckCircle2,
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Participant } from "@/lib/dummy-data";
 import { PindahLombaModal, ParticipantTransferTarget } from "@/components/dashboard/PindahLombaModal";
+import { VerifikasiPesertaModal } from "@/components/dashboard/VerifikasiPesertaModal";
 
 export default function DashboardPesertaDetailPage() {
   const params = useParams();
@@ -29,6 +31,7 @@ export default function DashboardPesertaDetailPage() {
   const [participant, setParticipant] = React.useState<Participant | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [transferOpen, setTransferOpen] = React.useState(false);
+  const [verificationOpen, setVerificationOpen] = React.useState(false);
 
   const fetchParticipant = React.useCallback(async () => {
     setLoading(true);
@@ -94,7 +97,18 @@ export default function DashboardPesertaDetailPage() {
               </h1>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {participant.status === "menunggu_verifikasi" && (
+                <Button
+                  size="sm"
+                  className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-sm"
+                  onClick={() => setVerificationOpen(true)}
+                  title="Verifikasi berkas dan status pendaftaran"
+                >
+                  <FileCheck className="h-3.5 w-3.5" />
+                  <span>Verifikasi Berkas</span>
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -264,6 +278,19 @@ export default function DashboardPesertaDetailPage() {
                     Peserta ini belum mengunggah dokumen persyaratan fisik.
                   </p>
                 )}
+
+                {participant.status === "menunggu_verifikasi" && (
+                  <div className="pt-2 border-t border-border flex justify-end">
+                    <Button
+                      size="sm"
+                      className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer shadow-sm"
+                      onClick={() => setVerificationOpen(true)}
+                    >
+                      <FileCheck className="h-3.5 w-3.5" />
+                      <span>Verifikasi Berkas Sekarang</span>
+                    </Button>
+                  </div>
+                )}
               </div>
             </Card>
           </div>
@@ -280,6 +307,31 @@ export default function DashboardPesertaDetailPage() {
               competitionName: participant.competitionName,
               registrationId: participant.registrationId,
               documentsCount: participant.documents?.length || 0,
+            }}
+            onSuccess={fetchParticipant}
+          />
+        )}
+
+        {participant && (
+          <VerifikasiPesertaModal
+            open={verificationOpen}
+            onOpenChange={setVerificationOpen}
+            participant={{
+              id: participant.id,
+              registrationId: participant.registrationId,
+              fullName: participant.fullName,
+              registrationNumber: participant.registrationNumber,
+              institution: participant.institution,
+              email: participant.email,
+              phone: participant.phone,
+              competitionId: participant.competitionId,
+              competitionName: participant.competitionName,
+              category: participant.category,
+              teamName: participant.teamName,
+              teamMembers: participant.teamMembers,
+              status: participant.status,
+              rejectionReason: participant.rejectionReason,
+              documents: participant.documents,
             }}
             onSuccess={fetchParticipant}
           />

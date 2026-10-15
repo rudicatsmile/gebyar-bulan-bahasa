@@ -17,6 +17,7 @@ import {
 import type { Participant } from "@/lib/dummy-data";
 import { Users, Search, Download, FileCheck, Eye, RotateCcw, Loader2, ArrowRightLeft } from "lucide-react";
 import { PindahLombaModal, ParticipantTransferTarget } from "@/components/dashboard/PindahLombaModal";
+import { VerifikasiPesertaModal, ParticipantVerificationTarget } from "@/components/dashboard/VerifikasiPesertaModal";
 
 export default function DashboardPesertaPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
@@ -27,6 +28,9 @@ export default function DashboardPesertaPage() {
 
   const [transferTarget, setTransferTarget] = React.useState<ParticipantTransferTarget | null>(null);
   const [transferOpen, setTransferOpen] = React.useState(false);
+
+  const [verificationTarget, setVerificationTarget] = React.useState<ParticipantVerificationTarget | null>(null);
+  const [verificationOpen, setVerificationOpen] = React.useState(false);
 
   const fetchParticipants = React.useCallback(async () => {
     setIsLoading(true);
@@ -63,6 +67,27 @@ export default function DashboardPesertaPage() {
       documentsCount: p.documents?.length || 0,
     });
     setTransferOpen(true);
+  };
+
+  const handleOpenVerification = (p: Participant) => {
+    setVerificationTarget({
+      id: p.id,
+      registrationId: p.registrationId,
+      fullName: p.fullName,
+      registrationNumber: p.registrationNumber,
+      institution: p.institution,
+      email: p.email,
+      phone: p.phone,
+      competitionId: p.competitionId,
+      competitionName: p.competitionName,
+      category: p.category,
+      teamName: p.teamName,
+      teamMembers: p.teamMembers,
+      status: p.status,
+      rejectionReason: p.rejectionReason,
+      documents: p.documents,
+    });
+    setVerificationOpen(true);
   };
 
   const filtered = participants.filter((p) => {
@@ -207,7 +232,19 @@ export default function DashboardPesertaPage() {
                   <p className="text-xs text-foreground font-medium">{p.competitionName || "Belum Memilih Lomba"}</p>
                   <div className="flex items-center justify-between pt-1 border-t border-border">
                     <span className="font-mono text-xs font-bold text-accent">{p.totalPoints} Pts</span>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {p.status === "menunggu_verifikasi" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-8 gap-1 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+                          onClick={() => handleOpenVerification(p)}
+                          title="Verifikasi berkas & pendaftaran"
+                        >
+                          <FileCheck className="h-3 w-3" />
+                          <span>Verifikasi</span>
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -304,6 +341,18 @@ export default function DashboardPesertaPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {p.status === "menunggu_verifikasi" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs h-8 gap-1 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+                              onClick={() => handleOpenVerification(p)}
+                              title="Verifikasi berkas & pendaftaran"
+                            >
+                              <FileCheck className="h-3.5 w-3.5" />
+                              <span className="font-semibold">Verifikasi</span>
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -335,6 +384,14 @@ export default function DashboardPesertaPage() {
           open={transferOpen}
           onOpenChange={setTransferOpen}
           participant={transferTarget}
+          onSuccess={fetchParticipants}
+        />
+
+        {/* Modal Verifikasi Berkas & Pendaftaran */}
+        <VerifikasiPesertaModal
+          open={verificationOpen}
+          onOpenChange={setVerificationOpen}
+          participant={verificationTarget}
           onSuccess={fetchParticipants}
         />
       </div>
