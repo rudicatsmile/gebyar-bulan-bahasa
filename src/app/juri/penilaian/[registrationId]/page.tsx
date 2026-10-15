@@ -38,6 +38,8 @@ export default function FormPenilaianDigitalPage() {
   const [loading, setLoading] = React.useState(true);
   const [notFoundState, setNotFoundState] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [isVerified, setIsVerified] = React.useState(true);
+  const [verificationNotice, setVerificationNotice] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
 
   const [participant, setParticipant] = React.useState<{
@@ -93,6 +95,8 @@ export default function FormPenilaianDigitalPage() {
         }
       } else {
         setErrorMessage(null);
+        setIsVerified(res.isVerified !== false);
+        setVerificationNotice(res.verificationNotice || null);
         setParticipant(res.participant);
         setCompetition(res.competition);
         setCriteria(res.criteria);
@@ -157,6 +161,7 @@ export default function FormPenilaianDigitalPage() {
 
   // Live calculation weighted total
   const isCompetitionLocked = competition?.status === "selesai";
+  const isLocked = isCompetitionLocked || !isVerified;
 
   const weightedTotal = criteria.reduce((total, c) => {
     const scoreVal = scores[c.id] || 0;
@@ -169,6 +174,13 @@ export default function FormPenilaianDigitalPage() {
 
   const handleSaveDraft = async () => {
     if (!competition || !participant) return;
+    if (!isVerified) {
+      setFeedbackNotice({
+        type: "error",
+        message: "Penilaian dicegah: Peserta belum diverifikasi oleh panitia/admin.",
+      });
+      return;
+    }
     setIsSaving(true);
     setFeedbackNotice(null);
 
@@ -213,6 +225,13 @@ export default function FormPenilaianDigitalPage() {
 
   const handleSubmitFinal = async () => {
     if (!competition || !participant) return;
+    if (!isVerified) {
+      setFeedbackNotice({
+        type: "error",
+        message: "Penilaian dicegah: Peserta belum diverifikasi oleh panitia/admin.",
+      });
+      return;
+    }
 
     // Validasi kelengkapan kriteria
     const allFilled = criteria.every(
@@ -410,6 +429,26 @@ export default function FormPenilaianDigitalPage() {
           </div>
         )}
 
+        {!isVerified && (
+          <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-foreground flex items-start gap-3 animate-in fade-in">
+            <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-sm text-foreground">
+                  Peringatan: Peserta Belum Terverifikasi
+                </span>
+                <Badge variant="warning" className="text-[10px] font-bold">
+                  MENUNGGU VERIFIKASI ADMIN
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {verificationNotice ||
+                  "Pendaftaran peserta ini belum disetujui (diverifikasi) oleh panitia/admin. Formulir penilaian dinonaktifkan dan penilaian dicegah sampai berkas peserta resmi diverifikasi."}
+              </p>
+            </div>
+          </div>
+        )}
+
         {isCompetitionLocked && (
           <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs flex items-center gap-3">
             <Lock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -477,7 +516,7 @@ export default function FormPenilaianDigitalPage() {
                           min={0}
                           max={crit.maxScore}
                           value={currentScore}
-                          disabled={isCompetitionLocked}
+                          disabled={isLocked}
                           onChange={(e) =>
                             handleScoreChange(crit.id, parseFloat(e.target.value) || 0)
                           }
@@ -494,7 +533,7 @@ export default function FormPenilaianDigitalPage() {
                       min={0}
                       max={crit.maxScore}
                       value={currentScore}
-                      disabled={isCompetitionLocked}
+                      disabled={isLocked}
                       onChange={(e) =>
                         handleScoreChange(crit.id, parseFloat(e.target.value) || 0)
                       }
@@ -520,7 +559,7 @@ export default function FormPenilaianDigitalPage() {
           <Textarea
             placeholder="Tuliskan catatan apresiasi, saran pengembangan vokal/ekspresi, atau hal yang perlu diperbaiki peserta..."
             value={notes}
-            disabled={isCompetitionLocked}
+            disabled={isLocked}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             className="disabled:opacity-60 disabled:cursor-not-allowed"
@@ -549,13 +588,20 @@ export default function FormPenilaianDigitalPage() {
             </Badge>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            {!isVerified && (
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                <Lock className="h-3.5 w-3.5" />
+                <span>Penilaian Terkunci (Belum Diverifikasi)</span>
+              </span>
+            )}
             <Button
               type="button"
               variant="outline"
-              disabled={isSaving || isCompetitionLocked}
+              disabled={isSaving || isLocked}
               onClick={handleSaveDraft}
               className="text-xs gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+              title={!isVerified ? "Penilaian dikunci karena peserta belum diverifikasi" : undefined}
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -566,10 +612,11 @@ export default function FormPenilaianDigitalPage() {
             </Button>
             <Button
               type="button"
-              disabled={isSaving || isCompetitionLocked}
+              disabled={isSaving || isLocked}
               onClick={handleSubmitFinal}
               size="lg"
               className="text-xs font-semibold gap-1.5 cursor-pointer shadow-xs disabled:cursor-not-allowed"
+              title={!isVerified ? "Penilaian dikunci karena peserta belum diverifikasi" : undefined}
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

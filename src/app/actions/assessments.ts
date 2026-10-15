@@ -163,15 +163,16 @@ export async function saveAssessment(data: SubmitAssessmentInput) {
       };
     }
 
-    // Pastikan peserta yang dinilai berstatus 'terverifikasi'
+    // Pastikan peserta yang dinilai berstatus 'terverifikasi' DAN pendaftaran terkonfirmasi (is_confirmed: true)
     const { data: regCheck } = await adminSupabase
       .from("registrations")
-      .select("id, participant:participants(status, full_name)")
+      .select("id, is_confirmed, participant:participants(status, full_name)")
       .eq("id", parsed.data.registrationId)
       .maybeSingle();
 
+    const isConfirmed = regCheck?.is_confirmed === true;
     const partStatus = (regCheck?.participant as any)?.status;
-    if (partStatus !== "terverifikasi") {
+    if (!isConfirmed || partStatus !== "terverifikasi") {
       return {
         success: false,
         error: "Penilaian gagal: Pendaftaran peserta belum disetujui (Terverifikasi) oleh panitia/admin.",
@@ -1079,6 +1080,8 @@ export interface JudgeRosterParticipant {
   activeStageId?: string;
   activeStageOrder?: number;
   activeStageName?: string;
+  isVerified?: boolean;
+  verificationStatus?: "terverifikasi" | "menunggu_verifikasi" | "ditolak";
 }
 
 export interface JudgeCompetitionRosterResult {
@@ -1105,6 +1108,8 @@ export interface JudgeCompetitionRosterResult {
     name: string;
   };
   participants: JudgeRosterParticipant[];
+  unverifiedParticipants?: JudgeRosterParticipant[];
+  unverifiedCount?: number;
   notice?: string;
   error?: string;
 }
@@ -1295,8 +1300,9 @@ export async function getJudgeCompetitionRoster(
 
         const matchedReg =
           regMapByPartId.get(p.participantId) || regMapByRegNum.get(p.registrationNumber);
+        const isConfirmed = matchedReg?.is_confirmed === true;
         const partStatus = (matchedReg?.participant as any)?.status;
-        if (partStatus && partStatus !== "terverifikasi") {
+        if (!isConfirmed || partStatus !== "terverifikasi") {
           return false;
         }
 
@@ -1386,22 +1392,22 @@ export async function getJudgeCompetitionRoster(
     }
 
     // =========================================================================
-    // LOGIKA SINGLE ROUND: Hanya tampilkan peserta yang SUDAH TERVERIFIKASI
+    // LOGIKA SINGLE ROUND: Pilah peserta terverifikasi vs belum terverifikasi
     // =========================================================================
     const allRegistrations = registrations || [];
     const totalRegistrations = allRegistrations.length;
 
-    // Filter HANYA peserta dengan status 'terverifikasi'
-    const verifiedRegistrations = allRegistrations.filter(
-      (r) => (r.participant as any)?.status === "terverifikasi"
-    );
+    // Helper cek verifikasi pendaftaran & berkas
+    const isRegistrationFullyVerified = (r: any) => {
+      const isConfirmed = r?.is_confirmed === true;
+      const partStatus = (r?.participant as any)?.status;
+      return isConfirmed && partStatus === "terverifikasi";
+    };
 
-    const pendingCount = allRegistrations.filter(
-      (r) => (r.participant as any)?.status === "menunggu_verifikasi"
-    ).length;
-    const rejectedCount = allRegistrations.filter(
-      (r) => (r.participant as any)?.status === "ditolak"
-    ).length;
+    // Filter HANYA peserta yang statusnya terverifikasi DAN is_confirmed true
+    const verifiedRegistrations = allRegistrations.filter(isRegistrationFullyVerified);
+    const unverifiedRegistrations = allRegistrations.filter((r) => !isRegistrationFullyVerified(r));
+    const pendingCount = unverifiedRegistrations.length;
 
     let notice: string | undefined = undefined;
 
@@ -1410,14 +1416,16 @@ export async function getJudgeCompetitionRoster(
         notice = `Terdapat ${pendingCount} peserta terdaftar yang masih dalam proses verifikasi berkas oleh panitia/admin. Peserta akan otomatis muncul di sini setelah diverifikasi.`;
       } else if (totalRegistrations === 0) {
         notice = "Belum ada peserta yang terdaftar pada cabang lomba ini.";
-      } else if (rejectedCount > 0) {
-        notice = `Seluruh pendaftaran peserta pada cabang lomba ini belum memenuhi syarat / berkas ditolak (${rejectedCount} peserta).`;
       } else {
         notice = "Belum ada peserta yang memenuhi syarat penilaian untuk cabang lomba ini.";
       }
     }
 
-    const participants: JudgeRosterParticipant[] = verifiedRegistrations.map((r, index) => {
+    const mapToRosterParticipant = (
+      r: any,
+      index: number,
+      isVerified: boolean
+    ): JudgeRosterParticipant => {
       const part = r.participant as any;
       const myAssessment = assessments.find((a) => a.registration_id === r.id);
 
@@ -1427,6 +1435,8 @@ export async function getJudgeCompetitionRoster(
       } else if (myAssessment?.status === "draft") {
         status = "draft";
       }
+
+      const rawPartStatus = part?.status || "menunggu_verifikasi";
 
       return {
         registrationId: r.id,
@@ -1438,6 +1448,12 @@ export async function getJudgeCompetitionRoster(
         status,
         weightedScore: myAssessment?.weighted_total ? Number(myAssessment.weighted_total) : null,
         performanceOrder: r.performance_order,
+        isVerified,
+        verificationStatus: isVerified
+          ? "terverifikasi"
+          : rawPartStatus === "ditolak"
+          ? "ditolak"
+          : "menunggu_verifikasi",
         members: ((r as any).registration_members || []).map((m: any) => ({
           id: m.id,
           name: m.member_name,
@@ -1445,7 +1461,15 @@ export async function getJudgeCompetitionRoster(
           isLeader: m.is_leader,
         })),
       };
-    });
+    };
+
+    const participants: JudgeRosterParticipant[] = verifiedRegistrations.map((r, index) =>
+      mapToRosterParticipant(r, index, true)
+    );
+
+    const unverifiedParticipants: JudgeRosterParticipant[] = unverifiedRegistrations.map((r, index) =>
+      mapToRosterParticipant(r, index, false)
+    );
 
     return {
       success: true,
@@ -1458,6 +1482,8 @@ export async function getJudgeCompetitionRoster(
         name: judgeProfile?.full_name || "Dewan Juri",
       },
       participants,
+      unverifiedParticipants,
+      unverifiedCount: pendingCount,
       notice,
     };
   } catch (err: unknown) {
@@ -1482,6 +1508,8 @@ export interface GradingCriterionItem {
 
 export interface ParticipantGradingSheetResult {
   success: boolean;
+  isVerified?: boolean;
+  verificationNotice?: string;
   participant?: {
     registrationId: string;
     registrationNumber: string;
@@ -1489,6 +1517,8 @@ export interface ParticipantGradingSheetResult {
     teamName: string | null;
     members?: JudgeRosterMember[];
     institution: string;
+    isVerified?: boolean;
+    verificationStatus?: "terverifikasi" | "menunggu_verifikasi" | "ditolak";
   };
   competition?: {
     id: string;
@@ -1532,6 +1562,7 @@ export async function getParticipantGradingSheet(
         participant_id,
         competition_id,
         team_name,
+        is_confirmed,
         participant:participants(*),
         competition:competitions(*),
         registration_members (
@@ -1559,24 +1590,21 @@ export async function getParticipantGradingSheet(
     const comp = reg.competition as any;
     const part = reg.participant as any;
 
-    // VALIDASI STATUS VERIFIKASI PESERTA
-    if (part?.status !== "terverifikasi") {
-      const statusLabel =
-        part?.status === "menunggu_verifikasi"
-          ? "masih menunggu proses verifikasi berkas oleh panitia/admin"
-          : part?.status === "ditolak"
-          ? "telah ditolak dalam proses verifikasi berkas"
-          : "belum berstatus Terverifikasi";
-      return {
-        success: false,
-        criteria: [],
-        existingScores: {},
-        existingComments: {},
-        existingNotes: "",
-        status: "belum_dinilai",
-        error: `Peserta ini ${statusLabel}. Dewan juri hanya diperkenankan menilai peserta yang telah resmi disetujui (Terverifikasi) oleh panitia/admin.`,
-      };
-    }
+    // VALIDASI STATUS VERIFIKASI PESERTA & KONFIRMASI PENDAFTARAN
+    const isConfirmed = reg.is_confirmed === true;
+    const partStatus = part?.status;
+    const isVerified = isConfirmed && partStatus === "terverifikasi";
+
+    const statusLabel =
+      partStatus === "ditolak"
+        ? "telah ditolak dalam proses verifikasi berkas"
+        : !isConfirmed || partStatus === "menunggu_verifikasi"
+        ? "masih menunggu proses verifikasi berkas oleh panitia/admin"
+        : "belum berstatus Terverifikasi";
+
+    const verificationNotice = isVerified
+      ? undefined
+      : `Pendaftaran peserta ini ${statusLabel}. Formulir penilaian dikunci dan tombol submit nilai dinonaktifkan sampai berkas resmi disetujui (Terverifikasi) oleh panitia/admin.`;
 
     // 2. Ambil kriteria penilaian lomba
     const { data: criteriaList, error: critErr } = await adminSupabase
@@ -1709,11 +1737,19 @@ export async function getParticipantGradingSheet(
 
     return {
       success: true,
+      isVerified,
+      verificationNotice,
       participant: {
         registrationId: reg.id,
         registrationNumber: part?.registration_number || `REG-${reg.id.slice(0, 6)}`,
         fullName: part?.full_name || reg.team_name || "Peserta",
         teamName: reg.team_name,
+        isVerified,
+        verificationStatus: isVerified
+          ? "terverifikasi"
+          : partStatus === "ditolak"
+          ? "ditolak"
+          : "menunggu_verifikasi",
         members: ((reg as any)?.registration_members || []).map((m: any) => ({
           id: m.id,
           name: m.member_name,

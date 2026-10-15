@@ -31,6 +31,7 @@ import {
   Gavel,
   ShieldAlert,
   Info,
+  Lock,
 } from "lucide-react";
 
 export default function JuriLombaPesertaPage() {
@@ -57,6 +58,9 @@ export default function JuriLombaPesertaPage() {
     } | null;
   } | null>(null);
   const [participants, setParticipants] = React.useState<JudgeRosterParticipant[]>([]);
+  const [unverifiedParticipants, setUnverifiedParticipants] = React.useState<JudgeRosterParticipant[]>([]);
+  const [unverifiedCount, setUnverifiedCount] = React.useState(0);
+  const [showUnverified, setShowUnverified] = React.useState(false);
   const [judgeName, setJudgeName] = React.useState<string>("");
   const [notice, setNotice] = React.useState<string | null>(null);
 
@@ -70,6 +74,8 @@ export default function JuriLombaPesertaPage() {
       } else {
         setCompetition(res.competition);
         setParticipants(res.participants);
+        setUnverifiedParticipants(res.unverifiedParticipants || []);
+        setUnverifiedCount(res.unverifiedCount || 0);
         setNotice(res.notice || null);
         if (res.judge?.name) {
           setJudgeName(res.judge.name);
@@ -89,6 +95,10 @@ export default function JuriLombaPesertaPage() {
   if (notFoundState) {
     return notFound();
   }
+
+  const displayedParticipants = showUnverified
+    ? [...participants, ...unverifiedParticipants]
+    : participants;
 
   return (
     <DashboardLayout role="juri">
@@ -221,6 +231,43 @@ export default function JuriLombaPesertaPage() {
             </div>
           )}
 
+        {/* ============================================================= */}
+        {/* BANNER PESERTA BELUM TERVERIFIKASI */}
+        {/* ============================================================= */}
+        {unverifiedCount > 0 && (
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <ShieldAlert className="h-4 w-4" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground text-xs sm:text-sm">
+                    {unverifiedCount} Peserta Belum Terverifikasi Panitia
+                  </span>
+                  <Badge variant="warning" className="text-[10px]">
+                    Tidak Bisa Dinilai
+                  </Badge>
+                </div>
+                <p className="text-muted-foreground text-[11px] sm:text-xs">
+                  Sesuai aturan kompetisi, peserta yang berkasnya belum diverifikasi atau belum dikonfirmasi panitia tidak dapat dinilai oleh dewan juri.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowUnverified(!showUnverified)}
+              className="text-xs shrink-0 border-amber-500/40 hover:bg-amber-500/20 text-foreground cursor-pointer"
+            >
+              {showUnverified
+                ? "Sembunyikan Belum Terverifikasi"
+                : `Lihat Peserta Belum Terverifikasi (${unverifiedCount})`}
+            </Button>
+          </div>
+        )}
+
         {/* Desktop Table View */}
         <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
           <Table>
@@ -249,7 +296,7 @@ export default function JuriLombaPesertaPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : participants.length === 0 ? (
+              ) : displayedParticipants.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={competition?.roundType === "multi_stage" ? 6 : 5}
@@ -273,19 +320,30 @@ export default function JuriLombaPesertaPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                participants.map((p) => {
+                displayedParticipants.map((p) => {
                   const isSent = p.status === "terkirim" || p.status === "final";
                   const isDraft = p.status === "draft";
+                  const isParticipantVerified = p.isVerified !== false;
 
                   return (
-                    <TableRow key={p.registrationId}>
+                    <TableRow
+                      key={p.registrationId}
+                      className={!isParticipantVerified ? "bg-muted/15" : undefined}
+                    >
                       <TableCell className="font-mono text-xs font-bold text-accent">
                         {p.registrationNumber}
                       </TableCell>
                       <TableCell>
-                        <strong className="text-foreground text-xs sm:text-sm block">
-                          {p.teamName || p.fullName}
-                        </strong>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <strong className="text-foreground text-xs sm:text-sm block">
+                            {p.teamName || p.fullName}
+                          </strong>
+                          {!isParticipantVerified && (
+                            <Badge variant="warning" className="text-[9px]">
+                              MENUNGGU VERIFIKASI
+                            </Badge>
+                          )}
+                        </div>
                         {p.members && p.members.length > 0 ? (
                           <div className="flex flex-wrap gap-1 pt-1 max-w-sm">
                             {p.members.map((m, mIdx) => (
@@ -339,7 +397,11 @@ export default function JuriLombaPesertaPage() {
                         </TableCell>
                       )}
                       <TableCell className="text-center">
-                        {isSent ? (
+                        {!isParticipantVerified ? (
+                          <Badge variant="default" className="text-[10px] bg-muted/60 text-muted-foreground">
+                            BELUM BISA DINILAI
+                          </Badge>
+                        ) : isSent ? (
                           <Badge variant="success" className="text-[10px]">
                             ✓ TERKIRIM {p.weightedScore !== null ? `(${p.weightedScore.toFixed(2)})` : ""}
                           </Badge>
@@ -366,27 +428,36 @@ export default function JuriLombaPesertaPage() {
                         >
                           <Button
                             size="sm"
-                            variant={isSent ? "outline" : "default"}
+                            variant={!isParticipantVerified ? "outline" : isSent ? "outline" : "default"}
                             className="text-xs h-8 gap-1.5 cursor-pointer"
                           >
-                            <Edit3 className="h-3 w-3" />
-                            <span>
-                              {isSent
-                                ? "Lihat / Ubah Nilai"
-                                : isDraft
-                                  ? `Lanjutkan Menilai${
-                                      competition?.roundType === "multi_stage" &&
-                                      competition?.activeStage
-                                        ? ` (Tahap ${competition.activeStage.stageOrder})`
-                                        : ""
-                                    }`
-                                  : `Buka Form Nilai${
-                                      competition?.roundType === "multi_stage" &&
-                                      competition?.activeStage
-                                        ? ` (Tahap ${competition.activeStage.stageOrder})`
-                                        : ""
-                                    }`}
-                            </span>
+                            {!isParticipantVerified ? (
+                              <>
+                                <Lock className="h-3 w-3" />
+                                <span>Terkunci (Belum Diverifikasi)</span>
+                              </>
+                            ) : (
+                              <>
+                                <Edit3 className="h-3 w-3" />
+                                <span>
+                                  {isSent
+                                    ? "Lihat / Ubah Nilai"
+                                    : isDraft
+                                      ? `Lanjutkan Menilai${
+                                          competition?.roundType === "multi_stage" &&
+                                          competition?.activeStage
+                                            ? ` (Tahap ${competition.activeStage.stageOrder})`
+                                            : ""
+                                        }`
+                                      : `Buka Form Nilai${
+                                          competition?.roundType === "multi_stage" &&
+                                          competition?.activeStage
+                                            ? ` (Tahap ${competition.activeStage.stageOrder})`
+                                            : ""
+                                        }`}
+                                </span>
+                              </>
+                            )}
                           </Button>
                         </Link>
                       </TableCell>
@@ -407,7 +478,7 @@ export default function JuriLombaPesertaPage() {
                 <span>Memuat daftar peserta...</span>
               </div>
             </div>
-          ) : participants.length === 0 ? (
+          ) : displayedParticipants.length === 0 ? (
             <div className="p-8 text-center text-xs text-muted-foreground border rounded-xl bg-card space-y-2">
               <div className="h-10 w-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
                 <Clock className="h-5 w-5" />
@@ -424,16 +495,29 @@ export default function JuriLombaPesertaPage() {
               </p>
             </div>
           ) : (
-            participants.map((p) => {
+            displayedParticipants.map((p) => {
               const isSent = p.status === "terkirim" || p.status === "final";
               const isDraft = p.status === "draft";
+              const isParticipantVerified = p.isVerified !== false;
 
               return (
-                <div key={p.registrationId} className="p-4 rounded-xl border border-border bg-card space-y-3">
+                <div
+                  key={p.registrationId}
+                  className={`p-4 rounded-xl border border-border bg-card space-y-3 ${
+                    !isParticipantVerified ? "bg-muted/15" : ""
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="font-mono text-xs font-bold text-accent">
-                      {p.registrationNumber}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono text-xs font-bold text-accent">
+                        {p.registrationNumber}
+                      </span>
+                      {!isParticipantVerified && (
+                        <Badge variant="warning" className="text-[9px]">
+                          MENUNGGU VERIFIKASI
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {competition?.roundType === "multi_stage" && (
                         p.stageStatus === "menunggu" ? (
@@ -454,7 +538,11 @@ export default function JuriLombaPesertaPage() {
                           </Badge>
                         )
                       )}
-                      {isSent ? (
+                      {!isParticipantVerified ? (
+                        <Badge variant="default" className="text-[10px] bg-muted/60 text-muted-foreground">
+                          BELUM BISA DINILAI
+                        </Badge>
+                      ) : isSent ? (
                         <Badge variant="success" className="text-[10px]">
                           ✓ TERKIRIM {p.weightedScore !== null ? `(${p.weightedScore.toFixed(2)})` : ""}
                         </Badge>
@@ -515,27 +603,36 @@ export default function JuriLombaPesertaPage() {
                   >
                     <Button
                       size="sm"
-                      variant={isSent ? "outline" : "default"}
+                      variant={!isParticipantVerified ? "outline" : isSent ? "outline" : "default"}
                       className="w-full text-xs h-10 gap-1.5 cursor-pointer"
                     >
-                      <Edit3 className="h-3.5 w-3.5" />
-                      <span>
-                        {isSent
-                          ? "Lihat / Ubah Nilai"
-                          : isDraft
-                            ? `Lanjutkan Menilai${
-                                competition?.roundType === "multi_stage" &&
-                                competition?.activeStage
-                                  ? ` (Tahap ${competition.activeStage.stageOrder})`
-                                  : ""
-                              }`
-                            : `Buka Form Nilai${
-                                competition?.roundType === "multi_stage" &&
-                                competition?.activeStage
-                                  ? ` (Tahap ${competition.activeStage.stageOrder})`
-                                  : ""
-                              }`}
-                      </span>
+                      {!isParticipantVerified ? (
+                        <>
+                          <Lock className="h-3.5 w-3.5" />
+                          <span>Terkunci (Belum Diverifikasi)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Edit3 className="h-3.5 w-3.5" />
+                          <span>
+                            {isSent
+                              ? "Lihat / Ubah Nilai"
+                              : isDraft
+                                ? `Lanjutkan Menilai${
+                                    competition?.roundType === "multi_stage" &&
+                                    competition?.activeStage
+                                      ? ` (Tahap ${competition.activeStage.stageOrder})`
+                                      : ""
+                                  }`
+                                : `Buka Form Nilai${
+                                    competition?.roundType === "multi_stage" &&
+                                    competition?.activeStage
+                                      ? ` (Tahap ${competition.activeStage.stageOrder})`
+                                      : ""
+                                  }`}
+                          </span>
+                        </>
+                      )}
                     </Button>
                   </Link>
                 </div>
