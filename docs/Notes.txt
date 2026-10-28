@@ -1,0 +1,66 @@
+Akun :
+	admin@admin.com 			: Yalwash9.org   	[Super admin]
+	sie_acara@gmail.com 		: rahasia123		[Seksi Acara]
+	rudi.catsmile2@gmail.com 	: rahasia123		[Juri]
+	
+	rudi1@gmail.com 	: rahasia123		[peserta]   - Duta bahasa
+	rudi2@gmail.com 	: rahasia123		[peserta]   - Duta bahasa
+	rudi3@gmail.com 	: rahasia123		[peserta]   - Puisi
+	rudi4@gmail.com 	: rahasia123		[peserta]	- Puisi
+	rudi5@gmail.com 	: rahasia123		[peserta]   - Film Pendek (Golden Stage Theatre)
+	rudi6@gmail.com 	: rahasia123		[peserta]   - Film Pendek (Sanggar Si Pitung)
+	
+	rudi7@gmail.com 	: rahasia123		[peserta]
+	
+	
+Catatan buat sie-acara:
+	Do :
+		1. Update / Edit Atribut Lomba 			
+		2. Upload challenge baju daerah
+		3. Atur Manajemen jadwal
+		4. Atur juri dan penugasannya
+		5. Update Reward
+		6. Create & update template twibbon
+		7. On / off twibbon, perlu approval atau tidak
+		
+Catatan umum :
+	- Aplikasi lumayan memiliki logika yang komplek terutama pada lomba 'DUTA BAHASA'
+	- Aplikasi ada 2 kategori : Lomba dan Challenge / game
+	- Lomba :
+		- 8 Cabang
+			- 3 Kelompok
+				- 2 Single round
+				- 1 Multi stage
+			- 5 Individu
+			
+		- Atribut :
+			- Petunjuk Teknis & Peraturan Lomba / Syarat 
+			- Kriteria
+			- Pilihan Naskah 
+			- Format acara
+			- Wajib upload (Ya/Tidak) : Untuk "Duta bahasa"
+			- Lokasi / Venue / Ruangan 
+			- Penilaian / Metode Agregasi Nilai
+			
+	- Challenge / Gamifikasi
+		- 4 Challenge / game
+			- Puzzle Baju daerah
+			- QR Huruf menjadi kata bermakna
+			- QR keliling stand lomba
+			- Twibbon
+			
+	- Reward 
+		- Atur berapa stok reward dan berapa point untuk mendapatkannya
+		- Untuk 'QR keliling stand lomba' punya reward tersendiri ???
+		- Apakah saat berhasil  'QR keliling stand lomba', juga mendapat point ???
+		
+Questions :
+	1. Apakah register peserta, langsung bisa ikut challenge / lomba tanpa moderasi ???
+	2. Pada monitor publik ada 'Papan skor sementara', apaka perlu ditampilkan atau tidak?
+	
+	
+Challenge diganti Misi  !!!
+	
+	
+	
+		

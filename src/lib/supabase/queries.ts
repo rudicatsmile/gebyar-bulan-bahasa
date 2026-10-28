@@ -59,7 +59,7 @@ const compIdToName: Record<string, string> = {
   "a0000000-0000-0000-0000-000000000002": "Film Pendek",
   "a0000000-0000-0000-0000-000000000003": "Pidato Bahasa Indonesia",
   "a0000000-0000-0000-0000-000000000004": "Melukis Tas Kanvas",
-  "a0000000-0000-0000-0000-000000000005": "Seni Teater Monolog",
+  "a0000000-0000-0000-0000-000000000005": "Monolog",
   "a0000000-0000-0000-0000-000000000006": "Pembawa Acara (MC) Formal",
   "a0000000-0000-0000-0000-000000000007": "Seni Tradisi Palang Pintu",
   "a0000000-0000-0000-0000-000000000008": "Vokal Grup Lagu Daerah & Nasional",

@@ -1442,6 +1442,8 @@ export async function getJudgeDashboardData(): Promise<{
     status: string;
     criteriaCount: number;
     isChiefJudge: boolean;
+    roundType?: "single_round" | "multi_stage";
+    posterUrl?: string;
   }>;
   error?: string;
 }> {
@@ -1481,6 +1483,7 @@ export async function getJudgeDashboardData(): Promise<{
         description,
         theme_link,
         status,
+        poster_url,
         competition_criteria (id),
         schedules (venue, stage)
       )
@@ -1526,10 +1529,15 @@ export async function getJudgeDashboardData(): Promise<{
                 ? "multi_stage"
                 : "single_round");
 
+            let compName = comp.name || "";
+            if (comp.slug === "monolog" || compName === "Teater & Monolog" || compName === "Seni Teater Monolog") {
+              compName = "Monolog";
+            }
+
             return {
               id: comp.id,
               slug: comp.slug,
-              name: comp.name,
+              name: compName,
               category: comp.type || "individu",
               description: comp.description || "",
               venue: venue || "Panggung Utama",
@@ -1538,16 +1546,25 @@ export async function getJudgeDashboardData(): Promise<{
               criteriaCount: comp.competition_criteria?.length || 4,
               isChiefJudge: Boolean(a.is_chief_judge),
               roundType,
+              posterUrl: comp.poster_url || "/images/images.png",
             };
           });
+
+        let expertise = (judgeProfile.institution || "").trim();
+        if (expertise === "Teater & Monolog" || expertise === "Seni Teater Monolog") {
+          expertise = "Monolog";
+        }
+        if (!expertise) {
+          expertise = "Dewan Juri Resmi";
+        }
 
         return {
           success: true,
           judgeInfo: {
             fullName: judgeProfile.full_name || "Dewan Juri",
-            expertise: judgeProfile.institution || "Dewan Juri Resmi",
+            expertise,
             title: judgeProfile.role === "juri" ? "Dewan Juri Ahli Bersertifikasi" : "Penilai Lomba",
-            avatarUrl: judgeProfile.avatar_url || undefined,
+            avatarUrl: judgeProfile.avatar_url || "/images/images.png",
           },
           assignedComps: mapped,
         };
@@ -1600,10 +1617,15 @@ export async function getJudgeDashboardData(): Promise<{
               ? "multi_stage"
               : "single_round");
 
+          let compName = comp.name || "";
+          if (comp.slug === "monolog" || compName === "Teater & Monolog" || compName === "Seni Teater Monolog") {
+            compName = "Monolog";
+          }
+
           return {
             id: comp.id,
             slug: comp.slug,
-            name: comp.name,
+            name: compName,
             category: comp.type || "individu",
             description: comp.description || "",
             venue: venue || "Panggung Utama",
@@ -1612,16 +1634,25 @@ export async function getJudgeDashboardData(): Promise<{
             criteriaCount: comp.competition_criteria?.length || 4,
             isChiefJudge: Boolean(a.is_chief_judge),
             roundType,
+            posterUrl: comp.poster_url || "/images/images.png",
           };
         });
+
+      let fallbackExpertise = (fallbackJudge?.institution || "").trim();
+      if (fallbackExpertise === "Teater & Monolog" || fallbackExpertise === "Seni Teater Monolog") {
+        fallbackExpertise = "Monolog";
+      }
+      if (!fallbackExpertise) {
+        fallbackExpertise = "Dewan Juri Sastra & Puisi";
+      }
 
       return {
         success: true,
         judgeInfo: {
           fullName: fallbackJudge?.full_name || "H.MULYANA,MM",
-          expertise: fallbackJudge?.institution || "Dewan Juri Sastra & Puisi",
+          expertise: fallbackExpertise,
           title: "Dewan Juri Ahli Bersertifikasi",
-          avatarUrl: fallbackJudge?.avatar_url || undefined,
+          avatarUrl: fallbackJudge?.avatar_url || "/images/images.png",
         },
         assignedComps: mapped,
       };

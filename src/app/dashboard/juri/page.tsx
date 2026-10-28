@@ -659,7 +659,7 @@ export default function DashboardJuriPage() {
               <option value="Sinematografi & Film" />
               <option value="Public Speaking & MC" />
               <option value="Seni Rupa & Kriya" />
-              <option value="Teater & Monolog" />
+              <option value="Monolog" />
               <option value="Tradisi Betawi & Palang Pintu" />
               <option value="Musik & Vokal" />
             </datalist>
@@ -737,7 +737,7 @@ export default function DashboardJuriPage() {
               <option value="Sinematografi & Film" />
               <option value="Public Speaking & MC" />
               <option value="Seni Rupa & Kriya" />
-              <option value="Teater & Monolog" />
+              <option value="Monolog" />
               <option value="Tradisi Betawi & Palang Pintu" />
               <option value="Musik & Vokal" />
             </datalist>

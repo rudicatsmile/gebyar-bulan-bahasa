@@ -10,6 +10,8 @@ import { JUDGES } from "@/lib/dummy-data";
 import { Trophy, ArrowRight, UserCheck, CheckCircle2, Clock, Loader2, Layers } from "lucide-react";
 import { getJudgeDashboardData } from "@/app/actions/competitions";
 
+const DEFAULT_IMAGE = "/images/images.png";
+
 function getStatusBadge(status: string) {
   switch (status) {
     case "berlangsung":
@@ -31,7 +33,7 @@ export default function DashboardJuriPage() {
     fullName: "H.MULYANA,MM",
     expertise: "Dewan Juri Sastra & Puisi",
     title: "Dewan Juri Ahli Bersertifikasi",
-    avatarUrl: JUDGES[0].avatarUrl,
+    avatarUrl: DEFAULT_IMAGE,
   });
   const [assignedComps, setAssignedComps] = React.useState<
     Array<{
@@ -46,6 +48,7 @@ export default function DashboardJuriPage() {
       criteriaCount: number;
       isChiefJudge: boolean;
       roundType?: "single_round" | "multi_stage";
+      posterUrl?: string;
     }>
   >([]);
 
@@ -56,14 +59,32 @@ export default function DashboardJuriPage() {
         const res = await getJudgeDashboardData();
         if (res.success) {
           if (res.judgeInfo) {
+            let expertise = res.judgeInfo.expertise || "Dewan Juri Resmi";
+            if (expertise === "Teater & Monolog" || expertise === "Seni Teater Monolog") {
+              expertise = "Monolog";
+            }
             setJudgeInfo({
               fullName: res.judgeInfo.fullName,
-              expertise: res.judgeInfo.expertise,
+              expertise: expertise,
               title: res.judgeInfo.title,
-              avatarUrl: res.judgeInfo.avatarUrl || JUDGES[0].avatarUrl,
+              avatarUrl: res.judgeInfo.avatarUrl || DEFAULT_IMAGE,
             });
           }
-          setAssignedComps(res.assignedComps);
+          if (res.assignedComps) {
+            setAssignedComps(
+              res.assignedComps.map((comp) => {
+                let compName = comp.name;
+                if (comp.slug === "monolog" || compName === "Teater & Monolog" || compName === "Seni Teater Monolog") {
+                  compName = "Monolog";
+                }
+                return {
+                  ...comp,
+                  name: compName,
+                  posterUrl: comp.posterUrl || DEFAULT_IMAGE,
+                };
+              })
+            );
+          }
         } else {
           console.error("Gagal load penugasan juri:", res.error);
         }
@@ -84,16 +105,22 @@ export default function DashboardJuriPage() {
         <div className="p-6 rounded-2xl border border-border bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <img
-              src={judgeInfo.avatarUrl}
+              src={judgeInfo.avatarUrl || DEFAULT_IMAGE}
               alt={judgeInfo.fullName}
-              className="h-16 w-16 rounded-full object-cover border-2 border-accent"
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (!target.src.endsWith(DEFAULT_IMAGE)) {
+                  target.src = DEFAULT_IMAGE;
+                }
+              }}
+              className="h-16 w-16 rounded-full object-cover border-2 border-accent bg-accent/10 shrink-0"
             />
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <Badge variant="gold" className="text-[10px]">
                   DEWAN JURI RESMI
                 </Badge>
-                <span className="text-xs font-mono text-muted-foreground">
+                <span className="text-xs font-mono text-muted-foreground font-semibold">
                   {judgeInfo.expertise}
                 </span>
               </div>
@@ -141,58 +168,77 @@ export default function DashboardJuriPage() {
                   comp.name?.toLowerCase().includes("duta");
 
                 return (
-                  <Card key={comp.id} className="p-6 space-y-4 border-accent/40 bg-accent/5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <Badge variant={statusInfo.variant} className="text-xs">
-                          {statusInfo.label}
-                        </Badge>
-                        {isMultiStage ? (
-                          <Badge variant="default" className="text-[10px] bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 font-semibold gap-1">
-                            <Layers className="h-3 w-3" />
-                            <span>MULTI STAGE</span>
+                  <Card key={comp.id} className="p-5 sm:p-6 space-y-4 border-accent/40 bg-accent/5 flex flex-col justify-between hover:border-accent/70 transition-all">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge variant={statusInfo.variant} className="text-xs">
+                            {statusInfo.label}
                           </Badge>
-                        ) : (
-                          <Badge variant="default" className="text-[10px] bg-muted/40 text-muted-foreground border-border gap-1">
-                            <span>SINGLE ROUND</span>
-                          </Badge>
-                        )}
+                          {isMultiStage ? (
+                            <Badge variant="default" className="text-[10px] bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 font-semibold gap-1">
+                              <Layers className="h-3 w-3" />
+                              <span>MULTI STAGE</span>
+                            </Badge>
+                          ) : (
+                            <Badge variant="default" className="text-[10px] bg-muted/40 text-muted-foreground border-border gap-1">
+                              <span>SINGLE ROUND</span>
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-xs font-mono uppercase text-muted-foreground font-semibold">
+                          {comp.category}
+                        </span>
                       </div>
-                      <span className="text-xs font-mono uppercase text-muted-foreground font-semibold">
-                        {comp.category}
-                      </span>
+
+                      {/* Poster / Thumbnail Lomba & Deskripsi */}
+                      <div className="flex flex-col sm:flex-row gap-4 items-start">
+                        <div className="w-full sm:w-24 sm:h-24 h-44 rounded-xl overflow-hidden bg-card border border-border shrink-0 relative shadow-xs">
+                          <img
+                            src={comp.posterUrl || DEFAULT_IMAGE}
+                            alt={comp.name}
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              if (!target.src.endsWith(DEFAULT_IMAGE)) {
+                                target.src = DEFAULT_IMAGE;
+                              }
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <h3 className="font-heading text-xl font-bold text-foreground leading-snug">
+                            {comp.name}
+                          </h3>
+                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+                            {comp.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-card border border-border text-xs text-muted-foreground space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span>Lokasi & Panggung:</span>
+                          <strong className="text-foreground text-right">
+                            {comp.stage ? `${comp.venue} (${comp.stage})` : comp.venue}
+                          </strong>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Jumlah Kriteria:</span>
+                          <strong className="text-foreground text-right">{comp.criteriaCount} Komponen Berbobot 100%</strong>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Status Juri Anda:</span>
+                          <strong className="text-accent text-right">
+                            {comp.isChiefJudge ? "Juri Utama (Chief Judge)" : "Anggota Dewan Juri"}
+                          </strong>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <h3 className="font-heading text-xl font-bold text-foreground">
-                        {comp.name}
-                      </h3>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        {comp.description}
-                      </p>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-card border border-border text-xs text-muted-foreground space-y-1">
-                      <div className="flex justify-between">
-                        <span>Lokasi & Panggung:</span>
-                        <strong className="text-foreground">
-                          {comp.stage ? `${comp.venue} (${comp.stage})` : comp.venue}
-                        </strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Jumlah Kriteria:</span>
-                        <strong className="text-foreground">{comp.criteriaCount} Komponen Berbobot 100%</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Status Juri Anda:</span>
-                        <strong className="text-accent">
-                          {comp.isChiefJudge ? "Juri Utama (Chief Judge)" : "Anggota Dewan Juri"}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <Link href={`/juri/lomba/${comp.slug}`} className="block">
-                      <Button className="w-full text-xs gap-1.5 font-semibold" size="lg">
+                    <Link href={`/juri/lomba/${comp.slug}`} className="block pt-2">
+                      <Button className="w-full text-xs gap-1.5 font-semibold cursor-pointer" size="lg">
                         <span>Buka Roster Peserta & Mulai Menilai</span>
                         <ArrowRight className="h-4 w-4" />
                       </Button>

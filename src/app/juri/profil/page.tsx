@@ -367,9 +367,15 @@ export default function JuriProfilPage() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="flex items-center gap-4 pb-4 border-b border-border">
                   <img
-                    src={avatarUrl}
+                    src={avatarUrl || "/images/images.png"}
                     alt={fullName}
-                    className="h-16 w-16 rounded-full object-cover border-2 border-accent bg-accent/10"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.src.endsWith("/images/images.png")) {
+                        target.src = "/images/images.png";
+                      }
+                    }}
+                    className="h-16 w-16 rounded-full object-cover border-2 border-accent bg-accent/10 shrink-0"
                   />
                   <div>
                     <div className="flex items-center gap-2 mb-0.5">

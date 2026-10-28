@@ -1893,10 +1893,14 @@ export async function getJudgeProfileData(): Promise<JudgeProfileResult> {
 
     const assignedCompetitions: JudgeAssignedCompetition[] = (assignments || []).map((a) => {
       const comp = a.competition as any;
+      let compName = comp?.name || "Cabang Lomba";
+      if (comp?.slug === "monolog" || compName === "Teater & Monolog" || compName === "Seni Teater Monolog") {
+        compName = "Monolog";
+      }
       return {
         id: a.id,
         competitionId: a.competition_id,
-        name: comp?.name || "Cabang Lomba",
+        name: compName,
         slug: comp?.slug || "",
         category: comp?.type === "kelompok" ? "Kelompok" : "Individu",
         stageName: comp?.theme_link || "Panggung Utama",
@@ -1917,20 +1921,21 @@ export async function getJudgeProfileData(): Promise<JudgeProfileResult> {
     ).length;
     const draftCount = (assessments || []).filter((as) => as.status === "draft").length;
 
+    let inst = (judgeProfile.institution || "").trim();
+    if (inst === "Teater & Monolog" || inst === "Seni Teater Monolog") {
+      inst = "Monolog";
+    }
+
     return {
       success: true,
       profile: {
         id: judgeProfile.id,
         fullName: judgeProfile.full_name || "",
         email: judgeProfile.email || "",
-        institution: judgeProfile.institution || "",
+        institution: inst,
         nickname: judgeProfile.nickname || "",
         phone: judgeProfile.phone || "",
-        avatarUrl:
-          judgeProfile.avatar_url ||
-          `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-            judgeProfile.full_name || "Juri"
-          )}`,
+        avatarUrl: judgeProfile.avatar_url || "/images/images.png",
         role: judgeProfile.role || "juri",
       },
       assignedCompetitions,
