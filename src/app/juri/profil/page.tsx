@@ -18,6 +18,7 @@ import {
 import {
   getJudgeProfileData,
   updateJudgeProfileData,
+  updateLoggedInJudgeAvatar,
   JudgeAssignedCompetition,
 } from "@/app/actions/assessments";
 import {
@@ -33,6 +34,7 @@ import {
   FileCheck2,
   FileClock,
   ExternalLink,
+  Camera,
 } from "lucide-react";
 
 export default function JuriProfilPage() {
@@ -60,6 +62,57 @@ export default function JuriProfilPage() {
     submittedAssessments: 0,
     draftAssessments: 0,
   });
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [uploadingPhoto, setUploadingPhoto] = React.useState(false);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
+
+  const handlePhotoUpload = async (file: File) => {
+    setPhotoError(null);
+
+    // Validasi format file
+    const validMimes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    if (!validMimes.includes(file.type)) {
+      setPhotoError("Format berkas harus berupa gambar (JPG, PNG, atau WEBP).");
+      return;
+    }
+
+    // Validasi ukuran file (maksimal 3MB)
+    if (file.size > 3 * 1024 * 1024) {
+      setPhotoError("Ukuran foto melebihi batas maksimal 3MB.");
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      if (judgeId) {
+        formData.append("judgeId", judgeId);
+      }
+
+      const res = await updateLoggedInJudgeAvatar(formData);
+      if (res.success && res.avatarUrl) {
+        setAvatarUrl(res.avatarUrl);
+        setFeedback({
+          type: "success",
+          message: "Foto profil dewan juri berhasil diperbarui!",
+        });
+        setTimeout(() => setFeedback(null), 4000);
+      } else {
+        setPhotoError(res.error || "Gagal mengunggah foto profil baru.");
+      }
+    } catch (err: unknown) {
+      setPhotoError(
+        err instanceof Error ? err.message : "Terjadi kesalahan sistem saat mengunggah foto."
+      );
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   const loadProfile = React.useCallback(async () => {
     setLoading(true);
@@ -109,6 +162,7 @@ export default function JuriProfilPage() {
         institution,
         nickname: title,
         phone,
+        avatarUrl,
         newPassword: password || undefined,
       });
 
@@ -365,31 +419,96 @@ export default function JuriProfilPage() {
             {/* Form Edit Profil Juri */}
             <Card className="p-6 sm:p-8">
               <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="flex items-center gap-4 pb-4 border-b border-border">
-                  <img
-                    src={avatarUrl || "/images/images.png"}
-                    alt={fullName}
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      if (!target.src.endsWith("/images/images.png")) {
-                        target.src = "/images/images.png";
-                      }
-                    }}
-                    className="h-16 w-16 rounded-full object-cover border-2 border-accent bg-accent/10 shrink-0"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[10px] font-mono text-accent uppercase font-bold">
-                        Role: Dewan Juri Resmi
-                      </span>
-                      <ShieldCheck className="h-3.5 w-3.5 text-accent" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-border">
+                  <div className="flex items-center gap-4">
+                    <div className="relative group shrink-0">
+                      <img
+                        src={avatarUrl || "/images/images.png"}
+                        alt={fullName}
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          if (!target.src.endsWith("/images/images.png")) {
+                            target.src = "/images/images.png";
+                          }
+                        }}
+                        className="h-20 w-20 rounded-2xl object-cover border-2 border-accent bg-accent/10 shadow-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingPhoto}
+                        title="Klik untuk ganti foto profil"
+                        className="absolute inset-0 bg-black/60 text-white rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        {uploadingPhoto ? (
+                          <Loader2 className="h-5 w-5 animate-spin text-accent" />
+                        ) : (
+                          <>
+                            <Camera className="h-5 w-5 mb-0.5" />
+                            <span className="text-[10px] font-semibold">Ganti Foto</span>
+                          </>
+                        )}
+                      </button>
                     </div>
-                    <h3 className="font-heading text-lg font-bold text-foreground">
-                      {fullName || "Nama Dewan Juri"}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">{email}</p>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="text-[10px] font-mono text-accent uppercase font-bold">
+                          Role: Dewan Juri Resmi
+                        </span>
+                        <ShieldCheck className="h-3.5 w-3.5 text-accent" />
+                      </div>
+                      <h3 className="font-heading text-lg font-bold text-foreground truncate">
+                        {fullName || "Nama Dewan Juri"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground truncate">{email}</p>
+                    </div>
+                  </div>
+
+                  {/* Tombol Upload & Petunjuk Ukuran (Mobile & Desktop Friendly) */}
+                  <div className="sm:shrink-0 flex flex-col items-start sm:items-end gap-1.5 w-full sm:w-auto">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/jpg"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handlePhotoUpload(file);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto}
+                      className="text-xs gap-2 border-accent/40 hover:border-accent hover:bg-accent/10 text-foreground w-full sm:w-auto cursor-pointer"
+                    >
+                      {uploadingPhoto ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
+                          <span>Mengunggah Foto...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="h-3.5 w-3.5 text-accent" />
+                          <span>Ganti Foto Profil</span>
+                        </>
+                      )}
+                    </Button>
+                    <span className="text-[10px] text-muted-foreground">
+                      JPG, PNG, atau WEBP · Maks 3MB
+                    </span>
                   </div>
                 </div>
+
+                {photoError && (
+                  <div className="p-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-xs flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{photoError}</span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input

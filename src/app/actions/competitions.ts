@@ -779,7 +779,7 @@ export async function getCompetitionJudgesBySlug(slug: string): Promise<Array<{
         expertise: p?.institution || "Dewan Juri Ahli",
         avatarUrl:
           p?.avatar_url ||
-          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face",
+          "/images/images.png",
         isChiefJudge: Boolean(cj.is_chief_judge),
       };
     });

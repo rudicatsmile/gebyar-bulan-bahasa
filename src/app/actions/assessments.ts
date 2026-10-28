@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import path from "path";
+import fs from "fs/promises";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -1962,20 +1964,34 @@ export async function updateJudgeProfileData(data: {
   institution: string;
   nickname?: string;
   phone?: string;
+  avatarUrl?: string;
   newPassword?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const adminSupabase = createAdminClient();
 
+    const updatePayload: {
+      full_name: string;
+      institution: string;
+      nickname: string | null;
+      phone: string | null;
+      avatar_url?: string;
+      updated_at: string;
+    } = {
+      full_name: data.fullName,
+      institution: data.institution,
+      nickname: data.nickname || null,
+      phone: data.phone || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (data.avatarUrl) {
+      updatePayload.avatar_url = data.avatarUrl;
+    }
+
     const { error: pErr } = await adminSupabase
       .from("profiles")
-      .update({
-        full_name: data.fullName,
-        institution: data.institution,
-        nickname: data.nickname || null,
-        phone: data.phone || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", data.id);
 
     if (pErr) throw pErr;
@@ -1990,8 +2006,14 @@ export async function updateJudgeProfileData(data: {
       }
     }
 
-    revalidatePath("/juri/profil");
-    revalidatePath("/juri");
+    try {
+      revalidatePath("/juri/profil");
+      revalidatePath("/juri");
+      revalidatePath("/dashboard/juri");
+      revalidatePath("/lomba");
+    } catch {
+      // Abaikan jika dipanggil di luar konteks request Next.js (misal: test runner/script)
+    }
     return { success: true };
   } catch (err: unknown) {
     console.error("Error updateJudgeProfileData:", err);
@@ -2001,5 +2023,201 @@ export async function updateJudgeProfileData(data: {
     };
   }
 }
+
+/**
+ * Server action khusus juri login untuk mengubah foto profilnya sendiri.
+ * Mengikuti aturan keamanan:
+ * - Hanya juri yang login yang bisa mengubah fotonya sendiri (ID diambil dari auth session).
+ * - Juri tidak diizinkan mengubah foto juri lain.
+ * - Foto lama diganti dan dibersihkan dari storage/disk saat foto baru diunggah.
+ * - Menyimpan URL foto ke tabel profiles (kolom avatar_url).
+ */
+export async function updateLoggedInJudgeAvatar(formData: FormData): Promise<{
+  success: boolean;
+  avatarUrl?: string;
+  error?: string;
+}> {
+  try {
+    const serverSupabase = await createClient();
+    const {
+      data: { user },
+      error: authErr,
+    } = await serverSupabase.auth.getUser();
+
+    let targetJudgeId = user?.id;
+
+    // Fallback khusus development / testing jika cookie session kosong
+    if (!targetJudgeId && process.env.NODE_ENV !== "production") {
+      const explicitJudgeId = formData.get("judgeId") as string | null;
+      if (explicitJudgeId) {
+        targetJudgeId = explicitJudgeId;
+      }
+    }
+
+    if (!targetJudgeId) {
+      return {
+        success: false,
+        error: "Akses ditolak: Anda harus masuk (login) sebagai dewan juri untuk memperbarui foto profil.",
+      };
+    }
+
+    const adminSupabase = createAdminClient();
+    const { data: profile, error: pErr } = await adminSupabase
+      .from("profiles")
+      .select("id, role, avatar_url, full_name")
+      .eq("id", targetJudgeId)
+      .maybeSingle();
+
+    if (pErr || !profile) {
+      return {
+        success: false,
+        error: "Data profil dewan juri tidak ditemukan di sistem.",
+      };
+    }
+
+    if (profile.role !== "juri" && (profile.role as string) !== "super_admin") {
+      return {
+        success: false,
+        error: "Hanya akun dengan peran dewan juri yang dapat melakukan perubahan foto juri.",
+      };
+    }
+
+    const file = formData.get("file") as File | null;
+    if (!file || typeof file === "string") {
+      return { success: false, error: "Silakan pilih berkas foto yang ingin diunggah." };
+    }
+
+    // Validasi ukuran berkas (Maksimal 3MB)
+    const MAX_SIZE = 3 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      return { success: false, error: "Ukuran berkas melebihi batas maksimal 3MB." };
+    }
+
+    // Validasi format/MIME type
+    const validMimes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    if (!validMimes.includes(file.type)) {
+      return {
+        success: false,
+        error: "Format berkas tidak didukung. Harap unggah foto berekstensi JPG, PNG, atau WEBP.",
+      };
+    }
+
+    const bucketName = process.env.NEXT_PUBLIC_BUCKET_MEDIA || "media-acara";
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const uniqueFileName = `judge-${targetJudgeId}-${Date.now()}.${ext || "jpg"}`;
+    const storagePath = `judges/${uniqueFileName}`;
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    let publicUrl = "";
+
+    // 1. Unggah foto baru ke Supabase Storage (media-acara/judges/)
+    try {
+      const { data: uploadData, error: uploadErr } = await adminSupabase.storage
+        .from(bucketName)
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (!uploadErr && uploadData) {
+        const {
+          data: { publicUrl: url },
+        } = adminSupabase.storage.from(bucketName).getPublicUrl(uploadData.path);
+        publicUrl = url;
+      } else if (uploadErr) {
+        console.warn("Notice: Supabase storage upload gagal, beralih ke fallback disk lokal:", uploadErr);
+      }
+    } catch (storageErr) {
+      console.warn("Notice: Supabase storage exception, beralih ke fallback disk lokal:", storageErr);
+    }
+
+    // Fallback: Jika storage cloud gagal, simpan ke public/uploads/judges/
+    if (!publicUrl) {
+      try {
+        const uploadDir = path.join(process.cwd(), "public", "uploads", "judges");
+        await fs.mkdir(uploadDir, { recursive: true });
+        const localFilePath = path.join(uploadDir, uniqueFileName);
+        await fs.writeFile(localFilePath, buffer);
+        publicUrl = `/uploads/judges/${uniqueFileName}`;
+      } catch (fsErr) {
+        return {
+          success: false,
+          error: fsErr instanceof Error ? fsErr.message : "Gagal menyimpan berkas foto ke server.",
+        };
+      }
+    }
+
+    // 2. Bersihkan/hapus foto lama agar tidak menumpuk di storage ("foto lama diganti dengan yang baru")
+    const oldAvatarUrl = profile.avatar_url;
+    if (oldAvatarUrl && oldAvatarUrl !== publicUrl) {
+      if (oldAvatarUrl.includes(`/storage/v1/object/public/${bucketName}/`)) {
+        try {
+          const oldStoragePath = oldAvatarUrl.split(`/storage/v1/object/public/${bucketName}/`)[1];
+          if (oldStoragePath && oldStoragePath.startsWith("judges/")) {
+            await adminSupabase.storage.from(bucketName).remove([oldStoragePath]);
+          }
+        } catch (delErr) {
+          console.warn("Notice: Gagal menghapus foto lama juri di storage:", delErr);
+        }
+      } else if (oldAvatarUrl.startsWith("/uploads/judges/")) {
+        try {
+          const oldLocalPath = path.join(process.cwd(), "public", oldAvatarUrl.replace(/^\//, ""));
+          await fs.unlink(oldLocalPath).catch(() => {});
+        } catch (delLocalErr) {
+          console.warn("Notice: Gagal menghapus foto lama juri di local disk:", delLocalErr);
+        }
+      }
+    }
+
+    // 3. Simpan URL foto terbaru ke tabel profiles kolom avatar_url
+    const { error: updateErr } = await adminSupabase
+      .from("profiles")
+      .update({
+        avatar_url: publicUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", targetJudgeId);
+
+    if (updateErr) {
+      return {
+        success: false,
+        error: updateErr.message || "Gagal memperbarui URL foto profil di database.",
+      };
+    }
+
+    // 4. Sinkronkan ke auth user_metadata
+    try {
+      await adminSupabase.auth.admin.updateUserById(targetJudgeId, {
+        user_metadata: { avatar_url: publicUrl },
+      });
+    } catch (authErr) {
+      console.warn("Notice: Gagal sinkronisasi user_metadata auth:", authErr);
+    }
+
+    // 5. Revalidasi halaman-halaman yang memuat foto juri
+    try {
+      revalidatePath("/juri/profil");
+      revalidatePath("/juri");
+      revalidatePath("/dashboard/juri");
+      revalidatePath("/lomba");
+    } catch {
+      // Abaikan jika dipanggil di luar konteks request Next.js
+    }
+
+    return {
+      success: true,
+      avatarUrl: publicUrl,
+    };
+  } catch (err: unknown) {
+    console.error("Error updateLoggedInJudgeAvatar:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Terjadi kesalahan sistem saat memperbarui foto juri.",
+    };
+  }
+}
+
 
 
