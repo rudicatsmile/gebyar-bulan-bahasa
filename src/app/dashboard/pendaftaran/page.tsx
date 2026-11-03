@@ -601,8 +601,8 @@ export default function DashboardPendaftaranPage() {
                   ? "-- Memuat daftar instansi... --"
                   : "-- Pilih Asal Sekolah / Universitas / Sanggar --"}
               </option>
-              {institutions.map((inst) => (
-                <option key={inst.id} value={inst.name}>
+              {institutions.map((inst, idx) => (
+                <option key={inst.id || `inst-${inst.name || idx}`} value={inst.name}>
                   {inst.name}
                 </option>
               ))}
@@ -692,8 +692,8 @@ export default function DashboardPendaftaranPage() {
                           ? "-- Memuat daftar instansi... --"
                           : "-- Sama dengan Ketua / Pilih Instansi --"}
                       </option>
-                      {institutions.map((inst) => (
-                        <option key={inst.id} value={inst.name}>
+                      {institutions.map((inst, idx) => (
+                        <option key={inst.id || `inst-${inst.name || idx}`} value={inst.name}>
                           {inst.name}
                         </option>
                       ))}
@@ -808,8 +808,8 @@ export default function DashboardPendaftaranPage() {
               {editInstitution && !institutions.some((inst) => inst.name === editInstitution) && (
                 <option value={editInstitution}>{editInstitution}</option>
               )}
-              {institutions.map((inst) => (
-                <option key={inst.id} value={inst.name}>
+              {institutions.map((inst, idx) => (
+                <option key={inst.id || `inst-${inst.name || idx}`} value={inst.name}>
                   {inst.name}
                 </option>
               ))}

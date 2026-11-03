@@ -28,6 +28,36 @@ const DEFAULT_INSTITUTIONS: InstitutionItem[] = [
 
 const SETTINGS_KEY = "master_institutions";
 
+/**
+ * Memastikan setiap data instansi memiliki struktur yang valid, terutama `id` unik non-empty,
+ * nama, kategori, status aktif, dan urutan tampilan.
+ */
+function normalizeInstitutions(rawItems: unknown): InstitutionItem[] {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    return DEFAULT_INSTITUTIONS;
+  }
+
+  const seenIds = new Set<string>();
+
+  return rawItems.map((item: any, index: number) => {
+    let id = typeof item?.id === "string" && item.id.trim() ? item.id.trim() : `inst-${index + 1}`;
+    if (seenIds.has(id)) {
+      id = `${id}-${index + 1}`;
+    }
+    seenIds.add(id);
+
+    return {
+      id,
+      name: typeof item?.name === "string" && item.name.trim() ? item.name.trim() : `Instansi #${index + 1}`,
+      category: ["sekolah", "kampus", "instansi", "umum"].includes(item?.category)
+        ? item.category
+        : "sekolah",
+      isActive: item?.isActive !== false,
+      sortOrder: typeof item?.sortOrder === "number" ? item.sortOrder : index + 1,
+    };
+  });
+}
+
 const InstitutionInputSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(2, "Nama sekolah/kampus/instansi minimal 2 karakter"),
@@ -59,7 +89,7 @@ export async function getActiveInstitutions(): Promise<{
     let items: InstitutionItem[] = DEFAULT_INSTITUTIONS;
 
     if (data?.value && Array.isArray(data.value) && data.value.length > 0) {
-      items = (data.value as unknown) as InstitutionItem[];
+      items = normalizeInstitutions(data.value);
     } else {
       // Inisialisasi otomatis data awal jika belum ada di database
       await supabase.from("event_settings").upsert({
@@ -105,7 +135,7 @@ export async function getAdminInstitutions(): Promise<{
     let items: InstitutionItem[] = DEFAULT_INSTITUTIONS;
 
     if (data?.value && Array.isArray(data.value) && data.value.length > 0) {
-      items = (data.value as unknown) as InstitutionItem[];
+      items = normalizeInstitutions(data.value);
     } else {
       await supabase.from("event_settings").upsert({
         key: SETTINGS_KEY,
@@ -145,7 +175,7 @@ export async function upsertInstitution(data: InstitutionInput) {
       .eq("key", SETTINGS_KEY)
       .maybeSingle();
 
-    let items: InstitutionItem[] = (existingData?.value as unknown as InstitutionItem[]) || DEFAULT_INSTITUTIONS;
+    let items: InstitutionItem[] = normalizeInstitutions(existingData?.value);
 
     if (parsed.data.id) {
       // Edit existing
@@ -215,7 +245,7 @@ export async function toggleInstitutionStatus(id: string, isActive: boolean) {
       .eq("key", SETTINGS_KEY)
       .maybeSingle();
 
-    let items: InstitutionItem[] = (existingData?.value as unknown as InstitutionItem[]) || DEFAULT_INSTITUTIONS;
+    let items: InstitutionItem[] = normalizeInstitutions(existingData?.value);
 
     items = items.map((item) => (item.id === id ? { ...item, isActive } : item));
 
@@ -251,7 +281,7 @@ export async function deleteInstitution(id: string) {
       .eq("key", SETTINGS_KEY)
       .maybeSingle();
 
-    let items: InstitutionItem[] = (existingData?.value as unknown as InstitutionItem[]) || DEFAULT_INSTITUTIONS;
+    let items: InstitutionItem[] = normalizeInstitutions(existingData?.value);
 
     items = items.filter((item) => item.id !== id);
 

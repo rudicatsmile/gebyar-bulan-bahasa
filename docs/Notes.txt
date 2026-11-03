@@ -8,6 +8,32 @@ Supabase :
 
 
 Akun :
+	Super Admin:
+
+		Email: admin@admin.com
+		Password: Yalwash9.org
+		Role: super_admin
+
+	Seksi Acara:
+
+		Email: sie_acara@gmail.com
+		Password: rahasia123
+		Role: seksi_acara
+
+	Dewan Juri:
+
+		rudi.catsmile2@gmail.com (rahasia123) — Juri Monolog, Pidato, Membaca Puisi
+		8 Juri Resmi (mulyana@gebyarbulanbahasa.id, anisa.rizky@gebyarbulanbahasa.id, restu.nurcahyani@gebyarbulanbahasa.id, ngatmin@gebyarbulanbahasa.id, rudi.kurniawan@gebyarbulanbahasa.id, endang.ekowati@gebyarbulanbahasa.id, sofyan.jamaludin@gebyarbulanbahasa.id, roihan.kamil@gebyarbulanbahasa.id) dengan password rahasia123.
+
+	Peserta (rudi1 s.d. rudi7):
+
+		Email: rudi1@gmail.com hingga rudi7@gmail.com (rahasia123)
+		Terdaftar lengkap di cabang lomba Pidato (Duta Bahasa), Membaca Puisi, dan Teater.
+
+
+
+
+Akun :
 	admin@admin.com 			: Yalwash9.org   	[Super admin]
 	sie_acara@gmail.com 		: rahasia123		[Seksi Acara]
 	rudi.catsmile2@gmail.com 	: rahasia123		[Juri]

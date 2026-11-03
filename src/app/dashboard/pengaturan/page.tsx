@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,8 +22,9 @@ import {
   getChallengeParticipationSettings,
   saveChallengeParticipationSettings,
 } from "@/app/actions/challenge-eligibility";
-import { parseDateInWib } from "@/lib/utils";
+import { cn, parseDateInWib } from "@/lib/utils";
 import { getCompetitions, type Competition } from "@/lib/supabase/queries";
+import { createClient } from "@/lib/supabase/client";
 import {
   Settings,
   Save,
@@ -41,6 +43,9 @@ import {
   ShieldCheck,
   MessageSquareText,
   Sparkles,
+  Database,
+  ShieldAlert,
+  ArrowRight,
 } from "lucide-react";
 
 export default function DashboardPengaturanPage() {
@@ -96,6 +101,7 @@ export default function DashboardPengaturanPage() {
 
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [currentUserRole, setCurrentUserRole] = React.useState<string | null>(null);
   // Penanda sudah ter-hydrate di client. Menjamin render pertama di client
   // identik dengan HTML dari server sehingga menghindari hydration mismatch
   // pada atribut seperti `disabled` yang bergantung state loading.
@@ -240,6 +246,20 @@ export default function DashboardPengaturanPage() {
 
   React.useEffect(() => {
     setMounted(true);
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.role) {
+            setCurrentUserRole(data.role);
+          }
+        });
+    });
   }, []);
 
   React.useEffect(() => {
@@ -489,6 +509,56 @@ export default function DashboardPengaturanPage() {
             <span className="font-medium">{feedback.message}</span>
           </div>
         )}
+
+        {/* Navigasi Cepat Pemeliharaan Sistem & Backup */}
+        <div
+          className={cn(
+            "grid gap-3",
+            currentUserRole === "super_admin" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"
+          )}
+        >
+          {currentUserRole === "super_admin" && (
+            <Link
+              href="/dashboard/pengaturan/backup-restore"
+              className="p-3.5 rounded-xl border border-border bg-card hover:border-accent/60 hover:bg-muted/30 transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                  <Database className="h-5 w-5" />
+                </div>
+                <div>
+                  <strong className="text-xs font-bold text-foreground block group-hover:text-accent transition-colors">
+                    Backup & Restore Data Acara
+                  </strong>
+                  <span className="text-[11px] text-muted-foreground">
+                    Ekspor arsip database atau pulihkan data dari berkas backup JSON
+                  </span>
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
+            </Link>
+          )}
+
+          <Link
+            href="/dashboard/pengaturan/reset-data"
+            className="p-3.5 rounded-xl border border-border bg-card hover:border-destructive/60 hover:bg-muted/30 transition-all flex items-center justify-between group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
+                <ShieldAlert className="h-5 w-5" />
+              </div>
+              <div>
+                <strong className="text-xs font-bold text-foreground block group-hover:text-destructive transition-colors">
+                  Reset Data Acara (Hari H)
+                </strong>
+                <span className="text-[11px] text-muted-foreground">
+                  Bersihkan data simulasi / uji coba sebelum hari pelaksanaan
+                </span>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-destructive group-hover:translate-x-0.5 transition-all" />
+          </Link>
+        </div>
 
         <Card className="p-6 sm:p-8">
           {!mounted || isLoading ? (

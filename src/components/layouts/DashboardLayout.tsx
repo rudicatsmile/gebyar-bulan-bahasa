@@ -45,6 +45,7 @@ import {
   MoreHorizontal,
   ShieldAlert,
   Puzzle,
+  Database,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -92,6 +93,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Template Twibbon", href: "/dashboard/twibbon/template", icon: LayoutTemplate },
   { title: "Kelola Pengguna", href: "/dashboard/pengguna", icon: Users },
   { title: "Pengaturan Acara", href: "/dashboard/pengaturan", icon: Settings },
+  { title: "Backup & Restore", href: "/dashboard/pengaturan/backup-restore", icon: Database },
   { title: "Reset Data Acara", href: "/dashboard/pengaturan/reset-data", icon: ShieldAlert },
 ];
 
@@ -139,6 +141,25 @@ export function DashboardLayout({
   const [pendingVerificationCount, setPendingVerificationCount] = React.useState<number | null>(null);
   const [pendingChallengeProofCount, setPendingChallengeProofCount] = React.useState<number | null>(null);
   const [pendingTwibbonCount, setPendingTwibbonCount] = React.useState<number | null>(null);
+  const [currentUserRole, setCurrentUserRole] = React.useState<string | null>(null);
+
+  // Ambil data role spesifik pengguna yang sedang login (membedakan super_admin dari seksi_acara)
+  React.useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.role) {
+            setCurrentUserRole(data.role);
+          }
+        });
+    });
+  }, []);
 
   // ---------- Realtime badge counts from Supabase database ----------
   const fetchBadgeCounts = React.useCallback(() => {
@@ -275,7 +296,15 @@ export function DashboardLayout({
             ? MEDIA_NAV
             : PESERTA_NAV;
 
-    return rawItems.map((item) => {
+    // Filter menu: Menu 'Backup & Restore' hanya boleh diberikan untuk user role 'super admin'
+    const authorizedItems = rawItems.filter((item) => {
+      if (item.href === "/dashboard/pengaturan/backup-restore") {
+        return currentUserRole === "super_admin";
+      }
+      return true;
+    });
+
+    return authorizedItems.map((item) => {
       // 1. Verifikasi Berkas Peserta (/dashboard/peserta/verifikasi)
       if (item.href === "/dashboard/peserta/verifikasi") {
         return {
@@ -308,7 +337,7 @@ export function DashboardLayout({
       }
       return item;
     });
-  }, [role, pendingVerificationCount, pendingChallengeProofCount, pendingTwibbonCount]);
+  }, [role, currentUserRole, pendingVerificationCount, pendingChallengeProofCount, pendingTwibbonCount]);
 
   // Priority navigation items for mobile bottom bar per role
   const mobileNavConfig = React.useMemo(() => {

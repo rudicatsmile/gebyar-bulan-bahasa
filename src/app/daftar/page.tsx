@@ -175,8 +175,8 @@ function DaftarForm() {
               ? "-- Memuat daftar instansi... --"
               : "-- Pilih Asal Sekolah / Kampus / Instansi --"}
           </option>
-          {institutions.map((inst) => (
-            <option key={inst.id} value={inst.name}>
+          {institutions.map((inst, idx) => (
+            <option key={inst.id || `inst-${inst.name || idx}`} value={inst.name}>
               {inst.name}
             </option>
           ))}

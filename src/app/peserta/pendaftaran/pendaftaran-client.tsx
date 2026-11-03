@@ -863,8 +863,8 @@ export function PesertaPendaftaranClient() {
                             ? "-- Memuat daftar instansi... --"
                             : "-- Pilih Asal Sekolah / Kampus / Instansi --"}
                         </option>
-                        {institutions.map((inst) => (
-                          <option key={inst.id} value={inst.name}>
+                        {institutions.map((inst, instIdx) => (
+                          <option key={inst.id || `inst-${inst.name || instIdx}`} value={inst.name}>
                             {inst.name}
                           </option>
                         ))}

@@ -336,8 +336,8 @@ export default function AdminInstansiPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredInstitutions.map((item) => (
-                      <TableRow key={item.id}>
+                    filteredInstitutions.map((item, index) => (
+                      <TableRow key={item.id || `inst-row-${item.name || index}`}>
                         <TableCell className="text-center font-mono text-xs text-muted-foreground">
                           #{item.sortOrder || 0}
                         </TableCell>
@@ -412,8 +412,8 @@ export default function AdminInstansiPage() {
                   Tidak ada data instansi yang sesuai.
                 </Card>
               ) : (
-                filteredInstitutions.map((item) => (
-                  <Card key={item.id} className="p-4 space-y-3 border-border bg-card">
+                filteredInstitutions.map((item, index) => (
+                  <Card key={item.id || `inst-card-${item.name || index}`} className="p-4 space-y-3 border-border bg-card">
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1">
                         <div className="flex items-center gap-1.5">
