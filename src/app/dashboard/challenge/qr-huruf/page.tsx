@@ -47,6 +47,7 @@ import { QRLetterCard } from "@/components/qrcode/QRLetterCard";
 import {
   getAdminQrChallenges,
   createQrChallenge,
+  updateQrChallenge,
   toggleQrChallengeActive,
   deleteQrChallenge,
   updateQrLetterLocations,
@@ -55,6 +56,11 @@ import {
   type QrLetterCode,
   type QrSubmissionItem,
 } from "@/app/actions/qr-huruf";
+import {
+  getChallengePeriodInfo,
+  toDatetimeLocalValue,
+  fromDatetimeLocalValue,
+} from "@/lib/challenge-period";
 import { cn } from "@/lib/utils";
 
 export default function DashboardQrHurufPage() {
@@ -70,7 +76,18 @@ export default function DashboardQrHurufPage() {
   const [formDescription, setFormDescription] = React.useState("");
   const [formTargetPhrase, setFormTargetPhrase] = React.useState("");
   const [formPoints, setFormPoints] = React.useState("100");
+  const [formStartAt, setFormStartAt] = React.useState("");
+  const [formEndAt, setFormEndAt] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+
+  // Edit Challenge Modal
+  const [editChalOpen, setEditChalOpen] = React.useState(false);
+  const [editTitle, setEditTitle] = React.useState("");
+  const [editDesc, setEditDesc] = React.useState("");
+  const [editPoints, setEditPoints] = React.useState("100");
+  const [editStartAt, setEditStartAt] = React.useState("");
+  const [editEndAt, setEditEndAt] = React.useState("");
+  const [savingEdit, setSavingEdit] = React.useState(false);
 
   // Single QR Preview Modal
   const [previewCode, setPreviewCode] = React.useState<QrLetterCode | null>(null);
@@ -108,6 +125,15 @@ export default function DashboardQrHurufPage() {
   const activeChallenge =
     challenges.find((c) => c.id === selectedChallengeId) || challenges[0];
 
+  const activePeriodInfo = React.useMemo(() => {
+    if (!activeChallenge) return null;
+    return getChallengePeriodInfo(
+      activeChallenge.startAt,
+      activeChallenge.endAt,
+      activeChallenge.isActive
+    );
+  }, [activeChallenge]);
+
   const handleCopy = (token: string) => {
     if (typeof window !== "undefined") {
       navigator.clipboard.writeText(token);
@@ -128,6 +154,8 @@ export default function DashboardQrHurufPage() {
         targetPhrase: formTargetPhrase.trim(),
         pointsReward: parseInt(formPoints) || 100,
         isActive: true,
+        startAt: fromDatetimeLocalValue(formStartAt),
+        endAt: fromDatetimeLocalValue(formEndAt),
       });
 
       if (res.success && res.challengeId) {
@@ -136,6 +164,8 @@ export default function DashboardQrHurufPage() {
         setFormDescription("");
         setFormTargetPhrase("");
         setFormPoints("100");
+        setFormStartAt("");
+        setFormEndAt("");
         await loadData();
         setSelectedChallengeId(res.challengeId);
       } else {
@@ -143,6 +173,32 @@ export default function DashboardQrHurufPage() {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChallenge) return;
+
+    setSavingEdit(true);
+    try {
+      const res = await updateQrChallenge({
+        id: activeChallenge.id,
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+        pointsReward: parseInt(editPoints) || 100,
+        startAt: fromDatetimeLocalValue(editStartAt),
+        endAt: fromDatetimeLocalValue(editEndAt),
+      });
+
+      if (res.success) {
+        setEditChalOpen(false);
+        await loadData();
+      } else {
+        alert(res.error || "Gagal memperbarui tantangan.");
+      }
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -222,9 +278,16 @@ export default function DashboardQrHurufPage() {
                 <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
                   Tantangan Aktif
                 </span>
-                <Badge variant={activeChallenge.isActive ? "success" : "default"}>
-                  {activeChallenge.isActive ? "AKTIF" : "NONAKTIF"}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  {activePeriodInfo && (
+                    <Badge variant={activePeriodInfo.badgeVariant} className="text-[10px]">
+                      {activePeriodInfo.label}
+                    </Badge>
+                  )}
+                  <Badge variant={activeChallenge.isActive ? "success" : "default"}>
+                    {activeChallenge.isActive ? "AKTIF" : "NONAKTIF"}
+                  </Badge>
+                </div>
               </div>
 
               {challenges.length > 1 ? (
@@ -248,6 +311,26 @@ export default function DashboardQrHurufPage() {
               <p className="text-xs text-muted-foreground line-clamp-2">
                 {activeChallenge.description || "Tidak ada deskripsi."}
               </p>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/50 text-[11px] text-muted-foreground">
+                <span className="truncate">{activePeriodInfo?.detailText}</span>
+                <Button
+                  onClick={() => {
+                    setEditTitle(activeChallenge.title);
+                    setEditDesc(activeChallenge.description || "");
+                    setEditPoints(activeChallenge.pointsReward.toString());
+                    setEditStartAt(toDatetimeLocalValue(activeChallenge.startAt));
+                    setEditEndAt(toDatetimeLocalValue(activeChallenge.endAt));
+                    setEditChalOpen(true);
+                  }}
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1 cursor-pointer shrink-0"
+                >
+                  <Edit className="h-3 w-3" />
+                  <span>Atur Periode & Info</span>
+                </Button>
+              </div>
             </Card>
 
             <Card className="p-4 space-y-1">
@@ -582,6 +665,23 @@ export default function DashboardQrHurufPage() {
               required
             />
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-border/50">
+              <Input
+                label="Tanggal & Waktu Mulai (WIB)"
+                type="datetime-local"
+                value={formStartAt}
+                onChange={(e) => setFormStartAt(e.target.value)}
+                helperText="Kosongkan jika langsung bisa diakses."
+              />
+              <Input
+                label="Tanggal & Waktu Berakhir (WIB)"
+                type="datetime-local"
+                value={formEndAt}
+                onChange={(e) => setFormEndAt(e.target.value)}
+                helperText="Kosongkan jika tanpa batas waktu."
+              />
+            </div>
+
             <DialogFooter>
               <Button
                 type="button"
@@ -599,6 +699,78 @@ export default function DashboardQrHurufPage() {
                   </>
                 ) : (
                   <span>Generate QR ({cleanPhraseLetters.length} Huruf)</span>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Dialog>
+
+        {/* DIALOG: EDIT CHALLENGE & PERIOD */}
+        <Dialog open={editChalOpen} onOpenChange={setEditChalOpen}>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Ubah Periode & Pengaturan Tantangan</DialogTitle>
+              <DialogDescription>
+                Atur jadwal mulai dan penutupan akses perburuan huruf QR untuk peserta.
+              </DialogDescription>
+            </DialogHeader>
+
+            <Input
+              label="Judul Tantangan *"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              required
+            />
+
+            <Textarea
+              label="Petunjuk / Instruksi untuk Peserta"
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              rows={2}
+            />
+
+            <Input
+              label="Poin Hadiah *"
+              type="number"
+              value={editPoints}
+              onChange={(e) => setEditPoints(e.target.value)}
+              required
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-border/50">
+              <Input
+                label="Tanggal & Waktu Mulai (WIB)"
+                type="datetime-local"
+                value={editStartAt}
+                onChange={(e) => setEditStartAt(e.target.value)}
+                helperText="Kosongkan jika langsung dibuka."
+              />
+              <Input
+                label="Tanggal & Waktu Berakhir (WIB)"
+                type="datetime-local"
+                value={editEndAt}
+                onChange={(e) => setEditEndAt(e.target.value)}
+                helperText="Kosongkan jika tanpa batas penutupan."
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditChalOpen(false)}
+                disabled={savingEdit}
+              >
+                Batal
+              </Button>
+              <Button type="submit" disabled={savingEdit}>
+                {savingEdit ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <span>Simpan Perubahan</span>
                 )}
               </Button>
             </DialogFooter>

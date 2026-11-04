@@ -31,6 +31,11 @@ import {
   type AdminChallengeItem,
 } from "@/app/actions/challenges";
 import {
+  getChallengePeriodInfo,
+  toDatetimeLocalValue,
+  fromDatetimeLocalValue,
+} from "@/lib/challenge-period";
+import {
   Sparkles,
   Plus,
   Store,
@@ -150,6 +155,8 @@ export default function DashboardChallengePage() {
   const [pointReward, setPointReward] = React.useState("25");
   const [badge, setBadge] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
+  const [startAt, setStartAt] = React.useState("");
+  const [endAt, setEndAt] = React.useState("");
 
   // Load challenges from database
   const loadChallenges = React.useCallback(async () => {
@@ -183,6 +190,8 @@ export default function DashboardChallengePage() {
     setPointReward("25");
     setBadge("Peserta Aktif");
     setIsActive(true);
+    setStartAt(toDatetimeLocalValue(new Date().toISOString()));
+    setEndAt("");
     setDialogOpen(true);
   };
 
@@ -196,6 +205,8 @@ export default function DashboardChallengePage() {
     setPointReward(String(ch.pointReward));
     setBadge(ch.badge);
     setIsActive(ch.isActive);
+    setStartAt(toDatetimeLocalValue(ch.startAt));
+    setEndAt(toDatetimeLocalValue(ch.endAt));
     setDialogOpen(true);
   };
 
@@ -220,6 +231,8 @@ export default function DashboardChallengePage() {
         pointReward: parseInt(pointReward) || 25,
         badge: badge || "Peserta Aktif",
         isActive,
+        startAt: fromDatetimeLocalValue(startAt),
+        endAt: fromDatetimeLocalValue(endAt),
       });
 
       if (res.success) {
@@ -479,7 +492,23 @@ export default function DashboardChallengePage() {
                     <Badge variant="default" className="text-[10px]">{ch.type.replace(/_/g, " ").toUpperCase()}</Badge>
                     <span className="font-mono font-bold text-accent">+{ch.pointReward} Pts</span>
                     <Badge variant="gold" className="text-[10px]">{ch.badge}</Badge>
+                    {(() => {
+                      const p = getChallengePeriodInfo(ch.startAt, ch.endAt, ch.isActive);
+                      return (
+                        <Badge variant={p.badgeVariant} className="text-[10px]">
+                          {p.label}
+                        </Badge>
+                      );
+                    })()}
                   </div>
+                  {(() => {
+                    const p = getChallengePeriodInfo(ch.startAt, ch.endAt, ch.isActive);
+                    return (
+                      <p className="text-[10px] text-muted-foreground">
+                        {p.detailText}
+                      </p>
+                    );
+                  })()}
                   <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1">
                     {ch.slug === "keliling-8-stand" && (
                       <Link href="/dashboard/challenge/stand">
@@ -512,6 +541,7 @@ export default function DashboardChallengePage() {
                   <TableHead>Tipe Misi</TableHead>
                   <TableHead className="text-center">Hadiah Poin</TableHead>
                   <TableHead className="text-center">Lencana Kehormatan</TableHead>
+                  <TableHead className="text-center">Periode Akses</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
@@ -519,14 +549,14 @@ export default function DashboardChallengePage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-accent" />
                       <span className="text-xs">Memuat data challenge dari database...</span>
                     </TableCell>
                   </TableRow>
                 ) : challenges.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <Sparkles className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
                       <span className="text-sm font-semibold block text-foreground">
                         Belum Ada Challenge Terdaftar di Database
@@ -559,6 +589,21 @@ export default function DashboardChallengePage() {
                         <Badge variant="gold" className="text-[10px]">
                           {ch.badge}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {(() => {
+                          const p = getChallengePeriodInfo(ch.startAt, ch.endAt, ch.isActive);
+                          return (
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge variant={p.badgeVariant} className="text-[10px]">
+                                {p.label}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                {p.detailText}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-center">
                         <button
@@ -705,6 +750,36 @@ export default function DashboardChallengePage() {
                   <option value="nonaktif">Nonaktif (Disembunyikan)</option>
                 </select>
               </div>
+            </div>
+
+            {/* Pengaturan Periode Tanggal Mulai & Tanggal Akhir */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-3 text-left">
+              <div className="flex items-center gap-2">
+                <Badge variant="gold" className="text-[10px]">
+                  JADWAL AKSES MISI
+                </Badge>
+                <span className="text-xs font-bold text-foreground">
+                  Periode Pengerjaan Peserta
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Tanggal & Jam Mulai (WIB) *"
+                  type="datetime-local"
+                  value={startAt}
+                  onChange={(e) => setStartAt(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Tanggal & Jam Selesai (WIB) (Opsional)"
+                  type="datetime-local"
+                  value={endAt}
+                  onChange={(e) => setEndAt(e.target.value)}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Di luar rentang waktu ini, peserta tidak dapat mengerjakan misi (status otomatis menjadi <em>Belum Dibuka</em> atau <em>Sudah Ditutup</em>). Kosongkan tanggal selesai jika misi berlaku tanpa batas akhir.
+              </p>
             </div>
 
             <DialogFooter>

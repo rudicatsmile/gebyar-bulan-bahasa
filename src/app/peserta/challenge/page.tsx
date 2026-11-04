@@ -9,16 +9,20 @@ import {
   getParticipantChallenges,
   type ParticipantChallengeItem,
 } from "@/app/actions/challenges";
-import { checkParticipantPuzzleAttempt } from "@/app/actions/puzzle";
+import { checkParticipantPuzzleAttempt, getPuzzleConfig } from "@/app/actions/puzzle";
 import { checkParticipantTwibbonStatus } from "@/app/actions/twibbon";
 import {
   getActiveJigsawPuzzle,
   getParticipantJigsawStatus,
 } from "@/app/actions/kepingan-puzzle";
-import { checkParticipantQrHurufStatus } from "@/app/actions/qr-huruf";
+import {
+  checkParticipantQrHurufStatus,
+  getActiveQrChallenge,
+} from "@/app/actions/qr-huruf";
 import { getParticipantStandProgress } from "@/app/actions/stand-rewards";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
+import { getChallengePeriodInfo } from "@/lib/challenge-period";
 import { Badge } from "@/components/ui/badge";
 import {
   Sparkles,
@@ -122,11 +126,22 @@ export default function PesertaChallengeListPage() {
     hasCompleted: boolean;
     points: number;
     title: string;
+    startAt?: string | null;
+    endAt?: string | null;
   } | null>(null);
   const [qrHurufStatus, setQrHurufStatus] = React.useState<{
     hasCompleted: boolean;
     score?: number;
     submittedPhrase?: string;
+  } | null>(null);
+  const [qrChallengeInfo, setQrChallengeInfo] = React.useState<{
+    id: string;
+    startAt?: string | null;
+    endAt?: string | null;
+  } | null>(null);
+  const [puzzlePeriodConfig, setPuzzlePeriodConfig] = React.useState<{
+    startAt?: string | null;
+    endAt?: string | null;
   } | null>(null);
   const [standStatus, setStandStatus] = React.useState<{
     allCompleted: boolean;
@@ -178,6 +193,8 @@ export default function PesertaChallengeListPage() {
               hasCompleted: status.hasCompleted,
               points: status.attempt?.score ?? pz.pointsReward,
               title: pz.title,
+              startAt: pz.startAt,
+              endAt: pz.endAt,
             });
           });
         } else {
@@ -186,10 +203,33 @@ export default function PesertaChallengeListPage() {
             hasCompleted: false,
             points: pz.pointsReward,
             title: pz.title,
+            startAt: pz.startAt,
+            endAt: pz.endAt,
           });
         }
       } else {
         setJigsawStatus(null);
+      }
+    });
+
+    // Ambil info challenge QR Huruf (termasuk periode)
+    getActiveQrChallenge().then((res) => {
+      if (res.success && res.challenge) {
+        setQrChallengeInfo({
+          id: res.challenge.id,
+          startAt: res.challenge.startAt,
+          endAt: res.challenge.endAt,
+        });
+      }
+    });
+
+    // Ambil info periode Puzzle Baju Daerah
+    getPuzzleConfig().then((res) => {
+      if (res.success) {
+        setPuzzlePeriodConfig({
+          startAt: res.startAt,
+          endAt: res.endAt,
+        });
       }
     });
 
@@ -417,76 +457,150 @@ export default function PesertaChallengeListPage() {
                   ) : null
                 }
               />
-              {jigsawStatus?.isActive && (
-                <ChallengeItem
-                  title={`Game Kepingan Puzzle: ${jigsawStatus.title}`}
-                  meta={
-                    isChallengeBlocked
-                      ? "Terkunci: Permainan kepingan puzzle hanya untuk peserta non-lomba"
-                      : jigsawStatus.hasCompleted
-                      ? `Perolehan Skor: +${jigsawStatus.points} Poin (Puzzle Selesai)`
-                      : `+${jigsawStatus.points} poin saat seluruh kepingan tersusun`
-                  }
-                  href={isChallengeBlocked ? null : "/peserta/challenge/kepingan-puzzle"}
-                  actionLabel={
-                    isChallengeBlocked
-                      ? "Terkunci (Peserta Lomba)"
-                      : jigsawStatus.hasCompleted
-                      ? "Lihat Hasil Mahakarya"
-                      : "Mulai Susun Kepingan"
-                  }
-                  icon={jigsawStatus.hasCompleted ? CheckCircle2 : Puzzle}
-                  variant={jigsawStatus.hasCompleted ? "outline" : "accent"}
-                  disabled={isChallengeBlocked}
-                  badge={
-                    isChallengeBlocked ? (
-                      <Badge variant="danger" className="shrink-0 text-[10px]">
-                        Khusus Non-Lomba
-                      </Badge>
-                    ) : jigsawStatus.hasCompleted ? (
-                      <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
-                        Sudah Selesai
-                      </Badge>
-                    ) : (
-                      <Badge variant="gold" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
-                        Game Unggulan
-                      </Badge>
-                    )
-                  }
-                />
-              )}
-              <ChallengeItem
-                title="Misi QR Huruf: Jelajah Aksara & Susun Kata"
-                meta={
-                  isChallengeBlocked
-                    ? "Terkunci: Misi berburu huruf aksara hanya untuk peserta non-lomba"
-                    : qrHurufStatus?.hasCompleted
-                    ? `Perolehan Skor: +${qrHurufStatus.score ?? 100} Poin (Kalimat Berhasil Tersusun)`
-                    : "+100 poin bila kalimat tersusun"
-                }
-                href={isChallengeBlocked ? null : "/peserta/challenge/qr-huruf"}
-                actionLabel={
-                  isChallengeBlocked
-                    ? "Terkunci (Peserta Lomba)"
-                    : qrHurufStatus?.hasCompleted
-                    ? "Lihat Hasil Misi"
-                    : "Mulai Berburu QR"
-                }
-                icon={qrHurufStatus?.hasCompleted ? CheckCircle2 : QrCode}
-                variant={qrHurufStatus?.hasCompleted ? "outline" : "accent"}
-                disabled={isChallengeBlocked}
-                badge={
-                  isChallengeBlocked ? (
-                    <Badge variant="danger" className="shrink-0 text-[10px]">
-                      Khusus Non-Lomba
-                    </Badge>
-                  ) : qrHurufStatus?.hasCompleted ? (
-                    <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
-                      Sudah Selesai
-                    </Badge>
-                  ) : null
-                }
-              />
+              {jigsawStatus?.isActive && (() => {
+                const period = getChallengePeriodInfo(jigsawStatus.startAt, jigsawStatus.endAt, jigsawStatus.isActive);
+                const isPlayable = period.isPlayable;
+                return (
+                  <ChallengeItem
+                    title={`Game Kepingan Puzzle: ${jigsawStatus.title}`}
+                    meta={
+                      isChallengeBlocked
+                        ? "Terkunci: Permainan kepingan puzzle hanya untuk peserta non-lomba"
+                        : jigsawStatus.hasCompleted
+                        ? `Perolehan Skor: +${jigsawStatus.points} Poin (Puzzle Selesai)`
+                        : !isPlayable
+                        ? `${period.detailText} • +${jigsawStatus.points} poin saat kepingan tersusun`
+                        : `+${jigsawStatus.points} poin saat seluruh kepingan tersusun`
+                    }
+                    href={isChallengeBlocked || (!jigsawStatus.hasCompleted && !isPlayable) ? null : "/peserta/challenge/kepingan-puzzle"}
+                    actionLabel={
+                      isChallengeBlocked
+                        ? "Terkunci (Peserta Lomba)"
+                        : jigsawStatus.hasCompleted
+                        ? "Lihat Hasil Mahakarya"
+                        : !isPlayable
+                        ? period.label
+                        : "Mulai Susun Kepingan"
+                    }
+                    icon={jigsawStatus.hasCompleted ? CheckCircle2 : Puzzle}
+                    variant={jigsawStatus.hasCompleted ? "outline" : "accent"}
+                    disabled={isChallengeBlocked || (!jigsawStatus.hasCompleted && !isPlayable)}
+                    badge={
+                      isChallengeBlocked ? (
+                        <Badge variant="danger" className="shrink-0 text-[10px]">
+                          Khusus Non-Lomba
+                        </Badge>
+                      ) : jigsawStatus.hasCompleted ? (
+                        <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          Sudah Selesai
+                        </Badge>
+                      ) : !isPlayable ? (
+                        <Badge variant={period.badgeVariant} className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          {period.label}
+                        </Badge>
+                      ) : (
+                        <Badge variant="gold" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          Game Unggulan
+                        </Badge>
+                      )
+                    }
+                  />
+                );
+              })()}
+
+              {(() => {
+                const period = getChallengePeriodInfo(qrChallengeInfo?.startAt, qrChallengeInfo?.endAt, true);
+                const isPlayable = period.isPlayable;
+                return (
+                  <ChallengeItem
+                    title="Misi QR Huruf: Jelajah Aksara & Susun Kata"
+                    meta={
+                      isChallengeBlocked
+                        ? "Terkunci: Misi berburu huruf aksara hanya untuk peserta non-lomba"
+                        : qrHurufStatus?.hasCompleted
+                        ? `Perolehan Skor: +${qrHurufStatus.score ?? 100} Poin (Kalimat Berhasil Tersusun)`
+                        : !isPlayable
+                        ? `${period.detailText} • +100 poin bila kalimat tersusun`
+                        : "+100 poin bila kalimat tersusun"
+                    }
+                    href={isChallengeBlocked || (!qrHurufStatus?.hasCompleted && !isPlayable) ? null : "/peserta/challenge/qr-huruf"}
+                    actionLabel={
+                      isChallengeBlocked
+                        ? "Terkunci (Peserta Lomba)"
+                        : qrHurufStatus?.hasCompleted
+                        ? "Lihat Hasil Misi"
+                        : !isPlayable
+                        ? period.label
+                        : "Mulai Berburu QR"
+                    }
+                    icon={qrHurufStatus?.hasCompleted ? CheckCircle2 : QrCode}
+                    variant={qrHurufStatus?.hasCompleted ? "outline" : "accent"}
+                    disabled={isChallengeBlocked || (!qrHurufStatus?.hasCompleted && !isPlayable)}
+                    badge={
+                      isChallengeBlocked ? (
+                        <Badge variant="danger" className="shrink-0 text-[10px]">
+                          Khusus Non-Lomba
+                        </Badge>
+                      ) : qrHurufStatus?.hasCompleted ? (
+                        <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          Sudah Selesai
+                        </Badge>
+                      ) : !isPlayable ? (
+                        <Badge variant={period.badgeVariant} className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          {period.label}
+                        </Badge>
+                      ) : null
+                    }
+                  />
+                );
+              })()}
+
+              {(() => {
+                const period = getChallengePeriodInfo(puzzlePeriodConfig?.startAt, puzzlePeriodConfig?.endAt, true);
+                const isPlayable = period.isPlayable;
+                return (
+                  <ChallengeItem
+                    title="Game Puzzle: Baju Daerah Nusantara"
+                    meta={
+                      isChallengeBlocked
+                        ? "Terkunci: Game puzzle hanya untuk peserta non-lomba"
+                        : puzzleAttempt?.hasAttempted
+                        ? `Skor Penyelesaian: ${puzzleAttempt.score ?? 0} Poin`
+                        : !isPlayable
+                        ? `${period.detailText} • Tebak asal pakaian adat`
+                        : "Mencocokkan baju adat dengan daerah asalnya di nusantara"
+                    }
+                    href={isChallengeBlocked || (!puzzleAttempt?.hasAttempted && !isPlayable) ? null : "/peserta/challenge/puzzle"}
+                    actionLabel={
+                      isChallengeBlocked
+                        ? "Terkunci (Peserta Lomba)"
+                        : puzzleAttempt?.hasAttempted
+                        ? "Lihat Skor Percobaan"
+                        : !isPlayable
+                        ? period.label
+                        : "Mulai Bermain Puzzle"
+                    }
+                    icon={puzzleAttempt?.hasAttempted ? CheckCircle2 : Puzzle}
+                    variant={puzzleAttempt?.hasAttempted ? "outline" : "accent"}
+                    disabled={isChallengeBlocked || (!puzzleAttempt?.hasAttempted && !isPlayable)}
+                    badge={
+                      isChallengeBlocked ? (
+                        <Badge variant="danger" className="shrink-0 text-[10px]">
+                          Khusus Non-Lomba
+                        </Badge>
+                      ) : puzzleAttempt?.hasAttempted ? (
+                        <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          Sudah Selesai
+                        </Badge>
+                      ) : !isPlayable ? (
+                        <Badge variant={period.badgeVariant} className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          {period.label}
+                        </Badge>
+                      ) : null
+                    }
+                  />
+                );
+              })()}
 
               {challenges.map((ch) => {
                 // Jangan tampilkan duplikat jika tantangan Twibbon atau Scan QR sudah ada sebagai menu utama
@@ -496,18 +610,37 @@ export default function PesertaChallengeListPage() {
                 if (isDuplicate) return null;
 
                 const action = getChallengeAction(ch);
+                const period = getChallengePeriodInfo(ch.startAt, ch.endAt, true);
+                const isPlayable = period.isPlayable;
+
                 return (
                   <ChallengeItem
                     key={ch.id}
                     title={ch.title}
-                    meta={isChallengeBlocked ? "Terkunci untuk peserta lomba" : `+${ch.pointReward} poin`}
-                    href={isChallengeBlocked ? null : (action?.href ?? null)}
-                    actionLabel={isChallengeBlocked ? "Terkunci (Peserta Lomba)" : (action?.label ?? "Poin diisi panitia")}
-                    disabled={isChallengeBlocked}
+                    meta={
+                      isChallengeBlocked
+                        ? "Terkunci untuk peserta lomba"
+                        : !isPlayable
+                        ? `${period.detailText} • +${ch.pointReward} poin`
+                        : `+${ch.pointReward} poin`
+                    }
+                    href={isChallengeBlocked || !isPlayable ? null : (action?.href ?? null)}
+                    actionLabel={
+                      isChallengeBlocked
+                        ? "Terkunci (Peserta Lomba)"
+                        : !isPlayable
+                        ? period.label
+                        : (action?.label ?? "Poin diisi panitia")
+                    }
+                    disabled={isChallengeBlocked || !isPlayable}
                     badge={
                       isChallengeBlocked ? (
                         <Badge variant="danger" className="shrink-0 text-[10px]">
                           Khusus Non-Lomba
+                        </Badge>
+                      ) : !isPlayable ? (
+                        <Badge variant={period.badgeVariant} className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          {period.label}
                         </Badge>
                       ) : undefined
                     }

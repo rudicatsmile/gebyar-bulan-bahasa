@@ -37,6 +37,7 @@ import {
   type CollectedLetter,
 } from "@/app/actions/qr-huruf";
 import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
+import { getChallengePeriodInfo } from "@/lib/challenge-period";
 import { cn } from "@/lib/utils";
 import jsQR from "jsqr";
 
@@ -47,6 +48,8 @@ interface ActiveChallengeState {
   pointsReward: number;
   totalLetters: number;
   wordLengths: number[];
+  startAt?: string | null;
+  endAt?: string | null;
 }
 
 export default function PesertaQrHurufPage() {
@@ -83,6 +86,12 @@ export default function PesertaQrHurufPage() {
 
   // Challenge data
   const [challenge, setChallenge] = React.useState<ActiveChallengeState | null>(null);
+
+  const periodInfo = React.useMemo(() => {
+    if (!challenge) return null;
+    return getChallengePeriodInfo(challenge.startAt, challenge.endAt, true);
+  }, [challenge]);
+  const isPeriodClosed = periodInfo ? !periodInfo.isPlayable : false;
   const [collectedLetters, setCollectedLetters] = React.useState<CollectedLetter[]>([]);
   const [submissionsHistory, setSubmissionsHistory] = React.useState<
     Array<{
@@ -343,6 +352,13 @@ export default function PesertaQrHurufPage() {
         });
         return;
       }
+      if (isPeriodClosed) {
+        setModalFeedback({
+          status: "error",
+          message: periodInfo?.detailText || "Akses misi QR Huruf sedang ditutup.",
+        });
+        return;
+      }
       const cleanToken = extractToken(rawCode);
       if (!cleanToken) return;
 
@@ -528,6 +544,13 @@ export default function PesertaQrHurufPage() {
       });
       return;
     }
+    if (isPeriodClosed) {
+      setScanFeedback({
+        type: "error",
+        message: periodInfo?.detailText || "Akses misi QR Huruf sedang ditutup.",
+      });
+      return;
+    }
     const cleanToken = extractToken(inputToken);
     if (!cleanToken) return;
 
@@ -601,6 +624,10 @@ export default function PesertaQrHurufPage() {
   const handleSubmitPhrase = async () => {
     if (isChallengeBlocked) {
       alert("Partisipasi ditolak: Berdasarkan regulasi panitia, peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti challenge ini.");
+      return;
+    }
+    if (isPeriodClosed) {
+      alert(periodInfo?.detailText || "Akses misi QR Huruf sedang ditutup.");
       return;
     }
     if (isCompleted) {
@@ -723,6 +750,28 @@ export default function PesertaQrHurufPage() {
                     : "(Peserta Cabang Lomba)"}
                 </strong>{" "}
                 tidak diperkenankan mengikuti challenge/misi QR Huruf ini. Anda diprioritaskan fokus pada kompetisi cabang lomba Anda.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Banner Periode Akses QR Huruf */}
+        {periodInfo && !periodInfo.isPlayable && !isChallengeBlocked && (
+          <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="p-2 rounded-lg bg-warning/20 text-warning shrink-0 mt-0.5">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-heading text-sm sm:text-base font-bold text-foreground">
+                  Akses Misi QR Huruf {periodInfo.label}
+                </h2>
+                <Badge variant={periodInfo.badgeVariant} className="text-[10px]">
+                  {periodInfo.label}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {periodInfo.detailText}. Anda belum dapat memindai token QR atau mengirimkan jawaban susunan kata pada periode ini.
               </p>
             </div>
           </div>

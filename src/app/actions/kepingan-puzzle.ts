@@ -7,6 +7,7 @@ import path from "node:path";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
+import { validateChallengePeriod } from "@/lib/challenge-period";
 
 function safeRevalidate(path: string) {
   try {
@@ -29,6 +30,8 @@ export interface JigsawConfig {
   pointsReward: number;
   timeLimitSeconds: number; // 0 = tanpa batas
   isActive: boolean;
+  startAt: string | null;
+  endAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +61,8 @@ const DEFAULT_JIGSAW: JigsawConfig = {
   pointsReward: 100,
   timeLimitSeconds: 120,
   isActive: true,
+  startAt: new Date().toISOString(),
+  endAt: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -75,25 +80,36 @@ export async function getAdminJigsawConfigs(): Promise<{
 }> {
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("jigsaw_puzzles")
-      .select("*")
-      .order("updated_at", { ascending: false });
+    const [{ data, error }, { data: periodRows }] = await Promise.all([
+      supabase.from("jigsaw_puzzles").select("*").order("updated_at", { ascending: false }),
+      supabase.from("event_settings").select("key, value").like("key", "jigsaw_period_%"),
+    ]);
+
+    const periodMap = new Map<string, { startAt?: string | null; endAt?: string | null }>();
+    periodRows?.forEach((r: any) => {
+      const pId = r.key.replace("jigsaw_period_", "");
+      periodMap.set(pId, r.value as any);
+    });
 
     if (!error && data && data.length > 0) {
-      const configs: JigsawConfig[] = data.map((row) => ({
-        id: row.id,
-        title: row.title,
-        description: row.description || "",
-        imageUrl: row.image_url,
-        gridSize: row.grid_size || Math.round(Math.sqrt(row.pieces_count || 9)),
-        piecesCount: row.pieces_count || 9,
-        pointsReward: row.points_reward ?? 100,
-        timeLimitSeconds: row.time_limit_seconds ?? 120,
-        isActive: Boolean(row.is_active),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }));
+      const configs: JigsawConfig[] = data.map((row: any) => {
+        const periodSetting = periodMap.get(row.id);
+        return {
+          id: row.id,
+          title: row.title,
+          description: row.description || "",
+          imageUrl: row.image_url,
+          gridSize: row.grid_size || Math.round(Math.sqrt(row.pieces_count || 9)),
+          piecesCount: row.pieces_count || 9,
+          pointsReward: row.points_reward ?? 100,
+          timeLimitSeconds: row.time_limit_seconds ?? 120,
+          isActive: Boolean(row.is_active),
+          startAt: row.start_at || periodSetting?.startAt || row.created_at,
+          endAt: row.end_at || periodSetting?.endAt || null,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      });
       return { success: true, configs };
     }
 
@@ -122,6 +138,22 @@ export async function getActiveJigsawPuzzle(): Promise<{
       .maybeSingle();
 
     if (!error && data) {
+      const raw = data as any;
+      let startAt = raw.start_at || data.created_at;
+      let endAt = raw.end_at || null;
+
+      if (!raw.start_at && !raw.end_at) {
+        const { data: pSet } = await supabase
+          .from("event_settings")
+          .select("value")
+          .eq("key", `jigsaw_period_${data.id}`)
+          .maybeSingle();
+        if (pSet?.value) {
+          startAt = (pSet.value as any).startAt || startAt;
+          endAt = (pSet.value as any).endAt || endAt;
+        }
+      }
+
       const puzzle: JigsawConfig = {
         id: data.id,
         title: data.title,
@@ -132,6 +164,8 @@ export async function getActiveJigsawPuzzle(): Promise<{
         pointsReward: data.points_reward ?? 100,
         timeLimitSeconds: data.time_limit_seconds ?? 120,
         isActive: Boolean(data.is_active),
+        startAt: startAt || null,
+        endAt: endAt || null,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };
@@ -160,6 +194,8 @@ const SaveJigsawSchema = z.object({
   pointsReward: z.coerce.number().min(0, "Poin reward minimal 0"),
   timeLimitSeconds: z.coerce.number().min(0, "Batas waktu minimal 0 detik"),
   isActive: z.boolean().default(true),
+  startAt: z.string().nullable().optional(),
+  endAt: z.string().nullable().optional(),
 });
 
 export async function saveJigsawConfig(
@@ -174,7 +210,7 @@ export async function saveJigsawConfig(
     return { success: false, error: parsed.error.issues[0]?.message };
   }
 
-  const { id, title, description, imageUrl, piecesCount, pointsReward, timeLimitSeconds, isActive } =
+  const { id, title, description, imageUrl, piecesCount, pointsReward, timeLimitSeconds, isActive, startAt, endAt } =
     parsed.data;
   const gridSize = Math.round(Math.sqrt(piecesCount));
   const puzzleId = id || crypto.randomUUID();
@@ -182,7 +218,7 @@ export async function saveJigsawConfig(
 
   try {
     const supabase = createAdminClient();
-    const payload = {
+    const payload: any = {
       id: puzzleId,
       title: title.trim(),
       description: description ? description.trim() : null,
@@ -195,6 +231,7 @@ export async function saveJigsawConfig(
       updated_at: now,
     };
 
+    // Coba simpan ke database tabel jigsaw_puzzles
     const { data, error } = await supabase
       .from("jigsaw_puzzles")
       .upsert(payload)
@@ -203,6 +240,21 @@ export async function saveJigsawConfig(
 
     if (error) {
       console.warn("DB save jigsaw error, fallback in-memory:", error);
+    }
+
+    // Simpan pengaturan periode startAt & endAt ke event_settings agar konsisten & persisten
+    try {
+      await supabase.from("event_settings").upsert({
+        key: `jigsaw_period_${puzzleId}`,
+        value: {
+          startAt: startAt || now,
+          endAt: endAt || null,
+        } as any,
+        description: `Periode akses game kepingan puzzle ${title}`,
+        updated_at: now,
+      });
+    } catch (ePeriod) {
+      console.warn("Gagal simpan period puzzle ke event_settings:", ePeriod);
     }
 
     const savedConfig: JigsawConfig = {
@@ -215,6 +267,8 @@ export async function saveJigsawConfig(
       pointsReward,
       timeLimitSeconds,
       isActive,
+      startAt: startAt || now,
+      endAt: endAt || null,
       createdAt: data?.created_at || now,
       updatedAt: now,
     };
@@ -546,6 +600,22 @@ export async function submitJigsawCompletion(
       .maybeSingle();
 
     if (dbPuzzle) {
+      const raw = dbPuzzle as any;
+      let startAt = raw.start_at || dbPuzzle.created_at;
+      let endAt = raw.end_at || null;
+
+      if (!raw.start_at && !raw.end_at) {
+        const { data: pSet } = await supabase
+          .from("event_settings")
+          .select("value")
+          .eq("key", `jigsaw_period_${dbPuzzle.id}`)
+          .maybeSingle();
+        if (pSet?.value) {
+          startAt = (pSet.value as any).startAt || startAt;
+          endAt = (pSet.value as any).endAt || endAt;
+        }
+      }
+
       puzzle = {
         id: dbPuzzle.id,
         title: dbPuzzle.title,
@@ -556,6 +626,8 @@ export async function submitJigsawCompletion(
         pointsReward: dbPuzzle.points_reward,
         timeLimitSeconds: dbPuzzle.time_limit_seconds,
         isActive: dbPuzzle.is_active,
+        startAt: startAt || null,
+        endAt: endAt || null,
         createdAt: dbPuzzle.created_at,
         updatedAt: dbPuzzle.updated_at,
       };
@@ -567,6 +639,15 @@ export async function submitJigsawCompletion(
       return {
         success: false,
         error: "Challenge kepingan puzzle ini sedang dinonaktifkan oleh panitia.",
+      };
+    }
+
+    // Validasi periode pengerjaan game kepingan puzzle
+    const periodValidation = validateChallengePeriod(puzzle.startAt, puzzle.endAt, puzzle.title);
+    if (!periodValidation.valid) {
+      return {
+        success: false,
+        error: periodValidation.error,
       };
     }
 

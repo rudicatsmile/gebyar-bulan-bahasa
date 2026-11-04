@@ -43,6 +43,11 @@ import {
   type JigsawConfig,
   type JigsawAttempt,
 } from "@/app/actions/kepingan-puzzle";
+import {
+  getChallengePeriodInfo,
+  toDatetimeLocalValue,
+  fromDatetimeLocalValue,
+} from "@/lib/challenge-period";
 
 const JIGSAW_PRESET_IMAGES = [
   {
@@ -81,6 +86,8 @@ export default function DashboardKepinganPuzzlePage() {
   const [pointsReward, setPointsReward] = React.useState<number>(100);
   const [timeLimitSeconds, setTimeLimitSeconds] = React.useState<number>(120);
   const [isActive, setIsActive] = React.useState<boolean>(true);
+  const [startAt, setStartAt] = React.useState<string>("");
+  const [endAt, setEndAt] = React.useState<string>("");
 
   // Upload state
   const [isUploading, setIsUploading] = React.useState(false);
@@ -95,6 +102,15 @@ export default function DashboardKepinganPuzzlePage() {
   // Attempts state
   const [attempts, setAttempts] = React.useState<JigsawAttempt[]>([]);
   const [resettingId, setResettingId] = React.useState<string | null>(null);
+
+  // Period Info calculation
+  const periodInfo = React.useMemo(() => {
+    return getChallengePeriodInfo(
+      fromDatetimeLocalValue(startAt),
+      fromDatetimeLocalValue(endAt),
+      isActive
+    );
+  }, [startAt, endAt, isActive]);
 
   // Grid calculation
   const currentGridSize = Math.round(Math.sqrt(piecesCount));
@@ -118,6 +134,8 @@ export default function DashboardKepinganPuzzlePage() {
         setPointsReward(primary.pointsReward);
         setTimeLimitSeconds(primary.timeLimitSeconds);
         setIsActive(primary.isActive);
+        setStartAt(toDatetimeLocalValue(primary.startAt));
+        setEndAt(toDatetimeLocalValue(primary.endAt));
       }
 
       if (attemptsRes.success) {
@@ -186,6 +204,8 @@ export default function DashboardKepinganPuzzlePage() {
         pointsReward: Number(pointsReward) || 0,
         timeLimitSeconds: Number(timeLimitSeconds) || 0,
         isActive,
+        startAt: fromDatetimeLocalValue(startAt),
+        endAt: fromDatetimeLocalValue(endAt),
       });
 
       if (res.success && res.config) {
@@ -369,6 +389,42 @@ export default function DashboardKepinganPuzzlePage() {
                     helperText="Penjelasan ringkas cara menyusun kepingan dan tema gambar."
                     required
                   />
+
+                  {/* Periode Akses Tantangan */}
+                  <div className="space-y-3 pt-3 border-t border-border/60">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Periode Akses Game
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">
+                          Tentukan kapan peserta mulai bisa memainkan game dan batas waktu penutupan.
+                        </p>
+                      </div>
+                      <Badge variant={periodInfo.badgeVariant} className="text-[11px] self-start sm:self-auto">
+                        {periodInfo.label}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input
+                        name="startAt"
+                        label="Tanggal & Waktu Mulai (WIB)"
+                        type="datetime-local"
+                        value={startAt}
+                        onChange={(e) => setStartAt(e.target.value)}
+                        helperText="Kosongkan jika langsung bisa dimainkan."
+                      />
+                      <Input
+                        name="endAt"
+                        label="Tanggal & Waktu Berakhir (WIB)"
+                        type="datetime-local"
+                        value={endAt}
+                        onChange={(e) => setEndAt(e.target.value)}
+                        helperText="Kosongkan jika tanpa batas waktu penutupan."
+                      />
+                    </div>
+                  </div>
                 </div>
               </Card>
 

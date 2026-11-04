@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { Database } from "@/types/database.types";
 import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
+import { validateChallengePeriod } from "@/lib/challenge-period";
 
 function safeRevalidate(path: string) {
   try {
@@ -515,13 +516,19 @@ export async function togglePuzzleItemActive(
 }
 
 // =============================================================================
-// PUZZLE CONFIGURATION (BATAS WAKTU)
+// PUZZLE CONFIGURATION (BATAS WAKTU & PERIODE AKSES)
 // =============================================================================
 let fallbackMemoryTimeLimit = 60;
+let fallbackMemoryPeriod: { startAt: string | null; endAt: string | null } = {
+  startAt: null,
+  endAt: null,
+};
 
 export async function getPuzzleConfig(): Promise<{
   success: boolean;
   timeLimitSeconds: number;
+  startAt?: string | null;
+  endAt?: string | null;
   error?: string;
 }> {
   try {
@@ -532,52 +539,108 @@ export async function getPuzzleConfig(): Promise<{
       .eq("key", "puzzle_time_limit_seconds")
       .maybeSingle();
 
+    const { data: periodData } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "puzzle_game_period")
+      .maybeSingle();
+
+    let startAt: string | null = fallbackMemoryPeriod.startAt;
+    let endAt: string | null = fallbackMemoryPeriod.endAt;
+
+    if (periodData && periodData.value) {
+      const p = typeof periodData.value === "string" ? JSON.parse(periodData.value) : periodData.value;
+      startAt = p.startAt || null;
+      endAt = p.endAt || null;
+    }
+
     if (!error && data && data.value !== null && data.value !== undefined) {
       let val = typeof data.value === "number" ? data.value : Number(data.value);
       if (typeof data.value === "object" && data.value !== null && (data.value as any).timeLimitSeconds !== undefined) {
         val = Number((data.value as any).timeLimitSeconds);
       }
       if (!isNaN(val) && val >= 0) {
-        return { success: true, timeLimitSeconds: val };
+        return { success: true, timeLimitSeconds: val, startAt, endAt };
       }
     }
-    return { success: true, timeLimitSeconds: fallbackMemoryTimeLimit };
+    return { success: true, timeLimitSeconds: fallbackMemoryTimeLimit, startAt, endAt };
   } catch {
-    return { success: true, timeLimitSeconds: fallbackMemoryTimeLimit };
+    return {
+      success: true,
+      timeLimitSeconds: fallbackMemoryTimeLimit,
+      startAt: fallbackMemoryPeriod.startAt,
+      endAt: fallbackMemoryPeriod.endAt,
+    };
   }
 }
 
-export async function updatePuzzleConfig(timeLimitSeconds: number): Promise<{
+export async function updatePuzzleConfig(
+  timeLimitSeconds: number,
+  period?: { startAt?: string | null; endAt?: string | null }
+): Promise<{
   success: boolean;
   timeLimitSeconds?: number;
+  startAt?: string | null;
+  endAt?: string | null;
   error?: string;
 }> {
   const parsedTime = Math.max(0, Math.floor(Number(timeLimitSeconds) || 0));
   fallbackMemoryTimeLimit = parsedTime;
 
+  if (period) {
+    fallbackMemoryPeriod = {
+      startAt: period.startAt || null,
+      endAt: period.endAt || null,
+    };
+  }
+
   try {
     const supabase = createAdminClient();
+    const now = new Date().toISOString();
+
     const { error } = await supabase
       .from("event_settings")
       .upsert({
         key: "puzzle_time_limit_seconds",
         value: parsedTime,
         description: "Batas waktu pengerjaan challenge puzzle baju daerah dalam detik (0 = tanpa batas waktu)",
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       });
 
     if (error) {
       console.warn("Notice: Gagal menyimpan puzzle_time_limit_seconds ke event_settings:", error);
     }
 
+    if (period !== undefined) {
+      await supabase.from("event_settings").upsert({
+        key: "puzzle_game_period",
+        value: {
+          startAt: period.startAt || null,
+          endAt: period.endAt || null,
+        } as any,
+        description: "Periode akses pengerjaan game puzzle baju daerah",
+        updated_at: now,
+      });
+    }
+
     safeRevalidate("/dashboard/challenge/puzzle");
     safeRevalidate("/peserta/challenge/puzzle");
     safeRevalidate("/peserta/challenge");
-    return { success: true, timeLimitSeconds: parsedTime };
+    return {
+      success: true,
+      timeLimitSeconds: parsedTime,
+      startAt: fallbackMemoryPeriod.startAt,
+      endAt: fallbackMemoryPeriod.endAt,
+    };
   } catch (err: unknown) {
     safeRevalidate("/dashboard/challenge/puzzle");
     safeRevalidate("/peserta/challenge/puzzle");
-    return { success: true, timeLimitSeconds: parsedTime };
+    return {
+      success: true,
+      timeLimitSeconds: parsedTime,
+      startAt: fallbackMemoryPeriod.startAt,
+      endAt: fallbackMemoryPeriod.endAt,
+    };
   }
 }
 
@@ -589,10 +652,14 @@ export async function getActivePuzzleItems(): Promise<{
   costumes: Array<{ id: string; costumeName: string; costumeImageUrl: string | null; hint: string | null }>;
   regions: string[];
   timeLimitSeconds: number;
+  startAt?: string | null;
+  endAt?: string | null;
   error?: string;
 }> {
   const config = await getPuzzleConfig();
   const timeLimitSeconds = config.timeLimitSeconds ?? 60;
+  const startAt = config.startAt ?? null;
+  const endAt = config.endAt ?? null;
 
   try {
     const supabase = createAdminClient();
@@ -614,7 +681,7 @@ export async function getActivePuzzleItems(): Promise<{
         .map((row) => row.region_name)
         .sort(() => Math.random() - 0.5);
 
-      return { success: true, costumes, regions, timeLimitSeconds };
+      return { success: true, costumes, regions, timeLimitSeconds, startAt, endAt };
     }
 
     // Fallback dari memory
@@ -629,7 +696,7 @@ export async function getActivePuzzleItems(): Promise<{
       .map((i) => i.regionName)
       .sort(() => Math.random() - 0.5);
 
-    return { success: true, costumes, regions, timeLimitSeconds };
+    return { success: true, costumes, regions, timeLimitSeconds, startAt, endAt };
   } catch {
     const active = fallbackMemoryItems.filter((i) => i.isActive);
     const costumes = active.map((i) => ({
@@ -642,7 +709,7 @@ export async function getActivePuzzleItems(): Promise<{
       .map((i) => i.regionName)
       .sort(() => Math.random() - 0.5);
 
-    return { success: true, costumes, regions, timeLimitSeconds };
+    return { success: true, costumes, regions, timeLimitSeconds, startAt, endAt };
   }
 }
 
@@ -688,6 +755,16 @@ export async function submitPuzzleAnswers(
       error:
         eligibility.reason ||
         "Peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti misi tantangan.",
+    };
+  }
+
+  // Validasi periode aktif game puzzle baju daerah
+  const config = await getPuzzleConfig();
+  const periodCheck = validateChallengePeriod(config.startAt, config.endAt, "Game Puzzle Baju Daerah");
+  if (!periodCheck.isValid) {
+    return {
+      success: false,
+      error: periodCheck.error,
     };
   }
 

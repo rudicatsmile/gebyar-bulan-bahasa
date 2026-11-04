@@ -39,8 +39,9 @@ import {
   type JigsawAttempt,
 } from "@/app/actions/kepingan-puzzle";
 import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
+import { getChallengePeriodInfo } from "@/lib/challenge-period";
 
-type GamePhase = "loading" | "ready" | "playing" | "completed" | "inactive" | "already_done" | "blocked";
+type GamePhase = "loading" | "ready" | "playing" | "completed" | "inactive" | "already_done" | "blocked" | "period_blocked";
 
 export default function PesertaKepinganPuzzlePage() {
   const { participant } = useCurrentParticipant();
@@ -48,6 +49,7 @@ export default function PesertaKepinganPuzzlePage() {
   const [phase, setPhase] = React.useState<GamePhase>("loading");
   const [blockedCompetitionNames, setBlockedCompetitionNames] = React.useState<string[]>([]);
   const [puzzle, setPuzzle] = React.useState<JigsawConfig | null>(null);
+  const [periodMessage, setPeriodMessage] = React.useState<string>("");
   const [pastAttempt, setPastAttempt] = React.useState<JigsawAttempt | null>(null);
 
   // Board state: current board is an array of tile indices
@@ -96,6 +98,15 @@ export default function PesertaKepinganPuzzlePage() {
       }
 
       setPuzzle(res.puzzle);
+
+      // Cek periode aktif game
+      const period = getChallengePeriodInfo(res.puzzle.startAt, res.puzzle.endAt, res.puzzle.isActive);
+      if (!period.isPlayable) {
+        setPeriodMessage(period.detailText);
+        setPhase("period_blocked");
+        return;
+      }
+
       const targetPieces = res.puzzle.piecesCount;
 
       // Cek apakah peserta sudah pernah menyelesaikan puzzle ini
@@ -390,6 +401,36 @@ export default function PesertaKepinganPuzzlePage() {
                 Jelajahi Challenge Lainnya
               </Button>
             </Link>
+          </Card>
+        )}
+
+        {/* ============================================================= */}
+        {/* KONDISI 2B: DI LUAR PERIODE PELAKSANAAN */}
+        {/* ============================================================= */}
+        {phase === "period_blocked" && (
+          <Card className="p-8 sm:p-12 text-center max-w-xl mx-auto space-y-5 border-border bg-card/60">
+            <div className="h-16 w-16 mx-auto rounded-full bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
+              <Clock className="h-8 w-8" />
+            </div>
+            <div className="space-y-2">
+              <Badge variant="gold" className="text-xs">
+                Akses Game Ditutup Sementara
+              </Badge>
+              <h2 className="font-heading text-xl sm:text-2xl font-bold text-foreground">
+                {puzzle?.title || "Game Kepingan Puzzle"}
+              </h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {periodMessage || "Game ini sedang berada di luar periode pelaksanaan yang ditentukan panitia."}
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link href="/peserta/challenge">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Kembali ke Menu Tantangan</span>
+                </Button>
+              </Link>
+            </div>
           </Card>
         )}
 

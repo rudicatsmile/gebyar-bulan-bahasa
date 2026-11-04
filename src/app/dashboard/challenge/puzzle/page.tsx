@@ -54,6 +54,11 @@ import {
   updatePuzzleConfig,
   type PuzzleItem,
 } from "@/app/actions/puzzle";
+import {
+  getChallengePeriodInfo,
+  toDatetimeLocalValue,
+  fromDatetimeLocalValue,
+} from "@/lib/challenge-period";
 import { cn } from "@/lib/utils";
 
 interface AttemptRow {
@@ -75,10 +80,20 @@ export default function DashboardPuzzlePage() {
   const [attempts, setAttempts] = React.useState<AttemptRow[]>([]);
   const [tab, setTab] = React.useState<"items" | "attempts">("items");
 
-  // Configuration (Time limit) states
+  // Configuration (Time limit & Period) states
   const [timeLimit, setTimeLimit] = React.useState<number>(60);
+  const [startAt, setStartAt] = React.useState<string>("");
+  const [endAt, setEndAt] = React.useState<string>("");
   const [savingConfig, setSavingConfig] = React.useState(false);
   const [configSavedMessage, setConfigSavedMessage] = React.useState<string | null>(null);
+
+  const periodInfo = React.useMemo(() => {
+    return getChallengePeriodInfo(
+      fromDatetimeLocalValue(startAt),
+      fromDatetimeLocalValue(endAt),
+      true
+    );
+  }, [startAt, endAt]);
 
   // Dialog states
   const [dialogMode, setDialogMode] = React.useState<"create" | "edit" | null>(null);
@@ -137,8 +152,12 @@ export default function DashboardPuzzlePage() {
       ]);
       if (itemsRes.success) setItems(itemsRes.items);
       if (attemptsRes.success) setAttempts(attemptsRes.attempts);
-      if (configRes.success && configRes.timeLimitSeconds !== undefined) {
-        setTimeLimit(configRes.timeLimitSeconds);
+      if (configRes.success) {
+        if (configRes.timeLimitSeconds !== undefined) {
+          setTimeLimit(configRes.timeLimitSeconds);
+        }
+        setStartAt(toDatetimeLocalValue(configRes.startAt));
+        setEndAt(toDatetimeLocalValue(configRes.endAt));
       }
     } catch (err) {
       console.error("Gagal memuat data puzzle:", err);
@@ -155,9 +174,12 @@ export default function DashboardPuzzlePage() {
     e.preventDefault();
     try {
       setSavingConfig(true);
-      const res = await updatePuzzleConfig(timeLimit);
+      const res = await updatePuzzleConfig(timeLimit, {
+        startAt: fromDatetimeLocalValue(startAt),
+        endAt: fromDatetimeLocalValue(endAt),
+      });
       if (res.success) {
-        setConfigSavedMessage("Batas waktu berhasil disimpan!");
+        setConfigSavedMessage("Pengaturan batas waktu & periode challenge berhasil disimpan!");
         setTimeout(() => setConfigSavedMessage(null), 3500);
       }
     } catch (err) {
@@ -374,40 +396,91 @@ export default function DashboardPuzzlePage() {
           </Card>
         </div>
 
-        {/* Time Limit Setting Card */}
+        {/* Time Limit & Period Setting Card */}
         <Card className="p-4 sm:p-5 border border-border/80 bg-card/60 backdrop-blur-xs">
-          <form onSubmit={handleSaveConfig} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-accent" />
-                <h3 className="font-heading text-sm font-bold text-foreground">
-                  Batas Waktu Pengerjaan Puzzle
-                </h3>
-                <Badge variant={timeLimit > 0 ? "gold" : "default"} className="text-[10px]">
-                  {timeLimit > 0 ? `${timeLimit} Detik` : "Tanpa Batas (Unlimited)"}
-                </Badge>
+          <form onSubmit={handleSaveConfig} className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-accent" />
+                  <h3 className="font-heading text-sm font-bold text-foreground">
+                    Aturan Gameplay & Periode Akses Puzzle
+                  </h3>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Atur batas waktu pengerjaan peserta dan jadwal tanggal mulai serta penutupan challenge ini.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Tentukan durasi pengerjaan bagi peserta. Masukkan <strong>0</strong> untuk mode tanpa batas waktu (unlimited).
-              </p>
+              <Badge variant={periodInfo.badgeVariant} className="text-[11px] self-start sm:self-auto">
+                {periodInfo.label}
+              </Badge>
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <div className="relative w-36">
-                <Input
-                  type="number"
-                  min={0}
-                  max={3600}
-                  step={5}
-                  value={timeLimit}
-                  onChange={(e) => setTimeLimit(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="text-center font-mono font-bold pr-12 text-sm h-9"
-                  required
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                  detik
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                  Batas Waktu (Detik) *
+                </label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={3600}
+                    step={5}
+                    value={timeLimit}
+                    onChange={(e) => setTimeLimit(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="font-mono font-bold pr-12 text-sm h-9"
+                    required
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                    detik
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  {timeLimit > 0 ? `${timeLimit} Detik` : "0 = Tanpa batas waktu"}
                 </span>
               </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                  Tanggal & Waktu Mulai (WIB)
+                </label>
+                <Input
+                  type="datetime-local"
+                  value={startAt}
+                  onChange={(e) => setStartAt(e.target.value)}
+                  className="text-xs h-9"
+                />
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  Kosongkan jika langsung dibuka.
+                </span>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                  Tanggal & Waktu Berakhir (WIB)
+                </label>
+                <Input
+                  type="datetime-local"
+                  value={endAt}
+                  onChange={(e) => setEndAt(e.target.value)}
+                  className="text-xs h-9"
+                />
+                <span className="text-[10px] text-muted-foreground mt-1 block">
+                  Kosongkan jika tanpa batas penutupan.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-border/40">
+              {configSavedMessage ? (
+                <p className="text-xs text-emerald-500 font-medium flex items-center gap-1.5 animate-in fade-in">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>{configSavedMessage}</span>
+                </p>
+              ) : (
+                <div />
+              )}
 
               <Button
                 type="submit"
@@ -420,16 +493,10 @@ export default function DashboardPuzzlePage() {
                 ) : (
                   <CheckCircle2 className="h-3.5 w-3.5" />
                 )}
-                <span>{savingConfig ? "Menyimpan..." : "Simpan Durasi"}</span>
+                <span>{savingConfig ? "Menyimpan..." : "Simpan Pengaturan Puzzle"}</span>
               </Button>
             </div>
           </form>
-          {configSavedMessage && (
-            <p className="text-xs text-emerald-500 font-medium mt-2.5 flex items-center gap-1.5 animate-in fade-in">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>{configSavedMessage}</span>
-            </p>
-          )}
         </Card>
 
         {/* Tab Switcher */}

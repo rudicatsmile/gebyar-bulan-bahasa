@@ -29,9 +29,10 @@ import {
   type PuzzleAttemptResult,
 } from "@/app/actions/puzzle";
 import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
+import { getChallengePeriodInfo } from "@/lib/challenge-period";
 import { cn } from "@/lib/utils";
 
-type GamePhase = "loading" | "ready" | "playing" | "result" | "completed" | "blocked";
+type GamePhase = "loading" | "ready" | "playing" | "result" | "completed" | "blocked" | "period_blocked";
 
 interface CostumeData {
   id: string;
@@ -52,6 +53,7 @@ export default function PesertaPuzzlePage() {
   const { participant } = useCurrentParticipant();
   const [phase, setPhase] = React.useState<GamePhase>("loading");
   const [blockedCompetitionNames, setBlockedCompetitionNames] = React.useState<string[]>([]);
+  const [periodMessage, setPeriodMessage] = React.useState<string>("");
   const [costumes, setCostumes] = React.useState<CostumeData[]>([]);
   const [regions, setRegions] = React.useState<string[]>([]);
   
@@ -134,17 +136,29 @@ export default function PesertaPuzzlePage() {
           setTimeLimit(res.timeLimitSeconds ?? 60);
         }
         setPhase("completed");
-      } else if (res.success && res.costumes.length > 0) {
-        setCostumes(res.costumes);
-        setRegions(res.regions);
-        const limit = res.timeLimitSeconds ?? 60;
-        setTimeLimit(limit);
-        setTimeRemaining(limit);
-        setPhase("ready");
       } else {
-        setCostumes([]);
-        setRegions([]);
-        setPhase("ready");
+        // Cek periode aktif jika peserta belum pernah menyelesaikan
+        if (res.success) {
+          const period = getChallengePeriodInfo(res.startAt, res.endAt, true);
+          if (!period.isPlayable) {
+            setPeriodMessage(period.detailText);
+            setPhase("period_blocked");
+            return;
+          }
+        }
+
+        if (res.success && res.costumes.length > 0) {
+          setCostumes(res.costumes);
+          setRegions(res.regions);
+          const limit = res.timeLimitSeconds ?? 60;
+          setTimeLimit(limit);
+          setTimeRemaining(limit);
+          setPhase("ready");
+        } else {
+          setCostumes([]);
+          setRegions([]);
+          setPhase("ready");
+        }
       }
     } catch {
       setPhase("ready");
@@ -464,6 +478,34 @@ export default function PesertaPuzzlePage() {
                 <Button size="lg" className="text-xs gap-1.5 cursor-pointer shadow-xs">
                   <ArrowLeft className="h-4 w-4" />
                   <span>Kembali ke Daftar Challenge</span>
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        )}
+
+        {/* ============ PHASE: PERIOD BLOCKED ============ */}
+        {phase === "period_blocked" && (
+          <Card className="p-8 sm:p-10 text-center space-y-6 border-border bg-card/60 max-w-lg mx-auto">
+            <div className="h-16 w-16 mx-auto rounded-full bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
+              <Clock className="h-8 w-8" />
+            </div>
+            <div className="space-y-2">
+              <Badge variant="gold" className="text-xs px-2.5 py-0.5">
+                Akses Game Ditutup Sementara
+              </Badge>
+              <h2 className="font-heading text-xl sm:text-2xl font-bold text-foreground">
+                Puzzle Baju Daerah Nusantara
+              </h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {periodMessage || "Game ini sedang berada di luar periode pelaksanaan yang ditentukan panitia."}
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link href="/peserta/challenge">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Kembali ke Menu Tantangan</span>
                 </Button>
               </Link>
             </div>

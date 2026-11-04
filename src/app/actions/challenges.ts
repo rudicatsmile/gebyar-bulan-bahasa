@@ -13,6 +13,7 @@ import {
   checkOutStandSession,
 } from "./stand-rewards";
 import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
+import { validateChallengePeriod } from "@/lib/challenge-period";
 
 export interface AdminChallengeItem {
   id: string;
@@ -25,6 +26,8 @@ export interface AdminChallengeItem {
   participantsCount: number;
   status: "aktif" | "selesai";
   isActive: boolean;
+  startAt: string | null;
+  endAt: string | null;
   createdAt: string;
 }
 
@@ -36,6 +39,8 @@ const ChallengeInputSchema = z.object({
   pointReward: z.coerce.number().min(1, "Reward poin minimal 1"),
   badge: z.string().min(2, "Lencana kehormatan wajib diisi").default("Peserta Aktif"),
   isActive: z.boolean().default(true),
+  startAt: z.string().nullable().optional(),
+  endAt: z.string().nullable().optional(),
 });
 
 export type ChallengeInput = z.infer<typeof ChallengeInputSchema>;
@@ -65,6 +70,8 @@ export async function getAdminChallenges(): Promise<{
       participantsCount: 0,
       status: row.is_active ? "aktif" : "selesai",
       isActive: Boolean(row.is_active),
+      startAt: row.start_at || null,
+      endAt: row.end_at || null,
       createdAt: row.created_at,
     }));
 
@@ -83,6 +90,8 @@ export interface ParticipantChallengeItem {
   type: ChallengeType;
   pointReward: number;
   badge: string;
+  startAt: string | null;
+  endAt: string | null;
 }
 
 /**
@@ -101,14 +110,14 @@ export async function getParticipantChallenges(): Promise<{
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("challenges")
-      .select("id, slug, title, description, type, point_reward, badge_icon")
+      .select("id, slug, title, description, type, point_reward, badge_icon, start_at, end_at")
       .eq("is_active", true)
       .order("point_reward", { ascending: false })
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    const mapped: ParticipantChallengeItem[] = (data || []).map((row) => ({
+    const mapped: ParticipantChallengeItem[] = (data || []).map((row: any) => ({
       id: row.id,
       slug: row.slug,
       title: row.title,
@@ -116,6 +125,8 @@ export async function getParticipantChallenges(): Promise<{
       type: row.type,
       pointReward: Number(row.point_reward) || 0,
       badge: row.badge_icon || "Peserta Aktif",
+      startAt: row.start_at || null,
+      endAt: row.end_at || null,
     }));
 
     return { success: true, challenges: mapped };
@@ -139,7 +150,7 @@ export async function upsertChallenge(data: ChallengeInput) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    const payload = {
+    const payload: any = {
       title: parsed.data.title,
       slug: slug || `challenge-${Date.now()}`,
       description: parsed.data.description,
@@ -147,6 +158,8 @@ export async function upsertChallenge(data: ChallengeInput) {
       point_reward: parsed.data.pointReward,
       badge_icon: parsed.data.badge,
       is_active: parsed.data.isActive,
+      start_at: parsed.data.startAt || new Date().toISOString(),
+      end_at: parsed.data.endAt || null,
     };
 
     if (parsed.data.id) {
@@ -159,10 +172,7 @@ export async function upsertChallenge(data: ChallengeInput) {
     } else {
       const { error } = await supabase
         .from("challenges")
-        .insert({
-          ...payload,
-          start_at: new Date().toISOString(),
-        });
+        .insert(payload);
 
       if (error) throw error;
     }

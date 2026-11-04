@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureParticipantLedgerSynced } from "@/lib/supabase/point-sync";
 import type { Database } from "@/types/database.types";
 import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
+import { validateChallengePeriod } from "@/lib/challenge-period";
 
 // =============================================================================
 // TYPES
@@ -18,6 +19,8 @@ export interface QrLetterChallenge {
   targetPhrase: string;
   pointsReward: number;
   isActive: boolean;
+  startAt?: string | null;
+  endAt?: string | null;
   createdAt: string;
   letterCodes: QrLetterCode[];
 }
@@ -140,6 +143,54 @@ function generateLetterCodes(phrase: string, challengeId: string): Omit<QrLetter
 }
 
 // =============================================================================
+// HELPER: PERIODE TANTANGAN QR HURUF
+// =============================================================================
+async function getQrChallengePeriod(id: string): Promise<{ startAt: string | null; endAt: string | null }> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", `qr_huruf_period_${id}`)
+      .maybeSingle();
+
+    if (data && data.value) {
+      const parsed = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+      return {
+        startAt: parsed.startAt || null,
+        endAt: parsed.endAt || null,
+      };
+    }
+  } catch {}
+
+  const mem = fallbackChallenges.find((c) => c.id === id);
+  return {
+    startAt: mem?.startAt || null,
+    endAt: mem?.endAt || null,
+  };
+}
+
+async function saveQrChallengePeriod(
+  id: string,
+  period: { startAt?: string | null; endAt?: string | null }
+) {
+  try {
+    const supabase = createAdminClient();
+    await supabase.from("event_settings").upsert({
+      key: `qr_huruf_period_${id}`,
+      value: {
+        startAt: period.startAt || null,
+        endAt: period.endAt || null,
+      } as any,
+      description: `Periode akses tantangan QR Huruf ${id}`,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn("Gagal simpan period qr huruf ke event_settings:", err);
+  }
+}
+
+// =============================================================================
 // ADMIN — GET ALL QR CHALLENGES
 // =============================================================================
 export async function getAdminQrChallenges(): Promise<{
@@ -153,6 +204,21 @@ export async function getAdminQrChallenges(): Promise<{
       .from("qr_letter_challenges")
       .select("*")
       .order("created_at", { ascending: false });
+
+    // Ambil metadata periode dari event_settings
+    const { data: periodRows } = await supabase
+      .from("event_settings")
+      .select("key, value")
+      .like("key", "qr_huruf_period_%");
+
+    const periodMap = new Map<string, { startAt?: string | null; endAt?: string | null }>();
+    (periodRows || []).forEach((row) => {
+      try {
+        const parsed = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
+        const chalId = row.key.replace("qr_huruf_period_", "");
+        periodMap.set(chalId, parsed);
+      } catch {}
+    });
 
     if (!error && challenges && challenges.length > 0) {
       const { data: codes } = await supabase
@@ -175,16 +241,21 @@ export async function getAdminQrChallenges(): Promise<{
         codesByChal.set(c.challenge_id, list);
       });
 
-      const formatted: QrLetterChallenge[] = challenges.map((ch) => ({
-        id: ch.id,
-        title: ch.title,
-        description: ch.description,
-        targetPhrase: ch.target_phrase,
-        pointsReward: ch.points_reward,
-        isActive: ch.is_active,
-        createdAt: ch.created_at,
-        letterCodes: codesByChal.get(ch.id) || [],
-      }));
+      const formatted: QrLetterChallenge[] = challenges.map((ch) => {
+        const period = periodMap.get(ch.id);
+        return {
+          id: ch.id,
+          title: ch.title,
+          description: ch.description,
+          targetPhrase: ch.target_phrase,
+          pointsReward: ch.points_reward,
+          isActive: ch.is_active,
+          startAt: period?.startAt ?? (ch as any).start_at ?? null,
+          endAt: period?.endAt ?? (ch as any).end_at ?? null,
+          createdAt: ch.created_at,
+          letterCodes: codesByChal.get(ch.id) || [],
+        };
+      });
 
       return { success: true, challenges: formatted };
     }
@@ -204,6 +275,8 @@ const CreateQrChallengeSchema = z.object({
   targetPhrase: z.string().min(2, "Kalimat target minimal 2 karakter"),
   pointsReward: z.number().int().min(5).default(50),
   isActive: z.boolean().default(true),
+  startAt: z.string().nullable().optional(),
+  endAt: z.string().nullable().optional(),
   locationHints: z.record(z.string()).optional(), // { [letterIndex]: locationHint }
 });
 
@@ -248,6 +321,12 @@ export async function createQrChallenge(
 
     if (chErr) throw chErr;
 
+    // Simpan pengaturan periode ke event_settings
+    await saveQrChallengePeriod(challengeId, {
+      startAt: parsed.data.startAt || null,
+      endAt: parsed.data.endAt || null,
+    });
+
     // Insert letter codes
     const codeInserts = letters.map((l) => ({
       challenge_id: challengeId,
@@ -278,6 +357,8 @@ export async function createQrChallenge(
       targetPhrase: parsed.data.targetPhrase.toUpperCase().trim(),
       pointsReward: parsed.data.pointsReward,
       isActive: parsed.data.isActive,
+      startAt: parsed.data.startAt || null,
+      endAt: parsed.data.endAt || null,
       createdAt: new Date().toISOString(),
       letterCodes: newCodes,
     };
@@ -300,6 +381,8 @@ const UpdateQrChallengeSchema = z.object({
   description: z.string().optional(),
   pointsReward: z.number().int().min(5).optional(),
   isActive: z.boolean().optional(),
+  startAt: z.string().nullable().optional(),
+  endAt: z.string().nullable().optional(),
 });
 
 export async function updateQrChallenge(
@@ -327,6 +410,13 @@ export async function updateQrChallenge(
 
     if (error) throw error;
 
+    if (parsed.data.startAt !== undefined || parsed.data.endAt !== undefined) {
+      await saveQrChallengePeriod(parsed.data.id, {
+        startAt: parsed.data.startAt,
+        endAt: parsed.data.endAt,
+      });
+    }
+
     revalidatePath("/dashboard/challenge/qr-huruf");
     return { success: true };
   } catch {
@@ -338,6 +428,8 @@ export async function updateQrChallenge(
           ...(parsed.data.description !== undefined && { description: parsed.data.description || null }),
           ...(parsed.data.pointsReward !== undefined && { pointsReward: parsed.data.pointsReward }),
           ...(parsed.data.isActive !== undefined && { isActive: parsed.data.isActive }),
+          ...(parsed.data.startAt !== undefined && { startAt: parsed.data.startAt || null }),
+          ...(parsed.data.endAt !== undefined && { endAt: parsed.data.endAt || null }),
         };
       }
       return ch;
@@ -478,6 +570,8 @@ export async function getActiveQrChallenge(): Promise<{
     pointsReward: number;
     totalLetters: number;
     wordLengths: number[]; // Jumlah huruf per kata, misal "BULAN BAHASA" -> [5, 6]
+    startAt?: string | null;
+    endAt?: string | null;
   };
   error?: string;
 }> {
@@ -495,6 +589,7 @@ export async function getActiveQrChallenge(): Promise<{
       const words = challenge.target_phrase.trim().split(/\s+/).filter(Boolean);
       const wordLengths = words.map((w) => w.replace(/[^A-Za-z]/g, "").length);
       const totalLetters = wordLengths.reduce((acc, curr) => acc + curr, 0);
+      const period = await getQrChallengePeriod(challenge.id);
 
       return {
         success: true,
@@ -505,6 +600,8 @@ export async function getActiveQrChallenge(): Promise<{
           pointsReward: challenge.points_reward,
           totalLetters,
           wordLengths,
+          startAt: period.startAt ?? (challenge as any).start_at ?? null,
+          endAt: period.endAt ?? (challenge as any).end_at ?? null,
         },
       };
     }
@@ -515,6 +612,7 @@ export async function getActiveQrChallenge(): Promise<{
       const words = ch.targetPhrase.trim().split(/\s+/).filter(Boolean);
       const wordLengths = words.map((w) => w.replace(/[^A-Za-z]/g, "").length);
       const totalLetters = wordLengths.reduce((acc, curr) => acc + curr, 0);
+      const period = await getQrChallengePeriod(ch.id);
       return {
         success: true,
         challenge: {
@@ -524,6 +622,8 @@ export async function getActiveQrChallenge(): Promise<{
           pointsReward: ch.pointsReward,
           totalLetters,
           wordLengths,
+          startAt: period.startAt ?? ch.startAt ?? null,
+          endAt: period.endAt ?? ch.endAt ?? null,
         },
       };
     }
@@ -543,6 +643,8 @@ export async function getActiveQrChallenge(): Promise<{
         pointsReward: ch.pointsReward,
         totalLetters,
         wordLengths,
+        startAt: ch.startAt ?? null,
+        endAt: ch.endAt ?? null,
       },
     };
   }
@@ -699,6 +801,13 @@ export async function scanQrLetterToken(
         return { success: false, error: "Tantangan untuk huruf ini sedang tidak aktif." };
       }
 
+      // Validasi periode pengerjaan challenge
+      const chalPeriod = await getQrChallengePeriod(code.challenge_id);
+      const periodCheck = validateChallengePeriod(chalPeriod.startAt, chalPeriod.endAt, "Challenge QR Huruf");
+      if (!periodCheck.isValid) {
+        return { success: false, error: periodCheck.error };
+      }
+
       // 2. Periksa apakah sudah pernah discan
       const { data: existingScan } = await supabase
         .from("qr_letter_scans")
@@ -754,6 +863,14 @@ export async function scanQrLetterToken(
 
     if (!memCode) {
       return { success: false, error: "Kode QR tidak dikenali atau tidak valid untuk tantangan ini." };
+    }
+
+    const chal = fallbackChallenges.find((c) => c.id === memCode.challengeId);
+    if (chal) {
+      const periodCheck = validateChallengePeriod(chal.startAt, chal.endAt, chal.title);
+      if (!periodCheck.isValid) {
+        return { success: false, error: periodCheck.error };
+      }
     }
 
     const alreadyScanned = fallbackScans.some(
@@ -834,6 +951,16 @@ export async function submitWordArrangement(
       error:
         eligibility.reason ||
         "Peserta yang mengikuti cabang lomba tidak diperkenankan mengikuti misi tantangan.",
+    };
+  }
+
+  // Validasi periode aktif tantangan QR Huruf
+  const chalPeriod = await getQrChallengePeriod(parsed.data.challengeId);
+  const periodCheck = validateChallengePeriod(chalPeriod.startAt, chalPeriod.endAt, "Challenge QR Huruf");
+  if (!periodCheck.isValid) {
+    return {
+      success: false,
+      error: periodCheck.error,
     };
   }
 
