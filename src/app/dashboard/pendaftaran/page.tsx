@@ -24,7 +24,9 @@ import {
   type GroupCompetitionItem,
 } from "@/app/actions/participants";
 import { getActiveInstitutions, type InstitutionItem } from "@/app/actions/institutions";
-import { UserPlus, Edit2, Trash2, Loader2, CheckCircle2, AlertCircle, Users, Plus } from "lucide-react";
+import { UserPlus, Edit2, Trash2, Loader2, CheckCircle2, AlertCircle, Users, Plus, FileSpreadsheet, Trophy } from "lucide-react";
+import { DaftarPesertaLombaModal } from "@/components/dashboard/DaftarPesertaLombaModal";
+import { ImportPesertaLombaModal } from "@/components/dashboard/ImportPesertaLombaModal";
 
 interface TeamMemberInput {
   name: string;
@@ -52,6 +54,10 @@ export default function DashboardPendaftaranPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // Modal Pendaftaran Peserta Manual & Import Excel
+  const [daftarLombaOpen, setDaftarLombaOpen] = React.useState(false);
+  const [importExcelOpen, setImportExcelOpen] = React.useState(false);
 
   // State Modal Tambah
   const [addDialogOpen, setAddDialogOpen] = React.useState(false);
@@ -314,21 +320,42 @@ export default function DashboardPendaftaranPage() {
             </p>
           </div>
 
-          <Button
-            onClick={() => {
-              if (competitions.length > 0 && !selectedComp) {
-                setSelectedComp(competitions[0].id);
-              }
-              resetAddForm();
-              setAddDialogOpen(true);
-            }}
-            size="sm"
-            className="text-xs gap-1.5 cursor-pointer shadow-xs"
-            suppressHydrationWarning
-          >
-            <UserPlus className="h-4 w-4" />
-            <span>Daftarkan Tim Baru</span>
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <Button
+              onClick={() => setDaftarLombaOpen(true)}
+              size="sm"
+              variant="accent"
+              className="text-xs gap-1.5 cursor-pointer shadow-xs font-semibold"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>Daftarkan Peserta ke Lomba</span>
+            </Button>
+            <Button
+              onClick={() => setImportExcelOpen(true)}
+              size="sm"
+              variant="outline"
+              className="text-xs gap-1.5 cursor-pointer border-accent/40 text-foreground hover:bg-accent/10 font-semibold"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-accent" />
+              <span>Import Excel</span>
+            </Button>
+            <Button
+              onClick={() => {
+                if (competitions.length > 0 && !selectedComp) {
+                  setSelectedComp(competitions[0].id);
+                }
+                resetAddForm();
+                setAddDialogOpen(true);
+              }}
+              size="sm"
+              variant="outline"
+              className="text-xs gap-1.5 cursor-pointer shadow-xs"
+              suppressHydrationWarning
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden lg:inline">Input Tim Beregu</span>
+            </Button>
+          </div>
         </div>
 
         {notification && (
@@ -905,6 +932,20 @@ export default function DashboardPendaftaranPage() {
             </DialogFooter>
           </div>
         </Dialog>
+
+        {/* Modal Pendaftaran Peserta ke Lomba Manual oleh Admin */}
+        <DaftarPesertaLombaModal
+          open={daftarLombaOpen}
+          onOpenChange={setDaftarLombaOpen}
+          onSuccess={loadData}
+        />
+
+        {/* Modal Import Peserta ke Lomba via Excel */}
+        <ImportPesertaLombaModal
+          open={importExcelOpen}
+          onOpenChange={setImportExcelOpen}
+          onSuccess={loadData}
+        />
       </div>
     </DashboardLayout>
   );

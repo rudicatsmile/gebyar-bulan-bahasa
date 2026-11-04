@@ -15,9 +15,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Participant } from "@/lib/dummy-data";
-import { Users, Search, Download, FileCheck, Eye, RotateCcw, Loader2, ArrowRightLeft } from "lucide-react";
+import {
+  Users,
+  Search,
+  Download,
+  FileCheck,
+  Eye,
+  RotateCcw,
+  Loader2,
+  ArrowRightLeft,
+  UserPlus,
+  FileSpreadsheet,
+  Trophy,
+} from "lucide-react";
 import { PindahLombaModal, ParticipantTransferTarget } from "@/components/dashboard/PindahLombaModal";
 import { VerifikasiPesertaModal, ParticipantVerificationTarget } from "@/components/dashboard/VerifikasiPesertaModal";
+import { DaftarPesertaLombaModal } from "@/components/dashboard/DaftarPesertaLombaModal";
+import { ImportPesertaLombaModal } from "@/components/dashboard/ImportPesertaLombaModal";
 
 export default function DashboardPesertaPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
@@ -31,6 +45,16 @@ export default function DashboardPesertaPage() {
 
   const [verificationTarget, setVerificationTarget] = React.useState<ParticipantVerificationTarget | null>(null);
   const [verificationOpen, setVerificationOpen] = React.useState(false);
+
+  // Modal Pendaftaran Lomba Manual & Import Excel
+  const [daftarLombaOpen, setDaftarLombaOpen] = React.useState(false);
+  const [daftarLombaTarget, setDaftarLombaTarget] = React.useState<{
+    id: string;
+    fullName: string;
+    institution: string;
+    registrationNumber?: string;
+  } | null>(null);
+  const [importExcelOpen, setImportExcelOpen] = React.useState(false);
 
   const fetchParticipants = React.useCallback(async () => {
     setIsLoading(true);
@@ -131,7 +155,7 @@ export default function DashboardPesertaPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             <Button
               size="sm"
               variant="outline"
@@ -144,10 +168,31 @@ export default function DashboardPesertaPage() {
               <RotateCcw className={`h-3.5 w-3.5 ${isMounted && isLoading ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
+            <Button
+              size="sm"
+              variant="accent"
+              onClick={() => {
+                setDaftarLombaTarget(null);
+                setDaftarLombaOpen(true);
+              }}
+              className="text-xs gap-1.5 cursor-pointer shadow-xs font-semibold"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>Daftarkan ke Lomba</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setImportExcelOpen(true)}
+              className="text-xs gap-1.5 cursor-pointer border-accent/40 text-foreground hover:bg-accent/10 font-semibold"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 text-accent" />
+              <span>Import Excel</span>
+            </Button>
             <Link href="/dashboard/peserta/verifikasi">
-              <Button size="sm" variant="accent" className="text-xs gap-1.5" suppressHydrationWarning>
+              <Button size="sm" variant="outline" className="text-xs gap-1.5" suppressHydrationWarning>
                 <FileCheck className="h-3.5 w-3.5" />
-                <span>Antrean Verifikasi ({isMounted ? pendingCount : 0})</span>
+                <span className="hidden md:inline">Antrean ({isMounted ? pendingCount : 0})</span>
               </Button>
             </Link>
             <Button
@@ -157,7 +202,7 @@ export default function DashboardPesertaPage() {
               className="text-xs gap-1.5 cursor-pointer"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>Ekspor CSV</span>
+              <span className="hidden sm:inline">CSV</span>
             </Button>
           </div>
         </div>
@@ -245,6 +290,24 @@ export default function DashboardPesertaPage() {
                           <span>Verifikasi</span>
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8 gap-1 border-accent/40 text-accent hover:bg-accent/10 cursor-pointer"
+                        onClick={() => {
+                          setDaftarLombaTarget({
+                            id: p.id,
+                            fullName: p.fullName,
+                            institution: p.institution,
+                            registrationNumber: p.registrationNumber,
+                          });
+                          setDaftarLombaOpen(true);
+                        }}
+                        title="Daftarkan peserta ke cabang lomba"
+                      >
+                        <Trophy className="h-3 w-3" />
+                        <span>Daftar Lomba</span>
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -356,6 +419,24 @@ export default function DashboardPesertaPage() {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="text-xs h-8 gap-1 border-accent/40 text-accent hover:bg-accent/10 cursor-pointer"
+                            onClick={() => {
+                              setDaftarLombaTarget({
+                                id: p.id,
+                                fullName: p.fullName,
+                                institution: p.institution,
+                                registrationNumber: p.registrationNumber,
+                              });
+                              setDaftarLombaOpen(true);
+                            }}
+                            title="Daftarkan ke cabang lomba"
+                          >
+                            <Trophy className="h-3.5 w-3.5" />
+                            <span className="hidden lg:inline">Daftar Lomba</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             className="text-xs h-8 gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
                             onClick={() => handleOpenTransfer(p)}
                             title="Pindah ke lomba lain"
@@ -392,6 +473,21 @@ export default function DashboardPesertaPage() {
           open={verificationOpen}
           onOpenChange={setVerificationOpen}
           participant={verificationTarget}
+          onSuccess={fetchParticipants}
+        />
+
+        {/* Modal Pendaftaran Peserta ke Lomba Manual oleh Admin */}
+        <DaftarPesertaLombaModal
+          open={daftarLombaOpen}
+          onOpenChange={setDaftarLombaOpen}
+          initialParticipant={daftarLombaTarget}
+          onSuccess={fetchParticipants}
+        />
+
+        {/* Modal Import Peserta ke Lomba via Excel */}
+        <ImportPesertaLombaModal
+          open={importExcelOpen}
+          onOpenChange={setImportExcelOpen}
           onSuccess={fetchParticipants}
         />
       </div>
