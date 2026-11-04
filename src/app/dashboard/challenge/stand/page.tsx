@@ -58,9 +58,15 @@ import {
   Settings,
   RotateCcw,
   ExternalLink,
+  Clock,
 } from "lucide-react";
 import { QRCodeCard } from "@/components/qrcode/QRCodeGenerator";
 import { createClient } from "@/lib/supabase/client";
+import {
+  getChallengePeriodInfo,
+  toDatetimeLocalValue,
+  fromDatetimeLocalValue,
+} from "@/lib/challenge-period";
 
 export default function DashboardKelolaStandPage() {
   const [stands, setStands] = React.useState<AdminStandItem[]>([]);
@@ -76,6 +82,8 @@ export default function DashboardKelolaStandPage() {
   const [minDurationMinutes, setMinDurationMinutes] = React.useState(15);
   const [validationMode, setValidationMode] = React.useState<"both" | "qr" | "code">("both");
   const [selectedRewardId, setSelectedRewardId] = React.useState<string>("");
+  const [startAt, setStartAt] = React.useState("");
+  const [endAt, setEndAt] = React.useState("");
   const [qrTab, setQrTab] = React.useState<"checkin" | "checkout">("checkin");
   const [rewardFeedback, setRewardFeedback] = React.useState<{
     type: "success" | "error";
@@ -108,6 +116,15 @@ export default function DashboardKelolaStandPage() {
   const [points, setPoints] = React.useState("10");
   const [description, setDescription] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
+
+  // Status periode akses misi jelajah stand
+  const periodInfo = React.useMemo(() => {
+    return getChallengePeriodInfo(
+      fromDatetimeLocalValue(startAt),
+      fromDatetimeLocalValue(endAt),
+      rewardEnabled
+    );
+  }, [startAt, endAt, rewardEnabled]);
 
   // Load stands from database
   const loadStands = React.useCallback(async (showLoading = true) => {
@@ -145,6 +162,8 @@ export default function DashboardKelolaStandPage() {
           setMinDurationMinutes(res.data.config.minDurationMinutes || 15);
           setValidationMode(res.data.config.validationMode || "both");
           setSelectedRewardId(res.data.config.rewardId || "");
+          setStartAt(toDatetimeLocalValue(res.data.config.startAt));
+          setEndAt(toDatetimeLocalValue(res.data.config.endAt));
         }
       }
     } catch (err) {
@@ -250,6 +269,8 @@ export default function DashboardKelolaStandPage() {
         validationMode: validationMode,
         rewardId: selectedRewardId || null,
         rewardName: selected ? selected.name : (rewardStatus?.config.rewardName || "Paket Merchandise Spesial Eksplorasi Budaya"),
+        startAt: fromDatetimeLocalValue(startAt),
+        endAt: fromDatetimeLocalValue(endAt),
       });
 
       if (res.success) {
@@ -466,11 +487,10 @@ export default function DashboardKelolaStandPage() {
         {/* Feedback Alert */}
         {feedback && (
           <div
-            className={`p-4 rounded-xl text-xs flex items-center justify-between gap-3 border ${
-              feedback.type === "success"
+            className={`p-4 rounded-xl text-xs flex items-center justify-between gap-3 border ${feedback.type === "success"
                 ? "border-success/40 bg-success/10 text-success"
                 : "border-danger/40 bg-danger/10 text-danger"
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               {feedback.type === "success" ? (
@@ -503,6 +523,9 @@ export default function DashboardKelolaStandPage() {
                   </h2>
                   <Badge variant={rewardEnabled ? "gold" : "default"} className="text-[10px] uppercase font-bold">
                     {rewardEnabled ? "Aktif" : "Nonaktif"}
+                  </Badge>
+                  <Badge variant={periodInfo.badgeVariant} className="text-[10px] uppercase font-bold">
+                    {periodInfo.label}
                   </Badge>
                   <Badge variant="default" className="text-[10px] font-mono border border-accent/40 text-accent">
                     Batas Kuota: {rewardStatus?.config.quota ?? rewardQuota} Peserta
@@ -564,11 +587,10 @@ export default function DashboardKelolaStandPage() {
           {/* Feedback Reward Alert */}
           {rewardFeedback && (
             <div
-              className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 border animate-in fade-in ${
-                rewardFeedback.type === "success"
+              className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 border animate-in fade-in ${rewardFeedback.type === "success"
                   ? "border-success/40 bg-success/10 text-success"
                   : "border-danger/40 bg-danger/10 text-danger"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2">
                 {rewardFeedback.type === "success" ? (
@@ -723,6 +745,41 @@ export default function DashboardKelolaStandPage() {
               </div>
             </div>
 
+            {/* 5. Periode Akses Misi Jelajah Stand */}
+            <div className="p-3.5 rounded-xl border border-border bg-background space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-accent" />
+                    Periode Akses Misi & Reward Stand
+                  </span>
+                  <p className="text-[11px] text-muted-foreground">
+                    Atur tanggal dan waktu mulai serta berakhirnya misi jelajah stand bagi peserta (Zona WIB).
+                  </p>
+                </div>
+                <Badge variant={periodInfo.badgeVariant} className="text-[11px] self-start sm:self-auto">
+                  {periodInfo.label}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                <Input
+                  label="Tanggal & Waktu Mulai (WIB)"
+                  type="datetime-local"
+                  value={startAt}
+                  onChange={(e) => setStartAt(e.target.value)}
+                  helperText="Peserta belum bisa check-in sebelum waktu ini. Kosongkan jika langsung dibuka."
+                />
+                <Input
+                  label="Tanggal & Waktu Berakhir (WIB)"
+                  type="datetime-local"
+                  value={endAt}
+                  onChange={(e) => setEndAt(e.target.value)}
+                  helperText="Misi dan checkout otomatis ditutup setelah waktu ini. Kosongkan jika tanpa batas."
+                />
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <span className="text-[11px] text-muted-foreground">
                 * Data reward otomatis terhubung ke pencatatan antrean klaim di <strong>/dashboard/challenge/reward</strong>.
@@ -739,7 +796,7 @@ export default function DashboardKelolaStandPage() {
                 ) : (
                   <CheckCircle2 className="h-3.5 w-3.5" />
                 )}
-                <span>{rewardSaving ? "Menyimpan..." : "Simpan Batas Kuota & Reward"}</span>
+                <span>{rewardSaving ? "Menyimpan..." : "Simpan Pengaturan & Periode Stand"}</span>
               </Button>
             </div>
           </form>
@@ -1101,22 +1158,20 @@ export default function DashboardKelolaStandPage() {
                 <button
                   type="button"
                   onClick={() => setQrTab("checkin")}
-                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    qrTab === "checkin"
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${qrTab === "checkin"
                       ? "bg-card text-foreground shadow-xs border border-border"
                       : "text-muted-foreground hover:text-foreground"
-                  }`}
+                    }`}
                 >
                   🚪 1. QR Masuk (Check-in)
                 </button>
                 <button
                   type="button"
                   onClick={() => setQrTab("checkout")}
-                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    qrTab === "checkout"
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${qrTab === "checkout"
                       ? "bg-card text-foreground shadow-xs border border-border"
                       : "text-muted-foreground hover:text-foreground"
-                  }`}
+                    }`}
                 >
                   📍 2. QR Dalam Stand (Checkout)
                 </button>
@@ -1192,13 +1247,12 @@ export default function DashboardKelolaStandPage() {
                           <TableRow key={`${rec.participantId}-${rec.rank}`}>
                             <TableCell className="text-center">
                               <span
-                                className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-mono font-bold ${
-                                  rec.rank <= 3
+                                className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-mono font-bold ${rec.rank <= 3
                                     ? "bg-accent text-accent-foreground"
                                     : isGranted
-                                    ? "bg-muted text-foreground"
-                                    : "bg-muted/50 text-muted-foreground"
-                                }`}
+                                      ? "bg-muted text-foreground"
+                                      : "bg-muted/50 text-muted-foreground"
+                                  }`}
                               >
                                 #{rec.rank}
                               </span>

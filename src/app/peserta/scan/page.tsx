@@ -40,6 +40,7 @@ import {
   type StandViewerSession,
 } from "@/app/actions/stand-rewards";
 import { getChallengeParticipationSettings } from "@/app/actions/challenge-eligibility";
+import { getChallengePeriodInfo } from "@/lib/challenge-period";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentParticipant } from "@/lib/hooks/useCurrentParticipant";
 import { cn } from "@/lib/utils";
@@ -101,12 +102,26 @@ function PesertaScanContent() {
     rewardName: string;
     minDurationMinutes: number;
     validationMode: "both" | "qr" | "code";
+    startAt?: string | null;
+    endAt?: string | null;
+    enabled?: boolean;
   }>({
     quota: 50,
     rewardName: "Paket Merchandise Gebyar Bahasa",
     minDurationMinutes: 15,
     validationMode: "both",
+    startAt: null,
+    endAt: null,
+    enabled: true,
   });
+
+  const periodInfo = React.useMemo(() => {
+    return getChallengePeriodInfo(
+      rewardConfig.startAt,
+      rewardConfig.endAt,
+      rewardConfig.enabled ?? true
+    );
+  }, [rewardConfig.startAt, rewardConfig.endAt, rewardConfig.enabled]);
   const [remainingRewardQuota, setRemainingRewardQuota] = React.useState(50);
   const [existingRecipient, setExistingRecipient] = React.useState<any>(null);
 
@@ -231,6 +246,9 @@ function PesertaScanContent() {
               rewardName: res.config.rewardName,
               minDurationMinutes: res.config.minDurationMinutes || 15,
               validationMode: res.config.validationMode || "both",
+              startAt: res.config.startAt,
+              endAt: res.config.endAt,
+              enabled: res.config.enabled,
             });
           }
 
@@ -313,7 +331,7 @@ function PesertaScanContent() {
       if (navigator.vibrate) {
         try {
           navigator.vibrate([80, 50, 80]);
-        } catch {}
+        } catch { }
       }
       try {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -330,7 +348,7 @@ function PesertaScanContent() {
           osc.start();
           osc.stop(ctx.currentTime + 0.15);
         }
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -348,7 +366,7 @@ function PesertaScanContent() {
         if (parsed.code) return String(parsed.code).trim().toUpperCase();
         if (parsed.token) return String(parsed.token).trim().toUpperCase();
         if (parsed.standCode) return String(parsed.standCode).trim().toUpperCase();
-      } catch {}
+      } catch { }
     }
     // If it's a URL
     if (clean.includes("http://") || clean.includes("https://")) {
@@ -360,7 +378,7 @@ function PesertaScanContent() {
           parsedUrl.searchParams.get("stand") ||
           parsedUrl.searchParams.get("token");
         if (codeParam) return codeParam.trim().toUpperCase();
-      } catch {}
+      } catch { }
     }
 
     return clean.toUpperCase();
@@ -418,7 +436,7 @@ function PesertaScanContent() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        await videoRef.current.play().catch(() => { });
       }
 
       setCameraStatus("active");
@@ -480,7 +498,7 @@ function PesertaScanContent() {
           advanced: [{ torch: newTorch }],
         })
         .then(() => setTorchOn(newTorch))
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [torchOn]);
 
@@ -490,6 +508,14 @@ function PesertaScanContent() {
       if (isChallengeBlocked) {
         setErrorMsg(
           `Partisipasi challenge ditolak: Berdasarkan kebijakan panitia, peserta yang mengikuti cabang lomba (${enrolledCompetitionNames.join(", ") || "Lomba"}) tidak diperkenankan mengikuti challenge ini.`
+        );
+        return;
+      }
+      if (!periodInfo.isPlayable) {
+        setErrorMsg(
+          periodInfo.detailText
+            ? `Misi belum dapat diakses (${periodInfo.label}: ${periodInfo.detailText}).`
+            : `Misi jelajah stand ${periodInfo.label.toLowerCase()}.`
         );
         return;
       }
@@ -562,7 +588,7 @@ function PesertaScanContent() {
         setActionLoading(false);
       }
     },
-    [isChallengeBlocked, enrolledCompetitionNames, processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera, isAllStandsCompleted]
+    [isChallengeBlocked, enrolledCompetitionNames, processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera, isAllStandsCompleted, periodInfo]
   );
 
   // Handle Checkout Action
@@ -571,6 +597,14 @@ function PesertaScanContent() {
       if (isChallengeBlocked) {
         setErrorMsg(
           `Partisipasi challenge ditolak: Berdasarkan kebijakan panitia, peserta yang mengikuti cabang lomba (${enrolledCompetitionNames.join(", ") || "Lomba"}) tidak diperkenankan mengikuti challenge ini.`
+        );
+        return;
+      }
+      if (!periodInfo.isPlayable) {
+        setErrorMsg(
+          periodInfo.detailText
+            ? `Misi sudah berakhir atau belum dibuka (${periodInfo.label}: ${periodInfo.detailText}).`
+            : `Misi jelajah stand ${periodInfo.label.toLowerCase()}.`
         );
         return;
       }
@@ -654,7 +688,7 @@ function PesertaScanContent() {
         setActionLoading(false);
       }
     },
-    [isChallengeBlocked, enrolledCompetitionNames, processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera, standsCompletedCount, totalActiveStands]
+    [isChallengeBlocked, enrolledCompetitionNames, processCodeString, triggerScanFeedback, resolveParticipantId, loadSessionData, refetch, stopCamera, standsCompletedCount, totalActiveStands, periodInfo]
   );
 
   // Handle Cancel Active Session
@@ -770,7 +804,7 @@ function PesertaScanContent() {
               if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
                 detectedValue = barcodes[0].rawValue;
               }
-            } catch {}
+            } catch { }
           }
 
           if (!detectedValue) {
@@ -800,7 +834,7 @@ function PesertaScanContent() {
                   detectedValue = code.data;
                 }
               }
-            } catch {}
+            } catch { }
           }
 
           if (detectedValue && isScanningActive && detectedValue !== lastScannedCode) {
@@ -851,9 +885,14 @@ function PesertaScanContent() {
             <span>Kembali ke Beranda Peserta</span>
           </Link>
           <div className="space-y-1.5 text-center">
-            <Badge variant="gold" className="text-xs">
-              Misi Eksplorasi Budaya
-            </Badge>
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <Badge variant="gold" className="text-xs">
+                Misi Eksplorasi Budaya
+              </Badge>
+              <Badge variant={periodInfo.badgeVariant} className="text-xs">
+                {periodInfo.label}
+              </Badge>
+            </div>
             <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               Challenge Keliling Stand Lomba
             </h1>
@@ -887,6 +926,28 @@ function PesertaScanContent() {
                     : "(Peserta Cabang Lomba)"}
                 </strong>{" "}
                 tidak diperkenankan mengikuti challenge/misi keliling stand. Anda diprioritaskan untuk fokus pada cabang lomba yang Anda ikuti.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Banner Periode Akses Misi Stand */}
+        {!isChallengeBlocked && !periodInfo.isPlayable && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-heading text-sm sm:text-base font-bold text-foreground">
+                  Misi Jelajah Stand Sedang Ditutup
+                </h2>
+                <Badge variant={periodInfo.badgeVariant} className="text-[10px]">
+                  {periodInfo.label}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {periodInfo.detailText}. Peserta baru dapat melakukan check-in dan checkout stand saat misi berada dalam periode aktif.
               </p>
             </div>
           </div>
@@ -1243,9 +1304,8 @@ function PesertaScanContent() {
                               <button
                                 type="button"
                                 onClick={toggleTorch}
-                                className={`p-2 rounded-full backdrop-blur-md transition-colors ${
-                                  torchOn ? "bg-amber-400 text-black" : "bg-black/60 text-white hover:bg-black/80"
-                                }`}
+                                className={`p-2 rounded-full backdrop-blur-md transition-colors ${torchOn ? "bg-amber-400 text-black" : "bg-black/60 text-white hover:bg-black/80"
+                                  }`}
                                 title="Senter Kamera"
                               >
                                 <Zap className="h-4 w-4" />
@@ -1385,6 +1445,35 @@ function PesertaScanContent() {
               </Link>
             </div>
           </Card>
+        ) : !periodInfo.isPlayable ? (
+          /* ========================================================================= */
+          /* KONDISI 2C: MISI SEDANG TIDAK AKTIF / DI LUAR PERIODE                      */
+          /* ========================================================================= */
+          <Card className="p-6 text-center space-y-4 border-2 border-amber-500/40 bg-amber-500/5">
+            <div className="mx-auto w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
+              <Clock className="h-8 w-8" />
+            </div>
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-semibold">
+                <Clock className="h-3.5 w-3.5" />
+                <span>{periodInfo.label}</span>
+              </div>
+              <h3 className="font-heading text-lg font-bold text-foreground">
+                Misi Jelajah Stand {periodInfo.label}
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+                {periodInfo.detailText}. Check-in dan checkout stand pameran hanya dapat dilakukan selama periode aktif yang ditentukan oleh panitia.
+              </p>
+            </div>
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+              <Link href="/peserta/challenge">
+                <Button variant="outline" className="text-xs font-semibold gap-1.5">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span>Kembali ke Daftar Misi</span>
+                </Button>
+              </Link>
+            </div>
+          </Card>
         ) : (
           /* ========================================================================= */
           /* KONDISI 2A: BELUM ADA SESI -> SCAN QR MASUK (CHECK-IN)                    */
@@ -1479,9 +1568,8 @@ function PesertaScanContent() {
                       <button
                         type="button"
                         onClick={toggleTorch}
-                        className={`p-2 rounded-full backdrop-blur-md transition-colors ${
-                          torchOn ? "bg-amber-400 text-black" : "bg-black/60 text-white hover:bg-black/80"
-                        }`}
+                        className={`p-2 rounded-full backdrop-blur-md transition-colors ${torchOn ? "bg-amber-400 text-black" : "bg-black/60 text-white hover:bg-black/80"
+                          }`}
                         title="Senter Kamera"
                       >
                         <Zap className="h-4 w-4" />
@@ -1576,8 +1664,8 @@ function PesertaScanContent() {
                     {isChallengeBlocked
                       ? "Akses Terkunci (Peserta Lomba)"
                       : actionLoading
-                      ? "Memproses Check-in..."
-                      : "Check-in & Mulai Menonton"}
+                        ? "Memproses Check-in..."
+                        : "Check-in & Mulai Menonton"}
                   </span>
                 </Button>
               </form>
@@ -1607,8 +1695,8 @@ function PesertaScanContent() {
                   st.isCompleted
                     ? "border-success/40 bg-success/5 text-foreground"
                     : activeSession?.standId === st.id
-                    ? "border-amber-500/50 bg-amber-500/10 text-foreground"
-                    : "border-border bg-background/50 text-muted-foreground"
+                      ? "border-amber-500/50 bg-amber-500/10 text-foreground"
+                      : "border-border bg-background/50 text-muted-foreground"
                 )}
               >
                 <div className="min-w-0">

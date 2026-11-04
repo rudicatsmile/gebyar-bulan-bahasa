@@ -147,6 +147,9 @@ export default function PesertaChallengeListPage() {
     allCompleted: boolean;
     standsCompletedCount: number;
     totalActiveStands: number;
+    startAt?: string | null;
+    endAt?: string | null;
+    enabled?: boolean;
   } | null>(null);
 
   // Status pengaturan partisipasi challenge untuk peserta lomba
@@ -238,17 +241,21 @@ export default function PesertaChallengeListPage() {
       checkParticipantQrHurufStatus(pId).then((res) => {
         setQrHurufStatus(res);
       });
-      // Periksa status Misi Scan QR Stand
-      getParticipantStandProgress(pId).then((res) => {
-        if (res.success) {
-          setStandStatus({
-            allCompleted: res.allCompleted,
-            standsCompletedCount: res.standsCompletedCount,
-            totalActiveStands: res.totalActiveStands,
-          });
-        }
-      });
     }
+
+    // Periksa status & periode Misi Scan QR Stand
+    getParticipantStandProgress(pId || "").then((res) => {
+      if (res.success) {
+        setStandStatus({
+          allCompleted: res.allCompleted,
+          standsCompletedCount: res.standsCompletedCount,
+          totalActiveStands: res.totalActiveStands,
+          startAt: res.config?.startAt,
+          endAt: res.config?.endAt,
+          enabled: res.config?.enabled,
+        });
+      }
+    });
 
     if (!participant?.id) return;
     checkParticipantPuzzleAttempt(participant.id)
@@ -377,66 +384,86 @@ export default function PesertaChallengeListPage() {
             ))
           ) : (
             <>
-              <ChallengeItem
-                title="Scan QR Kode Stand"
-                meta={
-                  isChallengeBlocked
-                    ? "Terkunci: Misi jelajah stand hanya dapat diikuti peserta non-lomba"
-                    : standStatus?.allCompleted
-                    ? `Seluruh ${standStatus.totalActiveStands} stand pameran budaya telah selesai dikunjungi`
-                    : standStatus && standStatus.standsCompletedCount > 0
-                      ? `${standStatus.standsCompletedCount} dari ${standStatus.totalActiveStands} stand telah diselesaikan`
-                      : "Jelajahi seluruh stand pameran budaya & tonton atraksi seni"
-                }
-                href={isChallengeBlocked ? null : "/peserta/scan"}
-                actionLabel={
-                  isChallengeBlocked
-                    ? "Terkunci (Peserta Lomba)"
-                    : standStatus?.allCompleted
-                    ? "Lihat Riwayat Stand"
-                    : standStatus && standStatus.standsCompletedCount > 0
-                      ? "Lanjutkan Jelajah Stand"
-                      : "Scan QR Kode Stand"
-                }
-                icon={standStatus?.allCompleted ? CheckCircle2 : QrCode}
-                variant={standStatus?.allCompleted ? "outline" : "accent"}
-                disabled={isChallengeBlocked}
-                badge={
-                  isChallengeBlocked ? (
-                    <Badge variant="danger" className="shrink-0 text-[10px]">
-                      Khusus Non-Lomba
-                    </Badge>
-                  ) : standStatus?.allCompleted ? (
-                    <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
-                      Sudah Selesai
-                    </Badge>
-                  ) : standStatus && standStatus.standsCompletedCount > 0 ? (
-                    <Badge variant="info" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
-                      {standStatus.standsCompletedCount}/{standStatus.totalActiveStands} Stand
-                    </Badge>
-                  ) : null
-                }
-              />
+              {(() => {
+                const standPeriod = getChallengePeriodInfo(
+                  standStatus?.startAt,
+                  standStatus?.endAt,
+                  standStatus?.enabled ?? true
+                );
+                const isPlayable = standPeriod.isPlayable;
+                const isCompleted = Boolean(standStatus?.allCompleted);
+
+                return (
+                  <ChallengeItem
+                    title="Scan QR Kode Stand"
+                    meta={
+                      isChallengeBlocked
+                        ? "Terkunci: Misi jelajah stand hanya dapat diikuti peserta non-lomba"
+                        : isCompleted
+                          ? `Seluruh ${standStatus?.totalActiveStands || 8} stand pameran budaya telah selesai dikunjungi`
+                          : !isPlayable
+                            ? `${standPeriod.detailText} • Jelajahi seluruh stand budaya`
+                            : standStatus && standStatus.standsCompletedCount > 0
+                              ? `${standStatus.standsCompletedCount} dari ${standStatus.totalActiveStands} stand telah diselesaikan`
+                              : "Jelajahi seluruh stand pameran budaya & tonton atraksi seni"
+                    }
+                    href={isChallengeBlocked || (!isCompleted && !isPlayable) ? null : "/peserta/scan"}
+                    actionLabel={
+                      isChallengeBlocked
+                        ? "Terkunci (Peserta Lomba)"
+                        : isCompleted
+                          ? "Lihat Riwayat Stand"
+                          : !isPlayable
+                            ? standPeriod.label
+                            : standStatus && standStatus.standsCompletedCount > 0
+                              ? "Lanjutkan Jelajah Stand"
+                              : "Scan QR Kode Stand"
+                    }
+                    icon={isCompleted ? CheckCircle2 : QrCode}
+                    variant={isCompleted ? "outline" : "accent"}
+                    disabled={isChallengeBlocked || (!isCompleted && !isPlayable)}
+                    badge={
+                      isChallengeBlocked ? (
+                        <Badge variant="danger" className="shrink-0 text-[10px]">
+                          Khusus Non-Lomba
+                        </Badge>
+                      ) : isCompleted ? (
+                        <Badge variant="success" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          Sudah Selesai
+                        </Badge>
+                      ) : !isPlayable ? (
+                        <Badge variant={standPeriod.badgeVariant} className="shrink-0 text-[10px]">
+                          {standPeriod.label}
+                        </Badge>
+                      ) : standStatus && standStatus.standsCompletedCount > 0 ? (
+                        <Badge variant="info" className="shrink-0 text-[10px] gap-1 px-2 py-0.5">
+                          {standStatus.standsCompletedCount}/{standStatus.totalActiveStands} Stand
+                        </Badge>
+                      ) : null
+                    }
+                  />
+                );
+              })()}
               <ChallengeItem
                 title="Tantangan Twibbon GebyarBulanBahasa"
                 meta={
                   isChallengeBlocked
                     ? "Terkunci: Unggah twibbon dengan reward poin hanya untuk peserta non-lomba"
                     : twibbonStatus?.pointsAwarded
-                    ? "+20 Poin Diperoleh (Disetujui)"
-                    : twibbonStatus?.hasSubmitted
-                      ? "Menunggu verifikasi moderasi Media Center"
-                      : "+20 poin per unggahan foto (setelah disetujui)"
+                      ? "+20 Poin Diperoleh (Disetujui)"
+                      : twibbonStatus?.hasSubmitted
+                        ? "Menunggu verifikasi moderasi Media Center"
+                        : "+20 poin per unggahan foto (setelah disetujui)"
                 }
                 href={isChallengeBlocked ? null : (twibbonStatus?.hasSubmitted ? "/peserta/twibbon" : "/twibbon/unggah")}
                 actionLabel={
                   isChallengeBlocked
                     ? "Terkunci (Peserta Lomba)"
                     : twibbonStatus?.pointsAwarded
-                    ? "Lihat Twibbon Saya"
-                    : twibbonStatus?.hasSubmitted
-                      ? "Cek Status Moderasi"
-                      : "Kirim Bukti Twibbon"
+                      ? "Lihat Twibbon Saya"
+                      : twibbonStatus?.hasSubmitted
+                        ? "Cek Status Moderasi"
+                        : "Kirim Bukti Twibbon"
                 }
                 icon={twibbonStatus?.pointsAwarded ? CheckCircle2 : Camera}
                 variant={twibbonStatus?.pointsAwarded ? "outline" : "accent"}
@@ -467,20 +494,20 @@ export default function PesertaChallengeListPage() {
                       isChallengeBlocked
                         ? "Terkunci: Permainan kepingan puzzle hanya untuk peserta non-lomba"
                         : jigsawStatus.hasCompleted
-                        ? `Perolehan Skor: +${jigsawStatus.points} Poin (Puzzle Selesai)`
-                        : !isPlayable
-                        ? `${period.detailText} • +${jigsawStatus.points} poin saat kepingan tersusun`
-                        : `+${jigsawStatus.points} poin saat seluruh kepingan tersusun`
+                          ? `Perolehan Skor: +${jigsawStatus.points} Poin (Puzzle Selesai)`
+                          : !isPlayable
+                            ? `${period.detailText} • +${jigsawStatus.points} poin saat kepingan tersusun`
+                            : `+${jigsawStatus.points} poin saat seluruh kepingan tersusun`
                     }
                     href={isChallengeBlocked || (!jigsawStatus.hasCompleted && !isPlayable) ? null : "/peserta/challenge/kepingan-puzzle"}
                     actionLabel={
                       isChallengeBlocked
                         ? "Terkunci (Peserta Lomba)"
                         : jigsawStatus.hasCompleted
-                        ? "Lihat Hasil Mahakarya"
-                        : !isPlayable
-                        ? period.label
-                        : "Mulai Susun Kepingan"
+                          ? "Lihat Hasil Mahakarya"
+                          : !isPlayable
+                            ? period.label
+                            : "Mulai Susun Kepingan"
                     }
                     icon={jigsawStatus.hasCompleted ? CheckCircle2 : Puzzle}
                     variant={jigsawStatus.hasCompleted ? "outline" : "accent"}
@@ -518,20 +545,20 @@ export default function PesertaChallengeListPage() {
                       isChallengeBlocked
                         ? "Terkunci: Misi berburu huruf aksara hanya untuk peserta non-lomba"
                         : qrHurufStatus?.hasCompleted
-                        ? `Perolehan Skor: +${qrHurufStatus.score ?? 100} Poin (Kalimat Berhasil Tersusun)`
-                        : !isPlayable
-                        ? `${period.detailText} • +100 poin bila kalimat tersusun`
-                        : "+100 poin bila kalimat tersusun"
+                          ? `Perolehan Skor: +${qrHurufStatus.score ?? 100} Poin (Kalimat Berhasil Tersusun)`
+                          : !isPlayable
+                            ? `${period.detailText} • +100 poin bila kalimat tersusun`
+                            : "+100 poin bila kalimat tersusun"
                     }
                     href={isChallengeBlocked || (!qrHurufStatus?.hasCompleted && !isPlayable) ? null : "/peserta/challenge/qr-huruf"}
                     actionLabel={
                       isChallengeBlocked
                         ? "Terkunci (Peserta Lomba)"
                         : qrHurufStatus?.hasCompleted
-                        ? "Lihat Hasil Misi"
-                        : !isPlayable
-                        ? period.label
-                        : "Mulai Berburu QR"
+                          ? "Lihat Hasil Misi"
+                          : !isPlayable
+                            ? period.label
+                            : "Mulai Berburu QR"
                     }
                     icon={qrHurufStatus?.hasCompleted ? CheckCircle2 : QrCode}
                     variant={qrHurufStatus?.hasCompleted ? "outline" : "accent"}
@@ -565,20 +592,20 @@ export default function PesertaChallengeListPage() {
                       isChallengeBlocked
                         ? "Terkunci: Game puzzle hanya untuk peserta non-lomba"
                         : puzzleAttempt?.hasAttempted
-                        ? `Skor Penyelesaian: ${puzzleAttempt.score ?? 0} Poin`
-                        : !isPlayable
-                        ? `${period.detailText} • Tebak asal pakaian adat`
-                        : "Mencocokkan baju adat dengan daerah asalnya di nusantara"
+                          ? `Skor Penyelesaian: ${puzzleAttempt.score ?? 0} Poin`
+                          : !isPlayable
+                            ? `${period.detailText} • Tebak asal pakaian adat`
+                            : "Mencocokkan baju adat dengan daerah asalnya di nusantara"
                     }
                     href={isChallengeBlocked || (!puzzleAttempt?.hasAttempted && !isPlayable) ? null : "/peserta/challenge/puzzle"}
                     actionLabel={
                       isChallengeBlocked
                         ? "Terkunci (Peserta Lomba)"
                         : puzzleAttempt?.hasAttempted
-                        ? "Lihat Skor Percobaan"
-                        : !isPlayable
-                        ? period.label
-                        : "Mulai Bermain Puzzle"
+                          ? "Lihat Skor Percobaan"
+                          : !isPlayable
+                            ? period.label
+                            : "Mulai Bermain Puzzle"
                     }
                     icon={puzzleAttempt?.hasAttempted ? CheckCircle2 : Puzzle}
                     variant={puzzleAttempt?.hasAttempted ? "outline" : "accent"}
@@ -621,16 +648,16 @@ export default function PesertaChallengeListPage() {
                       isChallengeBlocked
                         ? "Terkunci untuk peserta lomba"
                         : !isPlayable
-                        ? `${period.detailText} • +${ch.pointReward} poin`
-                        : `+${ch.pointReward} poin`
+                          ? `${period.detailText} • +${ch.pointReward} poin`
+                          : `+${ch.pointReward} poin`
                     }
                     href={isChallengeBlocked || !isPlayable ? null : (action?.href ?? null)}
                     actionLabel={
                       isChallengeBlocked
                         ? "Terkunci (Peserta Lomba)"
                         : !isPlayable
-                        ? period.label
-                        : (action?.label ?? "Poin diisi panitia")
+                          ? period.label
+                          : (action?.label ?? "Poin diisi panitia")
                     }
                     disabled={isChallengeBlocked || !isPlayable}
                     badge={

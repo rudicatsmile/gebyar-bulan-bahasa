@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { STANDS } from "@/lib/dummy-data";
 import { getStandCheckoutCode, getStandCheckoutToken } from "@/lib/stand-utils";
 import { checkParticipantChallengeEligibility } from "./challenge-eligibility";
+import { validateChallengePeriod } from "@/lib/challenge-period";
 
 export interface StandSpecialRewardConfig {
   enabled: boolean;
@@ -14,6 +15,8 @@ export interface StandSpecialRewardConfig {
   description?: string;
   minDurationMinutes: number; // default: 15 menit
   validationMode: "both" | "qr" | "code"; // "both", "qr", "code"
+  startAt?: string | null;
+  endAt?: string | null;
 }
 
 export interface StandSpecialRewardRecipient {
@@ -65,6 +68,8 @@ const DEFAULT_CONFIG: StandSpecialRewardConfig = {
   description: "Diberikan khusus untuk peserta yang berhasil menyelesaikan seluruh stand pameran budaya.",
   minDurationMinutes: 15,
   validationMode: "both",
+  startAt: null,
+  endAt: null,
 };
 
 async function broadcastStandUpdate(action: string, payload?: Record<string, any>) {
@@ -207,6 +212,8 @@ export async function updateStandSpecialRewardConfig(payload: {
   description?: string;
   minDurationMinutes?: number;
   validationMode?: "both" | "qr" | "code";
+  startAt?: string | null;
+  endAt?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = createAdminClient();
@@ -232,6 +239,8 @@ export async function updateStandSpecialRewardConfig(payload: {
       ...(payload.description !== undefined ? { description: payload.description } : {}),
       ...(payload.minDurationMinutes !== undefined ? { minDurationMinutes: Math.max(1, Number(payload.minDurationMinutes) || 15) } : {}),
       ...(payload.validationMode !== undefined ? { validationMode: payload.validationMode } : {}),
+      ...(payload.startAt !== undefined ? { startAt: payload.startAt || null } : {}),
+      ...(payload.endAt !== undefined ? { endAt: payload.endAt || null } : {}),
     };
 
     const { error } = await supabase.from("event_settings").upsert({
@@ -730,13 +739,13 @@ export async function getParticipantStandSession(participantId: string) {
     const activeStands = (dbStands && dbStands.length > 0)
       ? dbStands
       : STANDS.map((s) => ({
-          id: s.id,
-          name: s.name,
-          code: s.code,
-          booth_location: s.location,
-          qr_token: s.qrToken,
-          is_active: true,
-        }));
+        id: s.id,
+        name: s.name,
+        code: s.code,
+        booth_location: s.location,
+        qr_token: s.qrToken,
+        is_active: true,
+      }));
 
     const totalActiveStands = activeStands.length;
 
@@ -949,13 +958,13 @@ export async function checkInStandSession(payload: {
     const activeStands = (dbStands && dbStands.length > 0)
       ? dbStands
       : STANDS.map((s) => ({
-          id: s.id,
-          name: s.name,
-          code: s.code,
-          booth_location: s.location,
-          qr_token: s.qrToken,
-          is_active: true,
-        }));
+        id: s.id,
+        name: s.name,
+        code: s.code,
+        booth_location: s.location,
+        qr_token: s.qrToken,
+        is_active: true,
+      }));
 
     const cleanUpper = cleanInput.toUpperCase();
     const matchedStand = activeStands.find(
@@ -972,7 +981,7 @@ export async function checkInStandSession(payload: {
       };
     }
 
-    // 2. Ambil konfigurasi durasi minimal
+    // 2. Ambil konfigurasi durasi minimal & periode aktif
     const { data: configRow } = await supabase
       .from("event_settings")
       .select("value")
@@ -983,6 +992,19 @@ export async function checkInStandSession(payload: {
       ...DEFAULT_CONFIG,
       ...((configRow?.value as any) || {}),
     };
+
+    // Validasi periode aktif misi
+    const periodCheck = validateChallengePeriod(
+      config.startAt,
+      config.endAt,
+      "Misi Jelajah Stand Pameran"
+    );
+    if (!periodCheck.isValid) {
+      return {
+        success: false,
+        error: periodCheck.error || "Misi Jelajah Stand Pameran sedang tidak aktif.",
+      };
+    }
 
     const minMinutes = config.minDurationMinutes || 15;
 
@@ -1175,6 +1197,30 @@ export async function checkOutStandSession(payload: {
 
   try {
     const supabase = createAdminClient();
+
+    // Validasi periode aktif misi
+    const { data: configRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_special_reward_config")
+      .maybeSingle();
+
+    const config: StandSpecialRewardConfig = {
+      ...DEFAULT_CONFIG,
+      ...((configRow?.value as any) || {}),
+    };
+
+    const periodCheck = validateChallengePeriod(
+      config.startAt,
+      config.endAt,
+      "Misi Jelajah Stand Pameran"
+    );
+    if (!periodCheck.isValid) {
+      return {
+        success: false,
+        error: periodCheck.error || "Misi Jelajah Stand Pameran sedang tidak aktif.",
+      };
+    }
 
     // 1. Ambil daftar sesi
     const { data: sessionRow } = await supabase
