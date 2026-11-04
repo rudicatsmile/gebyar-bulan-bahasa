@@ -1149,7 +1149,7 @@ export default function DashboardKelolaStandPage() {
               <DialogHeader>
                 <DialogTitle>{previewStand.name}</DialogTitle>
                 <DialogDescription>
-                  Cetak 2 QR token resmi: satu untuk <strong>Pintu Masuk</strong> (check-in), dan satu lagi untuk <strong>Di Dalam Stand</strong> (checkout setelah 15 menit).
+                  Cetak 2 QR token resmi: satu untuk <strong>Pintu Masuk</strong> (check-in), dan satu lagi untuk <strong>Di Dalam Stand</strong> (checkout setelah {minDurationMinutes || 15} menit).
                 </DialogDescription>
               </DialogHeader>
 
@@ -1187,7 +1187,7 @@ export default function DashboardKelolaStandPage() {
                     points={previewStand.points}
                     type="checkin"
                     badgeLabel="PINTU MASUK STAND (CHECK-IN)"
-                    infoText="Tempel di pintu masuk/depan stand. Peserta memindai untuk check-in & memulai sesi menonton minimal 15 menit."
+                    infoText={`Tempel di pintu masuk/depan stand. Peserta memindai untuk check-in & memulai sesi menonton minimal ${minDurationMinutes || 15} menit.`}
                   />
                 ) : (
                   <QRCodeCard
@@ -1198,7 +1198,7 @@ export default function DashboardKelolaStandPage() {
                     points={previewStand.points}
                     type="checkout"
                     badgeLabel="DI DALAM AREA STAND (CHECKOUT)"
-                    infoText="HANYA dipajang di dalam panggung/area dalam stand. Dipindai / dimasukkan kodenya oleh peserta setelah durasi 15 menit selesai."
+                    infoText={`HANYA dipajang di dalam panggung/area dalam stand. Dipindai / dimasukkan kodenya oleh peserta setelah durasi ${minDurationMinutes || 15} menit selesai.`}
                   />
                 )}
               </div>
