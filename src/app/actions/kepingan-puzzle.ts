@@ -138,10 +138,11 @@ export async function getActiveJigsawPuzzle(): Promise<{
       .maybeSingle();
 
     if (!error && data) {
-      let startAt = data.start_at || data.created_at;
-      let endAt = data.end_at || null;
+      const raw = data as any;
+      let startAt = raw.start_at || data.created_at;
+      let endAt = raw.end_at || null;
 
-      if (!data.start_at && !data.end_at) {
+      if (!raw.start_at && !raw.end_at) {
         const { data: pSet } = await supabase
           .from("event_settings")
           .select("value")
@@ -599,10 +600,11 @@ export async function submitJigsawCompletion(
       .maybeSingle();
 
     if (dbPuzzle) {
-      let startAt = dbPuzzle.start_at || dbPuzzle.created_at;
-      let endAt = dbPuzzle.end_at || null;
+      const raw = dbPuzzle as any;
+      let startAt = raw.start_at || dbPuzzle.created_at;
+      let endAt = raw.end_at || null;
 
-      if (!dbPuzzle.start_at && !dbPuzzle.end_at) {
+      if (!raw.start_at && !raw.end_at) {
         const { data: pSet } = await supabase
           .from("event_settings")
           .select("value")

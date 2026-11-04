@@ -1212,6 +1212,8 @@ export interface Database {
           target_phrase: string;
           points_reward: number;
           is_active: boolean;
+          start_at: string | null;
+          end_at: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -1223,6 +1225,8 @@ export interface Database {
           target_phrase: string;
           points_reward?: number;
           is_active?: boolean;
+          start_at?: string | null;
+          end_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1234,6 +1238,8 @@ export interface Database {
           target_phrase?: string;
           points_reward?: number;
           is_active?: boolean;
+          start_at?: string | null;
+          end_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1433,6 +1439,8 @@ export interface Database {
           points_reward: number;
           time_limit_seconds: number;
           is_active: boolean;
+          start_at: string | null;
+          end_at: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -1447,6 +1455,8 @@ export interface Database {
           points_reward?: number;
           time_limit_seconds?: number;
           is_active?: boolean;
+          start_at?: string | null;
+          end_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1461,6 +1471,8 @@ export interface Database {
           points_reward?: number;
           time_limit_seconds?: number;
           is_active?: boolean;
+          start_at?: string | null;
+          end_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
