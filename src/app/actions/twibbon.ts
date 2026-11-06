@@ -688,3 +688,175 @@ export async function checkParticipantTwibbonStatus(participantId: string): Prom
     return { hasSubmitted: false, hasApproved: false, pointsAwarded: false };
   }
 }
+
+/**
+ * Ekstrak relative path berkas storage dari image_url twibbon.
+ */
+function extractTwibbonStoragePath(imageUrl: string | null | undefined): string | null {
+  if (!imageUrl || typeof imageUrl !== "string") return null;
+
+  const buckets = Array.from(new Set([TWIBBON_BUCKET, "twibbon"])).filter(Boolean);
+
+  for (const b of buckets) {
+    const markers = [
+      `/storage/v1/object/public/${b}/`,
+      `/storage/v1/object/sign/${b}/`,
+      `/${b}/`,
+    ];
+    for (const marker of markers) {
+      const idx = imageUrl.indexOf(marker);
+      if (idx !== -1) {
+        const raw = imageUrl.slice(idx + marker.length);
+        const cleaned = decodeURIComponent(raw.split("?")[0].replace(/^\/+/, ""));
+        if (cleaned) return cleaned;
+      }
+    }
+  }
+
+  // Jika berupa path relatif uploads/...
+  const cleanPath = imageUrl.split("?")[0].replace(/^\/+/, "");
+  if (cleanPath.startsWith("uploads/")) {
+    return decodeURIComponent(cleanPath);
+  }
+
+  return null;
+}
+
+/**
+ * Menghapus data twibbon beserta berkas gambar di storage,
+ * dan melakukan rollback poin peserta jika twibbon sebelumnya berstatus disetujui
+ * dan tidak ada twibbon disetujui lainnya milik peserta tersebut.
+ */
+export async function deleteTwibbon(twibbonId: string): Promise<{ success: boolean; error?: string }> {
+  if (!twibbonId || typeof twibbonId !== "string") {
+    return { success: false, error: "ID Twibbon tidak valid." };
+  }
+
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "Sesi tidak valid. Silakan login kembali." };
+    }
+
+    const admin = createAdminClient();
+
+    // Pastikan user memiliki peran panitia/staff
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const role = profile?.role ?? null;
+    const isStaff = role !== null && STAFF_ROLES.includes(role);
+
+    if (!isStaff) {
+      return { success: false, error: "Hanya panitia yang berwenang menghapus twibbon." };
+    }
+
+    // 1. Ambil data twibbon saat ini sebelum dihapus
+    const { data: existingTwibbon, error: fetchErr } = await (admin
+      .from("twibbons") as any)
+      .select("id, user_id, participant_id, status, image_url, uploader_name")
+      .eq("id", twibbonId)
+      .maybeSingle();
+
+    if (fetchErr || !existingTwibbon) {
+      return { success: false, error: "Data twibbon tidak ditemukan atau sudah terhapus." };
+    }
+
+    // 2. Evaluasi poin jika twibbon berstatus 'disetujui'
+    let participantId: string | null = (existingTwibbon as any)?.participant_id || null;
+    if (!participantId && (existingTwibbon as any)?.user_id) {
+      const { data: pRow } = await admin
+        .from("participants")
+        .select("id")
+        .eq("user_id", (existingTwibbon as any).user_id)
+        .maybeSingle();
+      if (pRow) participantId = pRow.id;
+    }
+
+    if ((existingTwibbon as any)?.status === "disetujui" && participantId) {
+      // Cek apakah ada twibbon lain milik peserta ini yang masih berstatus 'disetujui'
+      const uId = (existingTwibbon as any)?.user_id;
+
+      let otherQuery = (admin.from("twibbons") as any)
+        .select("id", { count: "exact", head: true })
+        .eq("status", "disetujui")
+        .neq("id", twibbonId);
+
+      if (uId && participantId) {
+        otherQuery = otherQuery.or(`user_id.eq.${uId},participant_id.eq.${participantId}`);
+      } else if (uId) {
+        otherQuery = otherQuery.eq("user_id", uId);
+      } else {
+        otherQuery = otherQuery.eq("participant_id", participantId);
+      }
+
+      const { count: otherCount } = await otherQuery;
+      const otherApproved = Boolean(otherCount && otherCount > 0);
+
+      // Jika tidak ada twibbon lain yang disetujui, tarik kembali poin reward (+20 poin)
+      if (!otherApproved) {
+        const { data: txToDelete } = await admin
+          .from("point_transactions")
+          .select("id, points")
+          .eq("participant_id", participantId)
+          .or("note.ilike.%Tantangan Twibbon%,challenge_id.eq.d0000000-0000-0000-0000-000000000004")
+          .maybeSingle();
+
+        if (txToDelete) {
+          // Trigger trg_sync_points pada PostgreSQL otomatis menghitung ulang dan mengurangi
+          // saldo total_points pada tabel participants saat row point_transactions dihapus.
+          await admin.from("point_transactions").delete().eq("id", txToDelete.id);
+        }
+      }
+    }
+
+    // 3. Hapus file gambar terkait di Supabase Storage jika ada
+    const storagePath = extractTwibbonStoragePath(existingTwibbon.image_url);
+    if (storagePath) {
+      try {
+        const { error: storageErr } = await admin.storage
+          .from(TWIBBON_BUCKET)
+          .remove([storagePath]);
+        if (storageErr) {
+          console.warn("Peringatan: Gagal menghapus file dari storage twibbon:", storageErr.message);
+        }
+      } catch (sErr) {
+        console.warn("Exception saat menghapus file storage twibbon:", sErr);
+      }
+    }
+
+    // 4. Hapus data twibbon dari database
+    const { error: deleteErr } = await admin
+      .from("twibbons")
+      .delete()
+      .eq("id", twibbonId);
+
+    if (deleteErr) {
+      return { success: false, error: deleteErr.message };
+    }
+
+    // 5. Revalidasi cache halaman-halaman terkait
+    revalidatePath("/dashboard/twibbon");
+    revalidatePath("/media/twibbon");
+    revalidatePath("/galeri/twibbon");
+    revalidatePath("/peserta/twibbon");
+    revalidatePath("/peserta/challenge");
+    revalidatePath("/peserta/riwayat-poin");
+    revalidatePath("/peserta");
+    revalidatePath("/leaderboard");
+    revalidatePath("/monitor");
+    revalidatePath("/monitor/twibbon");
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menghapus twibbon.";
+    return { success: false, error: message };
+  }
+}

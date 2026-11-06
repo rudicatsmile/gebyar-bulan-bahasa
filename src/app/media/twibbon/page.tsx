@@ -7,8 +7,24 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TwibbonItem } from "@/lib/dummy-data";
-import { moderateTwibbon, getTwibbonsForModeration } from "@/app/actions/twibbon";
-import { Camera, CheckCircle2, XCircle, Sparkles, ArrowLeft, Loader2, AlertCircle } from "lucide-react";
+import { moderateTwibbon, getTwibbonsForModeration, deleteTwibbon } from "@/app/actions/twibbon";
+import {
+  Camera,
+  CheckCircle2,
+  XCircle,
+  Sparkles,
+  ArrowLeft,
+  Loader2,
+  AlertCircle,
+  Trash2,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 type StatusFilter = "semua" | "menunggu" | "disetujui" | "ditolak";
 
@@ -23,9 +39,10 @@ export default function MediaTwibbonPage() {
   const [twibbons, setTwibbons] = React.useState<TwibbonItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [actionError, setActionError] = React.useState("");
-  // Default "semua" agar hasil unggahan tetap terlihat walau antrean kosong
-  // (menghindari salah paham "tidak ada data").
+  const [actionSuccess, setActionSuccess] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("semua");
+  const [deleteTarget, setDeleteTarget] = React.useState<TwibbonItem | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   // Baca lewat Server Action (mengecek role staff di server) — bukan publicClient
   // (anon) yang membuat kiriman berstatus `menunggu` tersembunyi oleh RLS.
@@ -51,6 +68,7 @@ export default function MediaTwibbonPage() {
       prev.map((t) => (t.id === id ? { ...t, status: "disetujui" } : t))
     );
     setActionError("");
+    setActionSuccess("");
     try {
       const result = await moderateTwibbon({
         twibbonId: id,
@@ -60,6 +78,8 @@ export default function MediaTwibbonPage() {
       if (!result.success) {
         setActionError(result.error || "Gagal menyetujui twibbon.");
         await refresh();
+      } else {
+        setActionSuccess(`Twibbon milik "${item?.uploaderName || "peserta"}" disetujui.`);
       }
     } catch (e) {
       console.error("Gagal approve twibbon:", e);
@@ -74,6 +94,7 @@ export default function MediaTwibbonPage() {
       prev.map((t) => (t.id === id ? { ...t, status: "ditolak" } : t))
     );
     setActionError("");
+    setActionSuccess("");
     try {
       const result = await moderateTwibbon({
         twibbonId: id,
@@ -83,11 +104,39 @@ export default function MediaTwibbonPage() {
       if (!result.success) {
         setActionError(result.error || "Gagal menolak twibbon.");
         await refresh();
+      } else {
+        setActionSuccess(`Twibbon milik "${item?.uploaderName || "peserta"}" ditolak.`);
       }
     } catch (e) {
       console.error("Gagal reject twibbon:", e);
       setActionError("Gagal menolak twibbon. Silakan coba lagi.");
       await refresh();
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    const targetId = deleteTarget.id;
+    const targetName = deleteTarget.uploaderName;
+    setIsDeleting(true);
+    setActionError("");
+    setActionSuccess("");
+
+    try {
+      const result = await deleteTwibbon(targetId);
+      if (result.success) {
+        setTwibbons((prev) => prev.filter((t) => t.id !== targetId));
+        setActionSuccess(`Data twibbon milik "${targetName}" dan berkas gambarnya berhasil dihapus permanen.`);
+        setDeleteTarget(null);
+        await refresh();
+      } else {
+        setActionError(result.error || "Gagal menghapus data twibbon.");
+      }
+    } catch (err) {
+      console.error("Gagal menghapus twibbon:", err);
+      setActionError("Terjadi kesalahan sistem saat menghapus twibbon.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -152,9 +201,32 @@ export default function MediaTwibbonPage() {
         </div>
 
         {actionError && (
-          <div className="p-3.5 rounded-lg border border-danger/40 bg-danger/10 text-danger text-xs flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{actionError}</span>
+          <div className="p-3.5 rounded-lg border border-danger/40 bg-danger/10 text-danger text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{actionError}</span>
+            </div>
+            <button
+              onClick={() => setActionError("")}
+              className="text-xs font-semibold hover:underline cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        )}
+
+        {actionSuccess && (
+          <div className="p-3.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>{actionSuccess}</span>
+            </div>
+            <button
+              onClick={() => setActionSuccess("")}
+              className="text-xs font-semibold hover:underline cursor-pointer"
+            >
+              Tutup
+            </button>
           </div>
         )}
 
@@ -211,12 +283,12 @@ export default function MediaTwibbonPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredTwibbons.map((item) => (
-              <Card key={item.id} className="overflow-hidden flex flex-col justify-between">
+              <Card key={item.id} className="overflow-hidden flex flex-col justify-between group">
                 <div className="relative aspect-square w-full bg-muted overflow-hidden">
                   <img
                     src={item.imageUrl}
                     alt={item.uploaderName}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                   <div className="absolute top-2 left-2 flex gap-1">
                     <Badge
@@ -232,16 +304,27 @@ export default function MediaTwibbonPage() {
                       {item.status.toUpperCase()}
                     </Badge>
                   </div>
+                  <div className="absolute top-2 right-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(item)}
+                      title="Hapus Twibbon Ini"
+                      className="p-1.5 rounded-full bg-background/80 backdrop-blur-xs text-muted-foreground hover:text-danger hover:bg-background transition-all shadow-sm cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span className="sr-only">Hapus Twibbon</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h4 className="font-heading text-sm font-bold text-foreground">
+                  <div className="space-y-1">
+                    <h4 className="font-heading text-sm font-bold text-foreground truncate">
                       {item.uploaderName}
                     </h4>
-                    <p className="text-xs text-muted-foreground">{item.institution}</p>
+                    <p className="text-xs text-muted-foreground truncate">{item.institution}</p>
                     <p className="text-xs text-foreground/80 line-clamp-2 italic pt-1">
-                      &ldquo;{item.caption}&rdquo;
+                      &ldquo;{item.caption || "Tanpa keterangan"}&rdquo;
                     </p>
                   </div>
 
@@ -262,22 +345,47 @@ export default function MediaTwibbonPage() {
                     </div>
 
                     {item.status === "menunggu" && (
-                      <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div className="space-y-2 pt-1">
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleReject(item.id)}
+                            className="text-xs h-8"
+                          >
+                            Tolak
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="success"
+                            onClick={() => handleApprove(item.id)}
+                            className="text-xs h-8"
+                          >
+                            Setujui
+                          </Button>
+                        </div>
                         <Button
                           size="sm"
-                          variant="destructive"
-                          onClick={() => handleReject(item.id)}
-                          className="text-xs h-8"
+                          variant="outline"
+                          onClick={() => setDeleteTarget(item)}
+                          className="w-full text-xs h-7 text-danger hover:text-danger hover:bg-danger/10 border-danger/30"
                         >
-                          Tolak
+                          <Trash2 className="h-3 w-3 mr-1" />
+                          Hapus Permanen
                         </Button>
+                      </div>
+                    )}
+
+                    {(item.status === "disetujui" || item.status === "ditolak") && (
+                      <div className="pt-1">
                         <Button
                           size="sm"
-                          variant="success"
-                          onClick={() => handleApprove(item.id)}
-                          className="text-xs h-8"
+                          variant="outline"
+                          onClick={() => setDeleteTarget(item)}
+                          className="w-full text-xs h-7 text-danger hover:text-danger hover:bg-danger/10 border-danger/30"
                         >
-                          Setujui
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Hapus Twibbon
                         </Button>
                       </div>
                     )}
@@ -287,6 +395,107 @@ export default function MediaTwibbonPage() {
             ))}
           </div>
         )}
+
+        {/* Modal Konfirmasi Hapus Twibbon */}
+        <Dialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => {
+            if (!open && !isDeleting) setDeleteTarget(null);
+          }}
+        >
+          {deleteTarget && (
+            <div className="space-y-4">
+              <DialogHeader>
+                <div className="flex items-center gap-2 text-danger">
+                  <AlertCircle className="h-5 w-5" />
+                  <DialogTitle>Konfirmasi Hapus Twibbon</DialogTitle>
+                </div>
+                <DialogDescription>
+                  Apakah Anda yakin ingin menghapus data twibbon ini? Tindakan ini tidak dapat dibatalkan.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex gap-3 p-3 rounded-lg border border-border bg-muted/40 items-center">
+                <img
+                  src={deleteTarget.imageUrl}
+                  alt={deleteTarget.uploaderName}
+                  className="h-16 w-16 object-cover rounded-md border border-border shrink-0"
+                />
+                <div className="space-y-1 min-w-0 text-xs">
+                  <p className="font-semibold text-foreground truncate">
+                    {deleteTarget.uploaderName}
+                  </p>
+                  <p className="text-muted-foreground truncate">{deleteTarget.institution}</p>
+                  <div className="pt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <Badge
+                      variant={
+                        deleteTarget.status === "disetujui"
+                          ? "success"
+                          : deleteTarget.status === "menunggu"
+                          ? "warning"
+                          : "danger"
+                      }
+                      className="text-[10px]"
+                    >
+                      {deleteTarget.status.toUpperCase()}
+                    </Badge>
+                    {deleteTarget.isFeatured && (
+                      <Badge variant="gold" className="text-[10px]">
+                        UNGGULAN
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {deleteTarget.status === "disetujui" && (
+                <div className="p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs space-y-1">
+                  <p className="font-semibold flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    Penyesuaian Poin Otomatis:
+                  </p>
+                  <p className="text-[11px] leading-relaxed">
+                    Twibbon ini berstatus <strong>Disetujui</strong>. Jika dihapus dan peserta tidak memiliki twibbon lain yang disetujui, reward poin (+20) yang telah diberikan akan otomatis ditarik kembali di sistem agar data poin dan leaderboard tetap konsisten.
+                  </p>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground space-y-1 pl-1">
+                <p>• Data twibbon akan dihapus permanen dari database.</p>
+                <p>• Berkas foto di storage penyimpanan akan ikut dibersihkan.</p>
+              </div>
+
+              <DialogFooter className="flex-row justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={isDeleting}
+                >
+                  Batal
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteConfirm}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      Menghapus...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Ya, Hapus Permanen
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </Dialog>
       </div>
     </DashboardLayout>
   );
