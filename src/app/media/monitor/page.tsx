@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tv, Play, Radio, ExternalLink, RefreshCw, AlertTriangle, Layers } from "lucide-react";
+import { Tv, Play, Radio, ExternalLink, RefreshCw, AlertTriangle, Layers, Gift } from "lucide-react";
 import { useEventSettings } from "@/lib/hooks/useEventSettings";
 import { renderBrandText } from "@/components/ui/BrandText";
 import { setEmergencyAlert as publishEmergency } from "@/app/actions/monitor";
@@ -52,12 +52,20 @@ export default function MediaMonitorControlPage() {
             </p>
           </div>
 
-          <Link href="/monitor" target="_blank">
-            <Button size="sm" variant="accent" className="text-xs gap-1.5 shadow-xs">
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span>Buka Layar Monitor TV (Fullscreen)</span>
-            </Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/monitor/doorprize" target="_blank">
+              <Button size="sm" variant="outline" className="text-xs gap-1.5 shadow-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10">
+                <Gift className="h-3.5 w-3.5" />
+                <span>Buka Layar Doorprize</span>
+              </Button>
+            </Link>
+            <Link href="/monitor" target="_blank">
+              <Button size="sm" variant="accent" className="text-xs gap-1.5 shadow-xs">
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Buka Layar Monitor TV (Fullscreen)</span>
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {alertNotice && (

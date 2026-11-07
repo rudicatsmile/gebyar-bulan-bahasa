@@ -98,6 +98,8 @@ const CRITICAL_TABLES = [
   "jigsaw_attempts",
   "twibbon_templates",
   "twibbons",
+  "doorprizes",
+  "doorprize_winners",
   "activity_logs",
 ] as const;
 

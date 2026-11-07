@@ -1,0 +1,386 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import {
+  Trophy,
+  Gift,
+  Volume2,
+  VolumeX,
+  Maximize2,
+  Minimize2,
+  Radio,
+  Sparkles,
+  Users,
+  Award,
+  ArrowLeft,
+} from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { LuckyWheel } from "@/components/doorprize/LuckyWheel";
+import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
+import { renderBrandText } from "@/components/ui/BrandText";
+import {
+  getDoorprizePrizes,
+  getDoorprizeHistory,
+  type DoorprizeItem,
+  type DoorprizeWinnerRecord,
+  type EligibleParticipantItem,
+} from "@/app/actions/doorprize";
+
+export function MonitorDoorprizeClient({
+  initialPrizes,
+  initialHistory,
+}: {
+  initialPrizes: DoorprizeItem[];
+  initialHistory: DoorprizeWinnerRecord[];
+}) {
+  const [prizes, setPrizes] = React.useState<DoorprizeItem[]>(initialPrizes);
+  const [history, setHistory] = React.useState<DoorprizeWinnerRecord[]>(initialHistory);
+  const [activePrizeName, setActivePrizeName] = React.useState<string>(
+    initialPrizes[0]?.name || "Doorprize Gebyar Bulan Bahasa"
+  );
+
+  // Spin states
+  const [isSpinning, setIsSpinning] = React.useState(false);
+  const [targetSegment, setTargetSegment] = React.useState(0);
+  const [winner, setWinner] = React.useState<EligibleParticipantItem | null>(null);
+  const [showWinnerCard, setShowWinnerCard] = React.useState(false);
+  const [showConfetti, setShowConfetti] = React.useState(false);
+  const [shufflingName, setShufflingName] = React.useState("");
+
+  // Display controls
+  const [soundEnabled, setSoundEnabled] = React.useState(true);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const [realtimeConnected, setRealtimeConnected] = React.useState(true);
+
+  // Toggle Fullscreen
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
+  };
+
+  React.useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
+
+  // Realtime Supabase Subscription
+  React.useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("doorprize-live-channel")
+      .on("broadcast", { event: "doorprize_spin_started" }, ({ payload }) => {
+        if (payload?.winner) {
+          setShowWinnerCard(false);
+          setShowConfetti(false);
+          if (payload.prizeName) setActivePrizeName(payload.prizeName);
+          setTargetSegment(payload.targetSegmentIndex ?? 0);
+          setWinner(payload.winner);
+          setIsSpinning(true);
+        }
+      })
+      .on("broadcast", { event: "doorprize_winner_cancelled" }, () => {
+        getDoorprizeHistory().then((res) => {
+          if (res.success && res.winners) setHistory(res.winners);
+        });
+      })
+      .on("broadcast", { event: "doorprize_history_reset" }, () => {
+        setHistory([]);
+        setWinner(null);
+        setShowWinnerCard(false);
+        setShowConfetti(false);
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          setRealtimeConnected(true);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setRealtimeConnected(false);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Shuffling animation during spin
+  React.useEffect(() => {
+    if (!isSpinning) return;
+    const dummyNames = [
+      "Ahmad Fauzi • SMKN 2 Jakarta",
+      "Siti Nurhaliza • SMAN 70 Jakarta",
+      "Budi Santoso • SMK Diponegoro 2",
+      "Rina Anggraini • SMKN 26 Jakarta",
+      "Dimas Pratama • SMA Labschool",
+      "Dewi Lestari • SMKN 48 Jakarta",
+      "Eko Kurniawan • SMAN 8 Jakarta",
+      "Fitri Handayani • SMK Grafika",
+      "Gita Rahayu • SMAN 68 Jakarta",
+      "Hadi Wibowo • SMK Negeri 1 Jakarta",
+    ];
+
+    const interval = setInterval(() => {
+      const idx = Math.floor(Math.random() * dummyNames.length);
+      setShufflingName(dummyNames[idx]);
+    }, 70);
+
+    return () => clearInterval(interval);
+  }, [isSpinning]);
+
+  const handleSpinComplete = React.useCallback(() => {
+    setIsSpinning(false);
+    setShowConfetti(true);
+    setShowWinnerCard(true);
+
+    // Refresh history
+    getDoorprizeHistory().then((res) => {
+      if (res.success && res.winners) setHistory(res.winners);
+    });
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-amber-500 selection:text-black relative overflow-hidden">
+      {/* Confetti Explosion */}
+      <ConfettiCanvas active={showConfetti} />
+
+      {/* Decorative Stage Lighting Glow */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Top Header Bar */}
+      <header className="h-20 border-b border-white/10 bg-slate-950/80 backdrop-blur-md px-6 sm:px-10 flex items-center justify-between z-20">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/media/monitor"
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+            title="Kembali ke Konsol Monitor"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="font-heading text-lg sm:text-xl font-black tracking-tight text-white">
+                {renderBrandText("GEBYAR BULAN BAHASA")}
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30">
+                PANGGUNG UTAMA
+              </span>
+            </div>
+            <p className="text-xs text-white/50 font-medium">
+              Sistem Undian Roda Keberuntungan & Doorprize Resmi
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Status Realtime */}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono">
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                realtimeConnected ? "bg-emerald-400 animate-pulse" : "bg-amber-400"
+              }`}
+            />
+            <span className="text-white/80">
+              {realtimeConnected ? "KONEKSI LIVE PANGGUNG" : "MENYAMBUNGKAN..."}
+            </span>
+          </div>
+
+          {/* Sound Toggle */}
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
+            title={soundEnabled ? "Matikan Suara" : "Aktifkan Suara"}
+          >
+            {soundEnabled ? <Volume2 className="h-5 w-5 text-amber-400" /> : <VolumeX className="h-5 w-5" />}
+          </button>
+
+          {/* Fullscreen Button */}
+          <button
+            onClick={toggleFullscreen}
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
+            title={isFullscreen ? "Keluar Layar Penuh" : "Layar Penuh (TV/Proyektor)"}
+          >
+            {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-6 sm:p-10 flex flex-col justify-center items-center z-10">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          {/* Kolom Kiri: Roda Keberuntungan Besar */}
+          <div className="lg:col-span-7 flex flex-col items-center justify-center space-y-4">
+            <div className="relative p-2 rounded-full ring-8 ring-amber-500/10 shadow-2xl">
+              <LuckyWheel
+                isSpinning={isSpinning}
+                targetSegmentIndex={targetSegment}
+                spinDurationMs={6000}
+                onSpinComplete={handleSpinComplete}
+                soundEnabled={soundEnabled}
+                size={440}
+              />
+            </div>
+
+            {/* Shuffling Bar */}
+            <div className="w-full max-w-md h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
+              {isSpinning ? (
+                <div className="space-y-0.5 animate-pulse">
+                  <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block">
+                    ⚡ MENGACAK 100+ PESERTA DARI DATABASE...
+                  </span>
+                  <span className="font-heading text-sm sm:text-base font-black text-white truncate block">
+                    {shufflingName || "Mencari pemenang beruntung..."}
+                  </span>
+                </div>
+              ) : showWinnerCard && winner ? (
+                <span className="text-sm font-bold text-emerald-400">
+                  🎉 Selamat kepada pemenang undian!
+                </span>
+              ) : (
+                <div className="flex items-center gap-2 text-white/60 text-xs font-semibold">
+                  <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
+                  <span>Siap Mengundi • Menunggu Putaran Roda dari Panitia</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Kolom Kanan: Hadiah Aktif & Riwayat Terakhir */}
+          <div className="lg:col-span-5 space-y-6">
+            {/* Kartu Hadiah yang Sedang Diundi */}
+            <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-white/10 via-white/5 to-transparent border border-white/15 backdrop-blur-md shadow-2xl space-y-3">
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-bold tracking-widest uppercase">
+                <Gift className="h-4 w-4" />
+                <span>SEDANG DIUNDI SAAT INI</span>
+              </div>
+              <h2 className="font-heading text-2xl sm:text-4xl font-black text-white leading-tight drop-shadow-md">
+                {activePrizeName}
+              </h2>
+              <p className="text-xs sm:text-sm text-white/60 leading-relaxed">
+                Hadiah resmi doorprize Gebyar Bulan Bahasa untuk peserta festival yang terpilih secara acak.
+              </p>
+            </div>
+
+            {/* Riwayat Pemenang Terakhir di Layar TV */}
+            <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md space-y-3">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-amber-400" />
+                  <span className="font-heading text-xs sm:text-sm font-bold text-white tracking-wider uppercase">
+                    Pemenang Doorprize Sebelumnya
+                  </span>
+                </div>
+                <span className="text-xs font-mono text-white/50">
+                  {history.filter((w) => w.status !== "dibatalkan").length} Pemenang Sah
+                </span>
+              </div>
+
+              {history.filter((w) => w.status !== "dibatalkan").length === 0 ? (
+                <div className="py-6 text-center text-white/40 text-xs italic">
+                  Belum ada pemenang yang tercatat. Putaran perdana akan segera dimulai!
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                  {history
+                    .filter((w) => w.status !== "dibatalkan")
+                    .slice(0, 4)
+                    .map((w, i) => (
+                      <div
+                        key={w.id || i}
+                        className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between text-xs gap-3"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <span className="font-bold text-white block truncate text-sm">
+                            {w.participantName}
+                          </span>
+                          <span className="text-[11px] text-white/60 block truncate">
+                            {w.participantInstitution} • No: {w.participantRegNum}
+                          </span>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold text-[10px] shrink-0 border border-amber-500/30">
+                          {w.doorprizeName}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* WINNER OVERLAY POP-UP (GIANT BANNER READABLE FROM DISTANCE) */}
+      {showWinnerCard && winner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-lg animate-in zoom-in-95 duration-300">
+          <div className="relative max-w-3xl w-full p-8 sm:p-12 rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-4 border-amber-400 shadow-[0_0_80px_rgba(245,158,11,0.3)] text-center space-y-6">
+            {/* Top Close Button */}
+            <button
+              onClick={() => setShowWinnerCard(false)}
+              className="absolute top-4 right-4 text-white/50 hover:text-white text-xs px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              ✕ Tutup
+            </button>
+
+            {/* Glowing Trophy */}
+            <div className="mx-auto w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-tr from-amber-400 via-amber-300 to-amber-600 text-slate-950 flex items-center justify-center shadow-2xl ring-8 ring-amber-400/20 animate-bounce">
+              <Trophy className="h-14 w-14 sm:h-16 sm:w-16" />
+            </div>
+
+            <div className="space-y-3">
+              <span className="font-mono text-sm sm:text-base font-bold text-amber-400 uppercase tracking-widest">
+                🎉 SELAMAT KEPADA PEMENANG DOORPRIZE! 🎉
+              </span>
+
+              {/* Massive Name */}
+              <h1 className="font-heading text-4xl sm:text-6xl font-black text-white tracking-tight leading-none drop-shadow-lg">
+                {winner.fullName}
+              </h1>
+
+              {/* Institution & No Registrasi */}
+              <p className="font-heading text-lg sm:text-2xl font-bold text-white/80">
+                {winner.institution}
+              </p>
+              <p className="font-mono text-sm sm:text-base text-amber-300 font-semibold">
+                Nomor Registrasi: {winner.registrationNumber}
+              </p>
+            </div>
+
+            {/* Prize Card */}
+            <div className="p-5 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 space-y-1">
+              <span className="text-xs font-mono text-amber-200 uppercase tracking-wider block">
+                MEMENANGKAN HADIAH:
+              </span>
+              <p className="font-heading text-2xl sm:text-3xl font-black text-amber-400">
+                🎁 {activePrizeName}
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={() => setShowWinnerCard(false)}
+                className="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-heading text-sm font-bold uppercase tracking-wider hover:opacity-90 transition-opacity shadow-lg cursor-pointer"
+              >
+                Lanjutkan Undian Berikutnya
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Footer Info Bar */}
+      <footer className="h-14 border-t border-white/10 bg-slate-950/80 px-6 sm:px-10 flex items-center justify-between text-xs text-white/50 z-20">
+        <span>Gebyar Bulan Bahasa • Layar Undian Resmi Panggung</span>
+        <span>Kanal Monitor Panggung TV 1080p / 4K</span>
+      </footer>
+    </div>
+  );
+}
+

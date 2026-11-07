@@ -1512,6 +1512,99 @@ export interface Database {
         };
         Relationships: [];
       };
+      doorprizes: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          reward_id: string | null;
+          total_quantity: number;
+          remaining_quantity: number;
+          sponsor: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          reward_id?: string | null;
+          total_quantity?: number;
+          remaining_quantity?: number;
+          sponsor?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          reward_id?: string | null;
+          total_quantity?: number;
+          remaining_quantity?: number;
+          sponsor?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      doorprize_winners: {
+        Row: {
+          id: string;
+          doorprize_id: string | null;
+          doorprize_name: string;
+          reward_id: string | null;
+          participant_id: string;
+          participant_name: string;
+          participant_reg_num: string;
+          participant_institution: string;
+          participant_phone: string | null;
+          drawn_at: string;
+          drawn_by: string | null;
+          status: 'sah' | 'dibatalkan' | 'diserahkan';
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          doorprize_id?: string | null;
+          doorprize_name: string;
+          reward_id?: string | null;
+          participant_id: string;
+          participant_name: string;
+          participant_reg_num: string;
+          participant_institution: string;
+          participant_phone?: string | null;
+          drawn_at?: string;
+          drawn_by?: string | null;
+          status?: 'sah' | 'dibatalkan' | 'diserahkan';
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          doorprize_id?: string | null;
+          doorprize_name?: string;
+          reward_id?: string | null;
+          participant_id?: string;
+          participant_name?: string;
+          participant_reg_num?: string;
+          participant_institution?: string;
+          participant_phone?: string | null;
+          drawn_at?: string;
+          drawn_by?: string | null;
+          status?: 'sah' | 'dibatalkan' | 'diserahkan';
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       current_role: {

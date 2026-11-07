@@ -87,6 +87,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Verifikasi Bukti", href: "/dashboard/challenge/verifikasi", icon: CheckCircle2 },
   { title: "Penyesuaian Poin", href: "/dashboard/challenge/poin", icon: Coins },
   { title: "Katalog Reward", href: "/dashboard/challenge/reward", icon: Gift },
+  { title: "Undian Doorprize", href: "/dashboard/doorprize", icon: Gift },
   { title: "SISTEM", href: "#", icon: Settings, isHeader: true },
   { title: "Master Sekolah/Instansi", href: "/dashboard/instansi", icon: Building2 },
   { title: "Moderasi Twibbon", href: "/dashboard/twibbon", icon: Camera },
@@ -109,6 +110,7 @@ const MEDIA_NAV: NavItem[] = [
   { title: "Pengumuman", href: "/media/pengumuman", icon: Megaphone },
   { title: "Moderasi Twibbon", href: "/media/twibbon", icon: Camera },
   { title: "Kendali Monitor", href: "/media/monitor", icon: Tv },
+  { title: "Layar Doorprize", href: "/monitor/doorprize", icon: Gift },
   { title: "Playlist Monitor", href: "/media/konten-monitor", icon: Sliders },
   { title: "Galeri Foto/Video", href: "/media/galeri", icon: Image },
 ];
