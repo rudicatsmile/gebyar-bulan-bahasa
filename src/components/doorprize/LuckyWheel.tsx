@@ -48,72 +48,100 @@ export function LuckyWheel({
 }: LuckyWheelProps) {
   const [currentRotation, setCurrentRotation] = React.useState(0);
   const [pointerBounce, setPointerBounce] = React.useState(false);
-  const prevIsSpinningRef = React.useRef(false);
+  
+  // Refs untuk mencegah infinite re-render loop dan timer cancellation
+  const currentRotationRef = React.useRef(0);
+  const onSpinCompleteRef = React.useRef(onSpinComplete);
+  const targetSegmentRef = React.useRef(targetSegmentIndex);
+  const spinDurationRef = React.useRef(spinDurationMs);
   const spinTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const tickIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const hasFinishedSpinRef = React.useRef(false);
 
-  const numSegments = WHEEL_SEGMENTS.length;
-  const segmentAngle = 360 / numSegments; // 30 degrees per segment
+  // Selalu sinkronkan refs dengan props terbaru tanpa trigger re-run efek
+  React.useEffect(() => {
+    onSpinCompleteRef.current = onSpinComplete;
+  }, [onSpinComplete]);
+
+  React.useEffect(() => {
+    targetSegmentRef.current = targetSegmentIndex;
+  }, [targetSegmentIndex]);
+
+  React.useEffect(() => {
+    spinDurationRef.current = spinDurationMs;
+  }, [spinDurationMs]);
 
   React.useEffect(() => {
     soundEffects.setMuted(!soundEnabled);
   }, [soundEnabled]);
 
+  const numSegments = WHEEL_SEGMENTS.length;
+  const segmentAngle = 360 / numSegments; // 30 degrees per segment
+
   React.useEffect(() => {
     // Saat isSpinning beralih dari false ke true
-    if (isSpinning && !prevIsSpinningRef.current) {
-      // Hitung total rotasi:
-      // Pointer berada di atas (jam 12 / 270 derajat dari pusat SVG standar atau 0 derajat).
-      // Segmen ke-i harus berhenti di puncak (pointer).
-      const fullRotations = 360 * (6 + Math.floor(Math.random() * 2)); // 6-7 putaran penuh
-      // Random offset kecil di dalam segmen (+-8 derajat dari tengah) agar tampak alami
-      const jitter = (Math.random() - 0.5) * (segmentAngle * 0.6);
-      
-      // Sudut target agar segmen target berhenti di puncak (pointer)
-      const targetDegree = 360 - (targetSegmentIndex * segmentAngle + segmentAngle / 2) + jitter;
-      const nextRotation = currentRotation + fullRotations + (targetDegree - (currentRotation % 360));
-      
-      setCurrentRotation(nextRotation);
-
-      // Simulasi bunyi tick roda selama putaran
-      let tickCount = 0;
-      const totalTicks = 42;
-      const tickStart = Date.now();
-
-      const runTicks = () => {
-        const elapsed = Date.now() - tickStart;
-        const progress = Math.min(1, elapsed / spinDurationMs);
-
-        if (progress < 1) {
-          // Kecepatan berkurang seiring berjalannya waktu
-          soundEffects.playTick(1.0 + (1 - progress) * 0.5);
-          setPointerBounce(true);
-          setTimeout(() => setPointerBounce(false), 50);
-
-          const delay = 40 + Math.pow(progress, 2.5) * 450;
-          tickIntervalRef.current = setTimeout(runTicks, delay);
-        }
-      };
-
-      runTicks();
-
-      // Selesai berputar
-      spinTimeoutRef.current = setTimeout(() => {
-        if (tickIntervalRef.current) clearTimeout(tickIntervalRef.current);
-        soundEffects.playFanfare();
-        if (onSpinComplete) {
-          onSpinComplete();
-        }
-      }, spinDurationMs);
+    if (!isSpinning) {
+      hasFinishedSpinRef.current = false;
+      return;
     }
 
-    prevIsSpinningRef.current = isSpinning;
+    hasFinishedSpinRef.current = false;
+    const duration = spinDurationRef.current;
+
+    // 1. Hitung total rotasi kumulatif agar selalu berputar maju
+    const prevRotation = currentRotationRef.current;
+    const fullRotations = 360 * (6 + Math.floor(Math.random() * 2)); // 6-7 putaran penuh
+    // Random offset kecil di dalam segmen (+-8 derajat dari tengah) agar tampak alami
+    const jitter = (Math.random() - 0.5) * (segmentAngle * 0.6);
+    
+    // Sudut target agar segmen target berhenti di puncak (pointer jam 12)
+    const targetDegree = 360 - (targetSegmentRef.current * segmentAngle + segmentAngle / 2) + jitter;
+    const nextRotation = prevRotation + fullRotations + (targetDegree - (prevRotation % 360));
+    
+    currentRotationRef.current = nextRotation;
+    setCurrentRotation(nextRotation);
+
+    // 2. Simulasi bunyi tick mekanik roda selama putaran
+    const tickStart = Date.now();
+    let isCancelled = false;
+
+    const runTicks = () => {
+      if (isCancelled) return;
+      const elapsed = Date.now() - tickStart;
+      const progress = Math.min(1, elapsed / duration);
+
+      if (progress < 1) {
+        soundEffects.playTick(1.0 + (1 - progress) * 0.5);
+        setPointerBounce(true);
+        setTimeout(() => setPointerBounce(false), 50);
+
+        const delay = 40 + Math.pow(progress, 2.5) * 450;
+        tickIntervalRef.current = setTimeout(runTicks, delay);
+      }
+    };
+
+    runTicks();
+
+    // 3. Callback selesai berputar (dipanggil tepat saat putaran selesai)
+    const finishSpin = () => {
+      if (hasFinishedSpinRef.current) return;
+      hasFinishedSpinRef.current = true;
+      isCancelled = true;
+      if (tickIntervalRef.current) clearTimeout(tickIntervalRef.current);
+      soundEffects.playFanfare();
+      if (onSpinCompleteRef.current) {
+        onSpinCompleteRef.current();
+      }
+    };
+
+    spinTimeoutRef.current = setTimeout(finishSpin, duration);
 
     return () => {
+      isCancelled = true;
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
       if (tickIntervalRef.current) clearTimeout(tickIntervalRef.current);
     };
-  }, [isSpinning, targetSegmentIndex, spinDurationMs, currentRotation, onSpinComplete, segmentAngle]);
+  }, [isSpinning, segmentAngle]);
 
   const radius = 200;
   const center = 220;
@@ -148,6 +176,16 @@ export function LuckyWheel({
           transition: isSpinning
             ? `transform ${spinDurationMs}ms cubic-bezier(0.12, 0.85, 0.18, 1.0)`
             : "none",
+        }}
+        onTransitionEnd={() => {
+          if (isSpinning && !hasFinishedSpinRef.current) {
+            hasFinishedSpinRef.current = true;
+            if (tickIntervalRef.current) clearTimeout(tickIntervalRef.current);
+            soundEffects.playFanfare();
+            if (onSpinCompleteRef.current) {
+              onSpinCompleteRef.current();
+            }
+          }
         }}
       >
         <svg

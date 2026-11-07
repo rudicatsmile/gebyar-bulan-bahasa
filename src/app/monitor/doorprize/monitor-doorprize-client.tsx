@@ -83,7 +83,14 @@ export function MonitorDoorprizeClient({
           setShowConfetti(false);
           if (payload.prizeName) setActivePrizeName(payload.prizeName);
           setTargetSegment(payload.targetSegmentIndex ?? 0);
-          setWinner(payload.winner);
+          setWinner({
+            id: payload.winner.id,
+            fullName: payload.winner.fullName || payload.winner.name || "Peserta Beruntung",
+            registrationNumber: payload.winner.registrationNumber || "-",
+            institution: payload.winner.institution || "Umum",
+            totalPoints: payload.winner.totalPoints || 0,
+            status: "terverifikasi",
+          });
           setIsSpinning(true);
         }
       })

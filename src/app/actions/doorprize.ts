@@ -606,6 +606,7 @@ export async function spinDoorprize(payload: {
       winner: {
         id: winner.id,
         name: winner.fullName,
+        fullName: winner.fullName,
         registrationNumber: winner.registrationNumber,
         institution: winner.institution,
         totalPoints: winner.totalPoints,

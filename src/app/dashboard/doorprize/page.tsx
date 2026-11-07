@@ -56,6 +56,7 @@ import {
 } from "@/app/actions/doorprize";
 import { LuckyWheel } from "@/components/doorprize/LuckyWheel";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
+import { createClient } from "@/lib/supabase/client";
 
 export default function DashboardDoorprizePage() {
   // Data states
@@ -182,6 +183,31 @@ export default function DashboardDoorprizePage() {
       setTargetSegment(res.targetSegmentIndex ?? 0);
       setCurrentWinner(res.winner);
       setIsSpinning(true);
+
+      // 3. Broadcast langsung dari client browser ke Layar Monitor TV (WebSocket Realtime)
+      try {
+        const supabase = createClient();
+        const liveChannel = supabase.channel("doorprize-live-channel");
+        liveChannel.send({
+          type: "broadcast",
+          event: "doorprize_spin_started",
+          payload: {
+            winner: {
+              id: res.winner.id,
+              name: res.winner.fullName,
+              fullName: res.winner.fullName,
+              registrationNumber: res.winner.registrationNumber,
+              institution: res.winner.institution,
+              totalPoints: res.winner.totalPoints,
+            },
+            prizeName: selectedPrizeName,
+            targetSegmentIndex: res.targetSegmentIndex ?? 0,
+            spinDurationMs: 6000,
+          },
+        });
+      } catch (broadcastErr) {
+        console.warn("Client broadcast error:", broadcastErr);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Terjadi kesalahan saat memutar undian.";
       setFeedback({ type: "error", message });
@@ -204,6 +230,16 @@ export default function DashboardDoorprizePage() {
     try {
       const res = await cancelDoorprizeWinner(winnerId, "Peserta tidak hadir saat dipanggil 3 kali");
       if (res.success) {
+        // Broadcast pembatalan ke monitor
+        try {
+          const supabase = createClient();
+          supabase.channel("doorprize-live-channel").send({
+            type: "broadcast",
+            event: "doorprize_winner_cancelled",
+            payload: { winnerId },
+          });
+        } catch {}
+
         setFeedback({ type: "success", message: `Pemenang ${name} berhasil dibatalkan.` });
         loadData();
       } else {
@@ -222,6 +258,16 @@ export default function DashboardDoorprizePage() {
     try {
       const res = await resetDoorprizeHistory();
       if (res.success) {
+        // Broadcast reset ke monitor
+        try {
+          const supabase = createClient();
+          supabase.channel("doorprize-live-channel").send({
+            type: "broadcast",
+            event: "doorprize_history_reset",
+            payload: {},
+          });
+        } catch {}
+
         setFeedback({ type: "success", message: "Riwayat undian doorprize telah dibersihkan." });
         loadData();
       }
