@@ -54,7 +54,7 @@ import {
   type DoorprizeFilter,
   type EligibleParticipantItem,
 } from "@/app/actions/doorprize";
-import { LuckyWheel } from "@/components/doorprize/LuckyWheel";
+import { NameReelRoller } from "@/components/doorprize/NameReelRoller";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
 import { createClient } from "@/lib/supabase/client";
 
@@ -76,6 +76,7 @@ export default function DashboardDoorprizePage() {
   const [showConfetti, setShowConfetti] = React.useState(false);
   const [soundEnabled, setSoundEnabled] = React.useState(true);
   const [shufflingName, setShufflingName] = React.useState<string>("");
+  const [mcCallCount, setMcCallCount] = React.useState<number>(0);
 
   // Filters state
   const [filters, setFilters] = React.useState<DoorprizeFilter>({
@@ -165,6 +166,7 @@ export default function DashboardDoorprizePage() {
     setFeedback(null);
     setShowWinnerModal(false);
     setShowConfetti(false);
+    setMcCallCount(0);
 
     try {
       // 1. Eksekusi randomisasi aman di server
@@ -179,7 +181,7 @@ export default function DashboardDoorprizePage() {
         return;
       }
 
-      // 2. Set parameter putaran roda
+      // 2. Set parameter putaran roda / drum
       setTargetSegment(res.targetSegmentIndex ?? 0);
       setCurrentWinner(res.winner);
       setIsSpinning(true);
@@ -198,11 +200,12 @@ export default function DashboardDoorprizePage() {
               fullName: res.winner.fullName,
               registrationNumber: res.winner.registrationNumber,
               institution: res.winner.institution,
+              phone: res.winner.phone || null,
               totalPoints: res.winner.totalPoints,
             },
             prizeName: selectedPrizeName,
             targetSegmentIndex: res.targetSegmentIndex ?? 0,
-            spinDurationMs: 6000,
+            spinDurationMs: 5500,
           },
         });
       } catch (broadcastErr) {
@@ -211,6 +214,24 @@ export default function DashboardDoorprizePage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Terjadi kesalahan saat memutar undian.";
       setFeedback({ type: "error", message });
+    }
+  };
+
+  // Handle Panggilan Kehadiran MC Panggung (Panggilan 1, 2, 3)
+  const handleMcCall = (count: number) => {
+    setMcCallCount(count);
+    try {
+      const supabase = createClient();
+      supabase.channel("doorprize-live-channel").send({
+        type: "broadcast",
+        event: "doorprize_call_winner",
+        payload: {
+          count,
+          winnerName: currentWinner?.fullName,
+        },
+      });
+    } catch (err) {
+      console.warn("Broadcast MC call error:", err);
     }
   };
 
@@ -637,36 +658,38 @@ export default function DashboardDoorprizePage() {
                 </h3>
               </div>
 
-              {/* Roda Keberuntungan Utama */}
-              <div className="py-4">
-                <LuckyWheel
+              {/* Drum Roller Nama Peserta */}
+              <div className="w-full py-2">
+                <NameReelRoller
                   isSpinning={isSpinning}
-                  targetSegmentIndex={targetSegment}
-                  spinDurationMs={6000}
+                  winnerName={currentWinner?.fullName}
+                  winnerDetails={currentWinner}
+                  sampleParticipants={sampleParticipants}
+                  spinDurationMs={5500}
                   onSpinComplete={handleSpinComplete}
                   soundEnabled={soundEnabled}
-                  size={360}
+                  size="default"
                 />
               </div>
 
-              {/* Name Shuffle Bar saat berputar */}
+              {/* Status Bar Drum Roller */}
               <div className="w-full max-w-md h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-4 my-2 text-center">
                 {isSpinning ? (
                   <div className="space-y-0.5 animate-pulse">
                     <span className="text-[10px] font-mono text-accent uppercase tracking-wider block">
-                      ⚡ MENGACAK NAMA DARI DATABASE...
+                      ⚡ DRUM ROLLER MENGACAK NAMA PESERTA SECARA LIVE...
                     </span>
                     <span className="font-heading text-xs sm:text-sm font-bold text-foreground truncate block">
-                      {shufflingName || "Memilih kandidat beruntung..."}
+                      Menggulung daftar peserta terdaftar...
                     </span>
                   </div>
                 ) : currentWinner ? (
                   <span className="text-xs font-semibold text-emerald-500">
-                    🎉 Pemenang Terpilih: <strong>{currentWinner.fullName}</strong> ({currentWinner.institution})
+                    🎉 Pemenang Terkunci: <strong>{currentWinner.fullName}</strong> ({currentWinner.institution})
                   </span>
                 ) : (
                   <span className="text-xs text-muted-foreground">
-                    Siap diundi! Klik tombol putar roda di bawah ini.
+                    Siap diundi! Klik tombol putar rol drum di bawah ini.
                   </span>
                 )}
               </div>
@@ -681,12 +704,12 @@ export default function DashboardDoorprizePage() {
                   {isSpinning ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      <span>RODA SEDANG BERPUTAR...</span>
+                      <span>ROL DRUM SEDANG BERPUTAR...</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-5 w-5 fill-slate-950" />
-                      <span>PUTAR RODA SEKARANG (SPIN)</span>
+                      <span>PUTAR ROL UNDIAN SEKARANG (SPIN)</span>
                     </div>
                   )}
                 </Button>
@@ -724,24 +747,75 @@ export default function DashboardDoorprizePage() {
                 </p>
               </div>
 
-              <DialogFooter className="flex-col sm:flex-row gap-2 justify-center pt-2">
+              {/* Kontrol Panggilan MC Kehadiran Panggung */}
+              <div className="p-3.5 rounded-2xl border border-border bg-muted/40 space-y-2.5 text-left">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Radio className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+                    Panggilan Kehadiran MC Panggung:
+                  </span>
+                  <span className="text-[11px] font-mono font-semibold text-accent">
+                    {mcCallCount === 0
+                      ? "Menunggu Panggilan"
+                      : `Panggilan ke-${mcCallCount}`}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 2, 3].map((num) => (
+                    <Button
+                      key={num}
+                      type="button"
+                      size="sm"
+                      variant={mcCallCount >= num ? "accent" : "outline"}
+                      onClick={() => handleMcCall(num)}
+                      className="text-xs h-8 font-mono font-bold"
+                    >
+                      Panggilan {num}
+                    </Button>
+                  ))}
+                </div>
+
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  Status panggilan langsung disiarkan ke Layar Monitor TV agar peserta segera maju ke panggung.
+                </p>
+              </div>
+
+              <DialogFooter className="flex-col sm:flex-row gap-2 justify-between pt-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowWinnerModal(false)}
-                  className="w-full sm:w-auto text-xs"
-                >
-                  Tutup Notifikasi
-                </Button>
-                <Button
-                  size="sm"
                   onClick={() => {
+                    const winnerRec = history.find((h) => h.participantId === currentWinner.id && h.status === "sah");
+                    if (winnerRec) {
+                      handleCancelWinner(winnerRec.id, currentWinner.fullName);
+                    }
                     setShowWinnerModal(false);
                   }}
-                  className="w-full sm:w-auto text-xs font-bold"
+                  className="w-full sm:w-auto text-xs text-danger hover:bg-danger/10 border-danger/30"
                 >
-                  Siap Undi Hadiah Lainnya
+                  Peserta Tidak Hadir (Batalkan)
                 </Button>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowWinnerModal(false)}
+                    className="w-full sm:w-auto text-xs"
+                  >
+                    Tutup
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setShowWinnerModal(false);
+                    }}
+                    className="w-full sm:w-auto text-xs font-bold"
+                  >
+                    Selesai & Lanjut
+                  </Button>
+                </div>
               </DialogFooter>
             </div>
           )}

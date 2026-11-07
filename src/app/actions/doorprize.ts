@@ -48,6 +48,7 @@ export interface EligibleParticipantItem {
   institution: string;
   totalPoints: number;
   status: string;
+  phone?: string | null;
 }
 
 const DEFAULT_PRIZES: DoorprizeItem[] = [
@@ -393,7 +394,7 @@ export async function getDoorprizeEligibleParticipants(
     // 2. Query dasar tabel participants
     let query = admin
       .from("participants")
-      .select("id, full_name, registration_number, institution, total_points, status");
+      .select("id, full_name, registration_number, institution, total_points, status, phone");
 
     // Filter status verifikasi
     if (filters.verificationStatus === "terverifikasi") {
@@ -460,6 +461,7 @@ export async function getDoorprizeEligibleParticipants(
       institution: p.institution || "Umum",
       totalPoints: Number(p.total_points) || 0,
       status: p.status,
+      phone: p.phone || null,
     }));
 
     return {
@@ -535,6 +537,7 @@ export async function spinDoorprize(payload: {
       participantName: winner.fullName,
       participantRegNum: winner.registrationNumber,
       participantInstitution: winner.institution,
+      participantPhone: winner.phone || undefined,
       drawnAt,
       drawnBy: auth.userId,
       status: "sah",
@@ -609,13 +612,14 @@ export async function spinDoorprize(payload: {
         fullName: winner.fullName,
         registrationNumber: winner.registrationNumber,
         institution: winner.institution,
+        phone: winner.phone || null,
         totalPoints: winner.totalPoints,
       },
       prizeName,
       targetSegmentIndex,
       poolCount,
       drawnAt,
-      spinDurationMs: 6000,
+      spinDurationMs: 5500,
     });
 
     revalidatePath("/dashboard/doorprize");

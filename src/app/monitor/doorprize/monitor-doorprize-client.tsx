@@ -16,7 +16,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { LuckyWheel } from "@/components/doorprize/LuckyWheel";
+import { NameReelRoller } from "@/components/doorprize/NameReelRoller";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
 import { renderBrandText } from "@/components/ui/BrandText";
 import {
@@ -26,6 +26,15 @@ import {
   type DoorprizeWinnerRecord,
   type EligibleParticipantItem,
 } from "@/app/actions/doorprize";
+
+function maskPhoneNumber(phone?: string | null): string {
+  if (!phone || phone.trim().length < 6) return "";
+  const clean = phone.trim();
+  if (clean.length <= 8) {
+    return clean.slice(0, 3) + "****" + clean.slice(-2);
+  }
+  return clean.slice(0, 4) + "-****-" + clean.slice(-4);
+}
 
 export function MonitorDoorprizeClient({
   initialPrizes,
@@ -47,6 +56,7 @@ export function MonitorDoorprizeClient({
   const [showWinnerCard, setShowWinnerCard] = React.useState(false);
   const [showConfetti, setShowConfetti] = React.useState(false);
   const [shufflingName, setShufflingName] = React.useState("");
+  const [callCount, setCallCount] = React.useState<number>(0);
 
   // Display controls
   const [soundEnabled, setSoundEnabled] = React.useState(true);
@@ -81,6 +91,7 @@ export function MonitorDoorprizeClient({
         if (payload?.winner) {
           setShowWinnerCard(false);
           setShowConfetti(false);
+          setCallCount(0);
           if (payload.prizeName) setActivePrizeName(payload.prizeName);
           setTargetSegment(payload.targetSegmentIndex ?? 0);
           setWinner({
@@ -90,8 +101,14 @@ export function MonitorDoorprizeClient({
             institution: payload.winner.institution || "Umum",
             totalPoints: payload.winner.totalPoints || 0,
             status: "terverifikasi",
+            phone: payload.winner.phone || null,
           });
           setIsSpinning(true);
+        }
+      })
+      .on("broadcast", { event: "doorprize_call_winner" }, ({ payload }) => {
+        if (payload?.count) {
+          setCallCount(payload.count);
         }
       })
       .on("broadcast", { event: "doorprize_winner_cancelled" }, () => {
@@ -223,38 +240,39 @@ export function MonitorDoorprizeClient({
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 sm:p-10 flex flex-col justify-center items-center z-10">
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          {/* Kolom Kiri: Roda Keberuntungan Besar */}
+          {/* Kolom Kiri: Drum Roller Nama Peserta Besar */}
           <div className="lg:col-span-7 flex flex-col items-center justify-center space-y-4">
-            <div className="relative p-2 rounded-full ring-8 ring-amber-500/10 shadow-2xl">
-              <LuckyWheel
+            <div className="w-full">
+              <NameReelRoller
                 isSpinning={isSpinning}
-                targetSegmentIndex={targetSegment}
-                spinDurationMs={6000}
+                winnerName={winner?.fullName}
+                winnerDetails={winner}
+                spinDurationMs={5500}
                 onSpinComplete={handleSpinComplete}
                 soundEnabled={soundEnabled}
-                size={440}
+                size="large"
               />
             </div>
 
             {/* Shuffling Bar */}
-            <div className="w-full max-w-md h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
+            <div className="w-full max-w-xl h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
               {isSpinning ? (
                 <div className="space-y-0.5 animate-pulse">
                   <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block">
-                    ⚡ MENGACAK 100+ PESERTA DARI DATABASE...
+                    ⚡ DRUM ROLLER MENGACAK 100+ PESERTA DARI DATABASE...
                   </span>
                   <span className="font-heading text-sm sm:text-base font-black text-white truncate block">
-                    {shufflingName || "Mencari pemenang beruntung..."}
+                    Menyeleksi nama pemenang secara acak...
                   </span>
                 </div>
               ) : showWinnerCard && winner ? (
                 <span className="text-sm font-bold text-emerald-400">
-                  🎉 Selamat kepada pemenang undian!
+                  🎉 Selamat kepada pemenang undian: {winner.fullName}!
                 </span>
               ) : (
                 <div className="flex items-center gap-2 text-white/60 text-xs font-semibold">
                   <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
-                  <span>Siap Mengundi • Menunggu Putaran Roda dari Panitia</span>
+                  <span>Siap Mengundi • Menunggu Putaran Rol dari Panitia</span>
                 </div>
               )}
             </div>
@@ -355,10 +373,28 @@ export function MonitorDoorprizeClient({
               <p className="font-heading text-lg sm:text-2xl font-bold text-white/80">
                 {winner.institution}
               </p>
-              <p className="font-mono text-sm sm:text-base text-amber-300 font-semibold">
-                Nomor Registrasi: {winner.registrationNumber}
-              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 text-xs sm:text-sm font-mono text-amber-300">
+                <span>No. Registrasi: {winner.registrationNumber}</span>
+                {winner.phone && maskPhoneNumber(winner.phone) && (
+                  <span>• No. HP: {maskPhoneNumber(winner.phone)}</span>
+                )}
+              </div>
             </div>
+
+            {/* Status Panggilan Kehadiran MC */}
+            {callCount > 0 && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/25 via-amber-400/35 to-amber-500/25 border-2 border-amber-400 text-amber-300 animate-pulse shadow-xl space-y-1">
+                <span className="font-mono text-xs uppercase tracking-wider block text-amber-200">
+                  PANGGILAN KEHADIRAN PANGGUNG
+                </span>
+                <p className="font-heading text-2xl sm:text-3xl font-black text-amber-400">
+                  📢 PANGGILAN KE-{callCount}!
+                </p>
+                <p className="text-xs sm:text-sm font-semibold text-white/95">
+                  Peserta atas nama <strong>{winner.fullName}</strong> dipersilakan segera menuju ke depan panggung utama.
+                </p>
+              </div>
+            )}
 
             {/* Prize Card */}
             <div className="p-5 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 space-y-1">
