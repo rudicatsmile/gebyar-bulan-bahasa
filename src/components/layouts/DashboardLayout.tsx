@@ -83,7 +83,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "MISI & STAND", href: "#", icon: Sparkles, isHeader: true },
   { title: "Daftar Misi", href: "/dashboard/challenge", icon: Sparkles },
   { title: "Kepingan Puzzle", href: "/dashboard/challenge/kepingan-puzzle", icon: Puzzle },
-  { title: "Kelola 8 Stand", href: "/dashboard/challenge/stand", icon: Store },
+  { title: "Kelola Stand", href: "/dashboard/challenge/stand", icon: Store },
   { title: "Verifikasi Bukti", href: "/dashboard/challenge/verifikasi", icon: CheckCircle2 },
   { title: "Penyesuaian Poin", href: "/dashboard/challenge/poin", icon: Coins },
   { title: "Katalog Reward", href: "/dashboard/challenge/reward", icon: Gift },
@@ -141,6 +141,7 @@ export function DashboardLayout({
   const [pendingVerificationCount, setPendingVerificationCount] = React.useState<number | null>(null);
   const [pendingChallengeProofCount, setPendingChallengeProofCount] = React.useState<number | null>(null);
   const [pendingTwibbonCount, setPendingTwibbonCount] = React.useState<number | null>(null);
+  const [standCount, setStandCount] = React.useState<number | null>(null);
   const [currentUserRole, setCurrentUserRole] = React.useState<string | null>(null);
 
   // Ambil data role spesifik pengguna yang sedang login (membedakan super_admin dari seksi_acara)
@@ -198,6 +199,16 @@ export function DashboardLayout({
             setPendingTwibbonCount(count);
           }
         });
+
+      // 4. Hitung Jumlah Stand Pameran (tabel stands di database)
+      supabase
+        .from("stands")
+        .select("id", { count: "exact", head: true })
+        .then(({ count }) => {
+          if (count !== null && count !== undefined) {
+            setStandCount(count);
+          }
+        });
     } else if (role === "media_center") {
       // Moderasi Twibbon untuk Media Center
       supabase
@@ -237,6 +248,11 @@ export function DashboardLayout({
         { event: "*", schema: "public", table: "twibbons" },
         () => fetchBadgeCounts()
       )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "stands" },
+        () => fetchBadgeCounts()
+      )
       .subscribe((status: string) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           // Fallback: poll every 15 seconds if realtime fails
@@ -245,8 +261,16 @@ export function DashboardLayout({
         }
       });
 
+    const standBroadcastChannel = supabase
+      .channel("stand-challenge-channel")
+      .on("broadcast", { event: "stand_updated" }, () => {
+        fetchBadgeCounts();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(standBroadcastChannel);
     };
   }, [role, fetchBadgeCounts]);
 
@@ -335,9 +359,26 @@ export function DashboardLayout({
               : undefined,
         };
       }
+      // 4. Kelola Stand (/dashboard/challenge/stand) -> label dinamis mengikuti jumlah stand di database
+      if (item.href === "/dashboard/challenge/stand") {
+        return {
+          ...item,
+          title:
+            standCount !== null && standCount > 0
+              ? `Kelola ${standCount} Stand`
+              : "Kelola Stand",
+        };
+      }
       return item;
     });
-  }, [role, currentUserRole, pendingVerificationCount, pendingChallengeProofCount, pendingTwibbonCount]);
+  }, [
+    role,
+    currentUserRole,
+    pendingVerificationCount,
+    pendingChallengeProofCount,
+    pendingTwibbonCount,
+    standCount,
+  ]);
 
   // Priority navigation items for mobile bottom bar per role
   const mobileNavConfig = React.useMemo(() => {

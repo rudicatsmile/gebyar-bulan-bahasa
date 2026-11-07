@@ -122,14 +122,14 @@ const SPECIAL_CHALLENGES: SpecialChallengeItem[] = [
     title: "Keliling Stand Pameran",
     subtitle: "Scan QR Token Lokasi Stand",
     description:
-      "Kunjungan ke seluruh stand pameran cabang lomba nusantara. Kelola kode unik 6 karakter (PUISI01 s/d MEDIA08) dan cetak stiker QR tiap stand.",
+      "Kunjungan ke seluruh stand pameran cabang lomba nusantara. Kelola kode unik booth dan cetak stiker QR tiap stand.",
     type: "Scan QR Stand",
     pointReward: 80,
     badge: "Penjelajah Bahasa",
     href: "/dashboard/challenge/stand",
     icon: Store,
     borderHover: "border-border bg-card hover:border-foreground/30",
-    btnLabel: "Kelola 8 Stand",
+    btnLabel: "Kelola Stand",
     tag: "STAND PAMERAN",
   },
 ];
