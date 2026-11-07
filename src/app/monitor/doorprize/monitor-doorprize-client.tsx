@@ -27,6 +27,7 @@ import { renderBrandText } from "@/components/ui/BrandText";
 import {
   getDoorprizePrizes,
   getDoorprizeHistory,
+  getDoorprizeStageMode,
   type DoorprizeItem,
   type DoorprizeWinnerRecord,
   type EligibleParticipantItem,
@@ -64,8 +65,8 @@ export function MonitorDoorprizeClient({
   const [shufflingName, setShufflingName] = React.useState("");
   const [callCount, setCallCount] = React.useState<number>(0);
 
-  // Game mode & Buzzer states
-  const [activeMode, setActiveMode] = React.useState<"carousel" | "buzzer">("carousel");
+  // Game mode & Buzzer states: "vip_carousel" vs "buzzer"
+  const [activeMode, setActiveMode] = React.useState<"vip_carousel" | "buzzer">("vip_carousel");
   const [buzzerStatus, setBuzzerStatus] = React.useState<"idle" | "countdown" | "green" | "finished">("idle");
   const [buzzerDelayMs, setBuzzerDelayMs] = React.useState(2800);
   const [buzzerLeaderboard, setBuzzerLeaderboard] = React.useState<BuzzerLeaderboardEntry[]>([]);
@@ -94,6 +95,15 @@ export function MonitorDoorprizeClient({
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
+  // Initial Stage Mode Fetch
+  React.useEffect(() => {
+    getDoorprizeStageMode().then((res) => {
+      if (res.success && res.mode) {
+        setActiveMode(res.mode);
+      }
+    });
+  }, []);
+
   // Realtime Supabase Subscription
   React.useEffect(() => {
     const supabase = createClient();
@@ -101,6 +111,7 @@ export function MonitorDoorprizeClient({
       .channel("doorprize-live-channel")
       .on("broadcast", { event: "doorprize_spin_started" }, ({ payload }) => {
         if (payload?.winner) {
+          setActiveMode("vip_carousel");
           setShowWinnerCard(false);
           setShowConfetti(false);
           setCallCount(0);
@@ -155,7 +166,8 @@ export function MonitorDoorprizeClient({
       })
       .on("broadcast", { event: "doorprize_switch_mode" }, ({ payload }) => {
         if (payload?.mode) {
-          setActiveMode(payload.mode);
+          const nextMode = payload.mode === "buzzer" ? "buzzer" : "vip_carousel";
+          setActiveMode(nextMode);
         }
       })
       .subscribe((status) => {
@@ -244,9 +256,9 @@ export function MonitorDoorprizeClient({
           {/* Mode Switcher Pills */}
           <div className="flex items-center p-1 rounded-2xl bg-white/10 border border-white/10 text-xs font-bold">
             <button
-              onClick={() => setActiveMode("carousel")}
+              onClick={() => setActiveMode("vip_carousel")}
               className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeMode === "carousel"
+                activeMode === "vip_carousel"
                   ? "bg-amber-400 text-slate-950 shadow-md font-black"
                   : "text-white/70 hover:text-white"
               }`}
@@ -301,7 +313,7 @@ export function MonitorDoorprizeClient({
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 flex flex-col justify-center items-center z-10">
-        {activeMode === "carousel" ? (
+        {activeMode === "vip_carousel" ? (
           /* PANGGUNG 1: CAROUSEL VIP SINEMATIK */
           <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Kolom Kiri: Panggung Sinematik VIP Card Carousel */}

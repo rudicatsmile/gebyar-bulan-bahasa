@@ -1029,3 +1029,54 @@ export async function getBuzzerRoundState(): Promise<{
     return { success: false, error: message };
   }
 }
+
+/**
+ * 12. Ganti Mode Layar Panggung Doorprize (Sinematik VIP vs Buzzer Kilat)
+ */
+export async function switchDoorprizeMode(
+  mode: "vip_carousel" | "buzzer"
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+    await admin.from("event_settings").upsert({
+      key: "doorprize_stage_mode",
+      value: { mode },
+      description: "Mode tampilan aktif layar panggung undian doorprize",
+      updated_at: new Date().toISOString(),
+    });
+
+    await broadcastDoorprize("doorprize_switch_mode", { mode });
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal mengganti mode doorprize.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 13. Ambil Mode Layar Panggung Doorprize Terkini
+ */
+export async function getDoorprizeStageMode(): Promise<{
+  success: boolean;
+  mode: "vip_carousel" | "buzzer";
+}> {
+  try {
+    const admin = createAdminClient();
+    const { data: settingRow } = await admin
+      .from("event_settings")
+      .select("value")
+      .eq("key", "doorprize_stage_mode")
+      .maybeSingle();
+
+    if (settingRow?.value && typeof settingRow.value === "object" && "mode" in settingRow.value) {
+      const mode = (settingRow.value as any).mode;
+      if (mode === "buzzer" || mode === "vip_carousel") {
+        return { success: true, mode };
+      }
+    }
+
+    return { success: true, mode: "vip_carousel" };
+  } catch {
+    return { success: true, mode: "vip_carousel" };
+  }
+}

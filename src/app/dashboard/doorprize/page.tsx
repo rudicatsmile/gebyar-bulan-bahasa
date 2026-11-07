@@ -57,6 +57,8 @@ import {
   startBuzzerRound,
   finishBuzzerRound,
   getBuzzerRoundState,
+  switchDoorprizeMode,
+  getDoorprizeStageMode,
   type DoorprizeItem,
   type DoorprizeWinnerRecord,
   type DoorprizeFilter,
@@ -122,15 +124,44 @@ export default function DashboardDoorprizePage() {
   const [isLockingBuzzer, setIsLockingBuzzer] = React.useState(false);
   const [qrDialogOpen, setQrDialogOpen] = React.useState(false);
 
+  // Persistent channel ref for reliable, immediate broadcasts
+  const channelRef = React.useRef<any>(null);
+
+  const sendLiveBroadcast = React.useCallback((event: string, payload: Record<string, any>) => {
+    if (channelRef.current) {
+      try {
+        channelRef.current.send({
+          type: "broadcast",
+          event,
+          payload,
+        });
+      } catch (err) {
+        console.warn("sendLiveBroadcast error:", err);
+      }
+    } else {
+      try {
+        const supabase = createClient();
+        supabase.channel("doorprize-live-channel").send({
+          type: "broadcast",
+          event,
+          payload,
+        });
+      } catch (err) {
+        console.warn("Fallback broadcast error:", err);
+      }
+    }
+  }, []);
+
   // Load initial data
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const [prizesRes, historyRes, poolRes, buzzerRes] = await Promise.all([
+      const [prizesRes, historyRes, poolRes, buzzerRes, modeRes] = await Promise.all([
         getDoorprizePrizes(),
         getDoorprizeHistory(),
         getDoorprizeEligibleParticipants(filters),
         getBuzzerRoundState(),
+        getDoorprizeStageMode(),
       ]);
 
       if (prizesRes.success && prizesRes.prizes) {
@@ -155,6 +186,10 @@ export default function DashboardDoorprizePage() {
         setBuzzerRound(buzzerRes.round);
         setBuzzerLeaderboard(buzzerRes.round.leaderboard || []);
         setBuzzerStatus(buzzerRes.round.status || "idle");
+      }
+
+      if (modeRes.success && modeRes.mode) {
+        setActiveMode(modeRes.mode);
       }
     } catch (err) {
       console.error("Gagal load data doorprize:", err);
@@ -190,8 +225,11 @@ export default function DashboardDoorprizePage() {
       })
       .subscribe();
 
+    channelRef.current = liveChannel;
+
     return () => {
       supabase.removeChannel(liveChannel);
+      channelRef.current = null;
     };
   }, []);
 
@@ -246,30 +284,20 @@ export default function DashboardDoorprizePage() {
       setIsSpinning(true);
 
       // 3. Broadcast langsung dari client browser ke Layar Monitor TV (WebSocket Realtime)
-      try {
-        const supabase = createClient();
-        const liveChannel = supabase.channel("doorprize-live-channel");
-        liveChannel.send({
-          type: "broadcast",
-          event: "doorprize_spin_started",
-          payload: {
-            winner: {
-              id: res.winner.id,
-              name: res.winner.fullName,
-              fullName: res.winner.fullName,
-              registrationNumber: res.winner.registrationNumber,
-              institution: res.winner.institution,
-              phone: res.winner.phone || null,
-              totalPoints: res.winner.totalPoints,
-            },
-            prizeName: selectedPrizeName,
-            targetSegmentIndex: res.targetSegmentIndex ?? 0,
-            spinDurationMs: 5500,
-          },
-        });
-      } catch (broadcastErr) {
-        console.warn("Client broadcast error:", broadcastErr);
-      }
+      sendLiveBroadcast("doorprize_spin_started", {
+        winner: {
+          id: res.winner.id,
+          name: res.winner.fullName,
+          fullName: res.winner.fullName,
+          registrationNumber: res.winner.registrationNumber,
+          institution: res.winner.institution,
+          phone: res.winner.phone || null,
+          totalPoints: res.winner.totalPoints,
+        },
+        prizeName: selectedPrizeName,
+        targetSegmentIndex: res.targetSegmentIndex ?? 0,
+        spinDurationMs: 5500,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Terjadi kesalahan saat memutar undian.";
       setFeedback({ type: "error", message });
@@ -279,19 +307,10 @@ export default function DashboardDoorprizePage() {
   // Handle Panggilan Kehadiran MC Panggung (Panggilan 1, 2, 3)
   const handleMcCall = (count: number) => {
     setMcCallCount(count);
-    try {
-      const supabase = createClient();
-      supabase.channel("doorprize-live-channel").send({
-        type: "broadcast",
-        event: "doorprize_call_winner",
-        payload: {
-          count,
-          winnerName: currentWinner?.fullName,
-        },
-      });
-    } catch (err) {
-      console.warn("Broadcast MC call error:", err);
-    }
+    sendLiveBroadcast("doorprize_call_winner", {
+      count,
+      winnerName: currentWinner?.fullName,
+    });
   };
 
   // Callback saat animasi roda selesai berputar
@@ -311,14 +330,7 @@ export default function DashboardDoorprizePage() {
       const res = await cancelDoorprizeWinner(winnerId, "Peserta tidak hadir saat dipanggil 3 kali");
       if (res.success) {
         // Broadcast pembatalan ke monitor
-        try {
-          const supabase = createClient();
-          supabase.channel("doorprize-live-channel").send({
-            type: "broadcast",
-            event: "doorprize_winner_cancelled",
-            payload: { winnerId },
-          });
-        } catch {}
+        sendLiveBroadcast("doorprize_winner_cancelled", { winnerId });
 
         setFeedback({ type: "success", message: `Pemenang ${name} berhasil dibatalkan.` });
         loadData();
@@ -339,14 +351,7 @@ export default function DashboardDoorprizePage() {
       const res = await resetDoorprizeHistory();
       if (res.success) {
         // Broadcast reset ke monitor
-        try {
-          const supabase = createClient();
-          supabase.channel("doorprize-live-channel").send({
-            type: "broadcast",
-            event: "doorprize_history_reset",
-            payload: {},
-          });
-        } catch {}
+        sendLiveBroadcast("doorprize_history_reset", {});
 
         setFeedback({ type: "success", message: "Riwayat undian doorprize telah dibersihkan." });
         loadData();
@@ -389,16 +394,8 @@ export default function DashboardDoorprizePage() {
   // Handle Ganti Mode Panggung (Sinematik VIP vs Buzzer Kilat)
   const handleSwitchMode = (mode: "vip_carousel" | "buzzer") => {
     setActiveMode(mode);
-    try {
-      const supabase = createClient();
-      supabase.channel("doorprize-live-channel").send({
-        type: "broadcast",
-        event: "doorprize_switch_mode",
-        payload: { mode },
-      });
-    } catch (e) {
-      console.warn("Gagal broadcast mode:", e);
-    }
+    sendLiveBroadcast("doorprize_switch_mode", { mode });
+    switchDoorprizeMode(mode).catch((e) => console.warn("Gagal persist switch mode:", e));
   };
 
   // Handle Mulai Ronde Buzzer Kilat F1 Reflex
@@ -424,27 +421,14 @@ export default function DashboardDoorprizePage() {
         setBuzzerStatus("countdown");
 
         // Broadcast langsung ke channel live agar Layar Monitor TV beralih otomatis
-        try {
-          const supabase = createClient();
-          const channel = supabase.channel("doorprize-live-channel");
-          channel.send({
-            type: "broadcast",
-            event: "doorprize_switch_mode",
-            payload: { mode: "buzzer" },
-          });
-          channel.send({
-            type: "broadcast",
-            event: "buzzer_round_starting",
-            payload: {
-              roundId: res.round.roundId,
-              prizeName: res.round.prizeName,
-              greenDelayMs: res.round.greenDelayMs,
-              startedAt: res.round.startedAt,
-            },
-          });
-        } catch (bErr) {
-          console.warn("Broadcast start buzzer error:", bErr);
-        }
+        sendLiveBroadcast("doorprize_switch_mode", { mode: "buzzer" });
+        sendLiveBroadcast("buzzer_round_starting", {
+          roundId: res.round.roundId,
+          prizeName: res.round.prizeName,
+          greenDelayMs: res.round.greenDelayMs,
+          startedAt: res.round.startedAt,
+        });
+        switchDoorprizeMode("buzzer").catch(() => {});
 
         setFeedback({
           type: "success",
@@ -477,21 +461,12 @@ export default function DashboardDoorprizePage() {
         setShowConfetti(true);
 
         // Broadcast penutupan ke layar TV panggung
-        try {
-          const supabase = createClient();
-          supabase.channel("doorprize-live-channel").send({
-            type: "broadcast",
-            event: "buzzer_round_podium_locked",
-            payload: {
-              roundId: buzzerRound.roundId,
-              prizeName: buzzerRound.prizeName,
-              podium: buzzerLeaderboard.slice(0, 3),
-              allResults: buzzerLeaderboard,
-            },
-          });
-        } catch (bErr) {
-          console.warn("Broadcast lock buzzer error:", bErr);
-        }
+        sendLiveBroadcast("buzzer_round_podium_locked", {
+          roundId: buzzerRound.roundId,
+          prizeName: buzzerRound.prizeName,
+          podium: buzzerLeaderboard.slice(0, 3),
+          allResults: buzzerLeaderboard,
+        });
 
         const top1 = buzzerLeaderboard[0];
         setFeedback({
