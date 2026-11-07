@@ -40,6 +40,11 @@ import {
   Plus,
   Radio,
   Award,
+  Zap,
+  Flame,
+  QrCode,
+  Timer,
+  Crown,
 } from "lucide-react";
 import {
   getDoorprizePrizes,
@@ -49,13 +54,21 @@ import {
   spinDoorprize,
   cancelDoorprizeWinner,
   resetDoorprizeHistory,
+  startBuzzerRound,
+  finishBuzzerRound,
+  getBuzzerRoundState,
   type DoorprizeItem,
   type DoorprizeWinnerRecord,
   type DoorprizeFilter,
   type EligibleParticipantItem,
+  type BuzzerLeaderboardEntry,
+  type BuzzerRoundState,
 } from "@/app/actions/doorprize";
 import { VipCardCarousel } from "@/components/doorprize/VipCardCarousel";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
+import { F1StartLights } from "@/components/doorprize/F1StartLights";
+import { BuzzerLeaderboardPodium } from "@/components/doorprize/BuzzerLeaderboardPodium";
+import { BuzzerQrCode } from "@/components/doorprize/BuzzerQrCode";
 import { createClient } from "@/lib/supabase/client";
 
 export default function DashboardDoorprizePage() {
@@ -98,14 +111,26 @@ export default function DashboardDoorprizePage() {
   // Feedback states
   const [feedback, setFeedback] = React.useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  // Mode State: "vip_carousel" (Undian Sinematik VIP) vs "buzzer" (Buzzer Kilat F1 Reflex)
+  const [activeMode, setActiveMode] = React.useState<"vip_carousel" | "buzzer">("vip_carousel");
+
+  // Buzzer Kilat F1 States
+  const [buzzerRound, setBuzzerRound] = React.useState<BuzzerRoundState | null>(null);
+  const [buzzerStatus, setBuzzerStatus] = React.useState<"idle" | "countdown" | "green" | "finished">("idle");
+  const [buzzerLeaderboard, setBuzzerLeaderboard] = React.useState<BuzzerLeaderboardEntry[]>([]);
+  const [isStartingBuzzer, setIsStartingBuzzer] = React.useState(false);
+  const [isLockingBuzzer, setIsLockingBuzzer] = React.useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = React.useState(false);
+
   // Load initial data
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const [prizesRes, historyRes, poolRes] = await Promise.all([
+      const [prizesRes, historyRes, poolRes, buzzerRes] = await Promise.all([
         getDoorprizePrizes(),
         getDoorprizeHistory(),
         getDoorprizeEligibleParticipants(filters),
+        getBuzzerRoundState(),
       ]);
 
       if (prizesRes.success && prizesRes.prizes) {
@@ -125,6 +150,12 @@ export default function DashboardDoorprizePage() {
         setEligibleCount(poolRes.count);
         setSampleParticipants(poolRes.participants);
       }
+
+      if (buzzerRes.success && buzzerRes.round) {
+        setBuzzerRound(buzzerRes.round);
+        setBuzzerLeaderboard(buzzerRes.round.leaderboard || []);
+        setBuzzerStatus(buzzerRes.round.status || "idle");
+      }
     } catch (err) {
       console.error("Gagal load data doorprize:", err);
     } finally {
@@ -135,6 +166,34 @@ export default function DashboardDoorprizePage() {
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Realtime subscription for Buzzer leaderboard & sync
+  React.useEffect(() => {
+    const supabase = createClient();
+    const liveChannel = supabase
+      .channel("doorprize-live-channel")
+      .on("broadcast", { event: "buzzer_round_starting" }, ({ payload }) => {
+        setBuzzerStatus("countdown");
+        setBuzzerLeaderboard([]);
+      })
+      .on("broadcast", { event: "buzzer_leaderboard_updated" }, ({ payload }) => {
+        if (payload?.leaderboard) {
+          setBuzzerLeaderboard(payload.leaderboard);
+          setBuzzerStatus("green");
+        }
+      })
+      .on("broadcast", { event: "buzzer_round_podium_locked" }, ({ payload }) => {
+        setBuzzerStatus("finished");
+        if (payload?.allResults) {
+          setBuzzerLeaderboard(payload.allResults);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(liveChannel);
+    };
+  }, []);
 
   // Shuffling names animation while spinning
   React.useEffect(() => {
@@ -327,6 +386,135 @@ export default function DashboardDoorprizePage() {
     }
   };
 
+  // Handle Ganti Mode Panggung (Sinematik VIP vs Buzzer Kilat)
+  const handleSwitchMode = (mode: "vip_carousel" | "buzzer") => {
+    setActiveMode(mode);
+    try {
+      const supabase = createClient();
+      supabase.channel("doorprize-live-channel").send({
+        type: "broadcast",
+        event: "doorprize_switch_mode",
+        payload: { mode },
+      });
+    } catch (e) {
+      console.warn("Gagal broadcast mode:", e);
+    }
+  };
+
+  // Handle Mulai Ronde Buzzer Kilat F1 Reflex
+  const handleStartBuzzerRound = async () => {
+    if (isStartingBuzzer) return;
+    if (!selectedPrizeName.trim()) {
+      setFeedback({ type: "error", message: "Silakan pilih hadiah doorprize terlebih dahulu." });
+      return;
+    }
+
+    setIsStartingBuzzer(true);
+    setFeedback(null);
+
+    try {
+      const res = await startBuzzerRound({
+        prizeName: selectedPrizeName,
+        prizeId: selectedPrizeId,
+      });
+
+      if (res.success && res.round) {
+        setBuzzerRound(res.round);
+        setBuzzerLeaderboard([]);
+        setBuzzerStatus("countdown");
+
+        // Broadcast langsung ke channel live agar Layar Monitor TV beralih otomatis
+        try {
+          const supabase = createClient();
+          const channel = supabase.channel("doorprize-live-channel");
+          channel.send({
+            type: "broadcast",
+            event: "doorprize_switch_mode",
+            payload: { mode: "buzzer" },
+          });
+          channel.send({
+            type: "broadcast",
+            event: "buzzer_round_starting",
+            payload: {
+              roundId: res.round.roundId,
+              prizeName: res.round.prizeName,
+              greenDelayMs: res.round.greenDelayMs,
+              startedAt: res.round.startedAt,
+            },
+          });
+        } catch (bErr) {
+          console.warn("Broadcast start buzzer error:", bErr);
+        }
+
+        setFeedback({
+          type: "success",
+          message: `Ronde Buzzer F1 untuk hadiah "${selectedPrizeName}" telah dimulai! Lampu gantry start sedang menghitung mundur.`,
+        });
+      } else {
+        setFeedback({ type: "error", message: res.error || "Gagal memulai ronde buzzer." });
+      }
+    } catch (err) {
+      setFeedback({ type: "error", message: "Terjadi kesalahan saat memulai ronde buzzer." });
+    } finally {
+      setIsStartingBuzzer(false);
+    }
+  };
+
+  // Handle Kunci Hasil Podium & Tetapkan Juara Doorprize
+  const handleLockBuzzerRound = async () => {
+    if (!buzzerRound || isLockingBuzzer) return;
+    if (buzzerLeaderboard.length === 0) {
+      setFeedback({ type: "error", message: "Belum ada catatan refleks peserta yang masuk ke podium." });
+      return;
+    }
+
+    setIsLockingBuzzer(true);
+    try {
+      const res = await finishBuzzerRound({ roundId: buzzerRound.roundId });
+
+      if (res.success) {
+        setBuzzerStatus("finished");
+        setShowConfetti(true);
+
+        // Broadcast penutupan ke layar TV panggung
+        try {
+          const supabase = createClient();
+          supabase.channel("doorprize-live-channel").send({
+            type: "broadcast",
+            event: "buzzer_round_podium_locked",
+            payload: {
+              roundId: buzzerRound.roundId,
+              prizeName: buzzerRound.prizeName,
+              podium: buzzerLeaderboard.slice(0, 3),
+              allResults: buzzerLeaderboard,
+            },
+          });
+        } catch (bErr) {
+          console.warn("Broadcast lock buzzer error:", bErr);
+        }
+
+        const top1 = buzzerLeaderboard[0];
+        setFeedback({
+          type: "success",
+          message: `🏆 Juara 1: ${top1.fullName} (${top1.reactionTimeMs} ms) berhasil dinobatkan & tersimpan di database pemenang!`,
+        });
+        loadData();
+      } else {
+        setFeedback({ type: "error", message: res.error || "Gagal mengunci hasil ronde buzzer." });
+      }
+    } catch (err) {
+      setFeedback({ type: "error", message: "Terjadi kesalahan saat mengunci hasil ronde." });
+    } finally {
+      setIsLockingBuzzer(false);
+    }
+  };
+
+  // Handle Reset Status Ronde Buzzer
+  const handleResetBuzzerRound = () => {
+    setBuzzerStatus("idle");
+    setBuzzerLeaderboard([]);
+  };
+
   return (
     <DashboardLayout role="seksi_acara">
       {/* Confetti Explosion saat Pemenang Muncul */}
@@ -338,21 +526,67 @@ export default function DashboardDoorprizePage() {
           <div>
             <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
               <Gift className="h-7 w-7 text-accent" />
-              <span>Doorprize Spinner & Roda Keberuntungan</span>
+              <span>Doorprize Arena & Panggung Hadiah</span>
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Undian doorprize digital berbasis server-side randomization untuk 100+ peserta dengan animasi Roda Keberuntungan dan tayangan panggung.
+              Pilihan mode undian doorprize: Putaran Drum Kartu Sinematik VIP atau Permainan Interaktif Buzzer Kilat F1 Reflex.
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setQrDialogOpen(true)}
+              className="text-xs gap-1.5 shadow-xs font-bold cursor-pointer"
+            >
+              <QrCode className="h-4 w-4 text-accent" />
+              <span>QR Code Peserta</span>
+            </Button>
             <Link href="/monitor/doorprize" target="_blank">
               <Button size="sm" variant="accent" className="text-xs gap-1.5 shadow-xs font-bold cursor-pointer">
                 <Tv className="h-4 w-4" />
-                <span>Buka Layar Monitor Panggung (Live TV)</span>
+                <span>Buka Layar Panggung (Live TV)</span>
                 <ExternalLink className="h-3 w-3" />
               </Button>
             </Link>
+          </div>
+        </div>
+
+        {/* Mode Selector Tabs */}
+        <div className="flex items-center justify-between p-1.5 rounded-2xl bg-muted/60 border border-border flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => handleSwitchMode("vip_carousel")}
+              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                activeMode === "vip_carousel"
+                  ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              }`}
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>★ Undian Sinematik VIP (Drum Card)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchMode("buzzer")}
+              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                activeMode === "buzzer"
+                  ? "bg-red-600 text-white shadow-md font-black shadow-red-500/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              }`}
+            >
+              <Zap className="h-4 w-4" />
+              <span>⚡ Buzzer Kilat F1 Reflex (Multiplayer)</span>
+            </button>
+          </div>
+
+          <div className="text-[11px] text-muted-foreground px-2 flex items-center gap-2">
+            <span className="hidden sm:inline">Mode Layar TV saat ini:</span>
+            <Badge variant={activeMode === "buzzer" ? "danger" : "gold"} className="text-[10px] uppercase font-bold">
+              {activeMode === "buzzer" ? "Buzzer F1 Reflex" : "Sinematik VIP"}
+            </Badge>
           </div>
         </div>
 
@@ -622,99 +856,280 @@ export default function DashboardDoorprizePage() {
             </Card>
           </div>
 
-          {/* Kolom Kanan: Roda Keberuntungan & Tombol Spin */}
+          {/* Kolom Kanan: Panggung Undian (Sinematik VIP vs Buzzer Kilat) */}
           <div className="lg:col-span-7 flex flex-col items-center space-y-5">
-            <Card className="p-6 sm:p-8 rounded-3xl border-2 border-accent/40 bg-gradient-to-b from-card via-card to-background shadow-xl w-full flex flex-col items-center relative overflow-hidden">
-              {/* Stage Lights Banner */}
-              <div className="w-full flex items-center justify-between pb-4 border-b border-border/80">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
-                  <span className="font-heading text-xs sm:text-sm font-bold tracking-wider text-foreground uppercase">
-                    PANGGUNG UNDIAN DOORPRIZE
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSoundEnabled(!soundEnabled)}
-                    className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
-                    title={soundEnabled ? "Nonaktifkan Suara" : "Aktifkan Suara"}
-                  >
-                    {soundEnabled ? <Volume2 className="h-4 w-4 text-accent" /> : <VolumeX className="h-4 w-4" />}
-                  </button>
-                  <Badge variant="default" className="text-[10px] font-mono">
-                    Pool: {eligibleCount} Peserta
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Hadiah Aktif Badge */}
-              <div className="py-3 text-center space-y-1">
-                <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase block">
-                  SEDANG MENGUNDI HADIAH:
-                </span>
-                <h3 className="font-heading text-lg sm:text-2xl font-black text-accent drop-shadow-xs">
-                  {selectedPrizeName || "Belum Memilih Hadiah"}
-                </h3>
-              </div>
-
-              {/* Sinematik VIP Card Carousel Stage */}
-              <div className="w-full py-1">
-                <VipCardCarousel
-                  isSpinning={isSpinning}
-                  winnerName={currentWinner?.fullName}
-                  winnerDetails={currentWinner}
-                  sampleParticipants={sampleParticipants}
-                  spinDurationMs={5500}
-                  onSpinComplete={handleSpinComplete}
-                  soundEnabled={soundEnabled}
-                  size="default"
-                />
-              </div>
-
-              {/* Status Bar Panggung Carousel */}
-              <div className="w-full max-w-md h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-4 my-2 text-center">
-                {isSpinning ? (
-                  <div className="space-y-0.5 animate-pulse">
-                    <span className="text-[10px] font-mono text-accent uppercase tracking-wider block">
-                      ⚡ MEMILIH KANDIDAT PEMENANG DI PANGGUNG VIP...
-                    </span>
-                    <span className="font-heading text-xs sm:text-sm font-bold text-foreground truncate block">
-                      Menggeser barisan kartu peserta resmi...
+            {activeMode === "vip_carousel" ? (
+              <Card className="p-6 sm:p-8 rounded-3xl border-2 border-accent/40 bg-gradient-to-b from-card via-card to-background shadow-xl w-full flex flex-col items-center relative overflow-hidden">
+                {/* Stage Lights Banner */}
+                <div className="w-full flex items-center justify-between pb-4 border-b border-border/80">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
+                    <span className="font-heading text-xs sm:text-sm font-bold tracking-wider text-foreground uppercase">
+                      PANGGUNG SINEMATIK VIP CARD
                     </span>
                   </div>
-                ) : currentWinner ? (
-                  <span className="text-xs font-semibold text-emerald-500">
-                    🎉 Penobatan Pemenang: <strong>{currentWinner.fullName}</strong> ({currentWinner.institution})
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">
-                    Panggung siap! Klik tombol di bawah untuk memulai undian.
-                  </span>
-                )}
-              </div>
 
-              {/* Tombol Spin Raksasa */}
-              <div className="pt-3 w-full max-w-sm">
-                <Button
-                  onClick={handleSpin}
-                  disabled={isSpinning || eligibleCount === 0}
-                  className="w-full h-14 rounded-2xl font-heading text-base sm:text-lg font-black tracking-wider uppercase bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 shadow-lg hover:shadow-amber-500/30 transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSoundEnabled(!soundEnabled)}
+                      className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+                      title={soundEnabled ? "Nonaktifkan Suara" : "Aktifkan Suara"}
+                    >
+                      {soundEnabled ? <Volume2 className="h-4 w-4 text-accent" /> : <VolumeX className="h-4 w-4" />}
+                    </button>
+                    <Badge variant="default" className="text-[10px] font-mono">
+                      Pool: {eligibleCount} Peserta
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Hadiah Aktif Badge */}
+                <div className="py-3 text-center space-y-1">
+                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase block">
+                    SEDANG MENGUNDI HADIAH:
+                  </span>
+                  <h3 className="font-heading text-lg sm:text-2xl font-black text-accent drop-shadow-xs">
+                    {selectedPrizeName || "Belum Memilih Hadiah"}
+                  </h3>
+                </div>
+
+                {/* Sinematik VIP Card Carousel Stage */}
+                <div className="w-full py-1">
+                  <VipCardCarousel
+                    isSpinning={isSpinning}
+                    winnerName={currentWinner?.fullName}
+                    winnerDetails={currentWinner}
+                    sampleParticipants={sampleParticipants}
+                    spinDurationMs={5500}
+                    onSpinComplete={handleSpinComplete}
+                    soundEnabled={soundEnabled}
+                    size="default"
+                  />
+                </div>
+
+                {/* Status Bar Panggung Carousel */}
+                <div className="w-full max-w-md h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-4 my-2 text-center">
                   {isSpinning ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      <span>PENGACAKAN SINEMATIK BERLANGSUNG...</span>
+                    <div className="space-y-0.5 animate-pulse">
+                      <span className="text-[10px] font-mono text-accent uppercase tracking-wider block">
+                        ⚡ MEMILIH KANDIDAT PEMENANG DI PANGGUNG VIP...
+                      </span>
+                      <span className="font-heading text-xs sm:text-sm font-bold text-foreground truncate block">
+                        Menggeser barisan kartu peserta resmi...
+                      </span>
                     </div>
+                  ) : currentWinner ? (
+                    <span className="text-xs font-semibold text-emerald-500">
+                      🎉 Penobatan Pemenang: <strong>{currentWinner.fullName}</strong> ({currentWinner.institution})
+                    </span>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 fill-slate-950" />
-                      <span>PUTAR UNDIAN SEREMONIAL SEKARANG</span>
-                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      Panggung siap! Klik tombol di bawah untuk memulai undian.
+                    </span>
                   )}
-                </Button>
-              </div>
-            </Card>
+                </div>
+
+                {/* Tombol Spin Raksasa */}
+                <div className="pt-3 w-full max-w-sm">
+                  <Button
+                    onClick={handleSpin}
+                    disabled={isSpinning || eligibleCount === 0}
+                    className="w-full h-14 rounded-2xl font-heading text-base sm:text-lg font-black tracking-wider uppercase bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 shadow-lg hover:shadow-amber-500/30 transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSpinning ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>PENGACAKAN SINEMATIK BERLANGSUNG...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 fill-slate-950" />
+                        <span>PUTAR UNDIAN SEREMONIAL SEKARANG</span>
+                      </div>
+                    )}
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              <Card className="p-6 sm:p-8 rounded-3xl border-2 border-red-500/50 bg-gradient-to-b from-card via-card to-background shadow-xl w-full flex flex-col items-center relative overflow-hidden space-y-6">
+                {/* Buzzer Stage Banner */}
+                <div className="w-full flex items-center justify-between pb-4 border-b border-border/80">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-ping" />
+                    <span className="font-heading text-xs sm:text-sm font-bold tracking-wider text-foreground uppercase flex items-center gap-1.5">
+                      <Zap className="h-4 w-4 text-red-500 fill-red-500" />
+                      <span>ARENA BUZZER KILAT F1 REFLEX • LIVE</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setQrDialogOpen(true)}
+                      className="text-xs h-7 gap-1 font-bold"
+                    >
+                      <QrCode className="h-3.5 w-3.5 text-accent" />
+                      <span>QR Code</span>
+                    </Button>
+                    <Badge
+                      variant={buzzerStatus === "green" ? "success" : buzzerStatus === "countdown" ? "danger" : "default"}
+                      className="text-[10px] font-mono uppercase"
+                    >
+                      {buzzerStatus === "countdown"
+                        ? "Countdown Lampu"
+                        : buzzerStatus === "green"
+                        ? "Lampu Hijau (Live)"
+                        : buzzerStatus === "finished"
+                        ? "Podium Dikunci"
+                        : "Standby"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Hadiah Aktif Badge */}
+                <div className="text-center space-y-1">
+                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase block">
+                    SEDANG MEMPEREBUTKAN HADIAH:
+                  </span>
+                  <h3 className="font-heading text-lg sm:text-2xl font-black text-red-500 drop-shadow-xs">
+                    {selectedPrizeName || "Belum Memilih Hadiah"}
+                  </h3>
+                </div>
+
+                {/* F1 Start Lights */}
+                <div className="w-full flex flex-col items-center">
+                  <F1StartLights
+                    status={buzzerStatus}
+                    greenDelayMs={buzzerRound?.greenDelayMs || 2800}
+                    onGreenTrigger={() => setBuzzerStatus("green")}
+                    size="default"
+                  />
+                </div>
+
+                {/* Live Podium Leaderboard */}
+                <div className="w-full">
+                  <BuzzerLeaderboardPodium
+                    leaderboard={buzzerLeaderboard}
+                    prizeName={selectedPrizeName}
+                    size="default"
+                  />
+                </div>
+
+                {/* Status Bar */}
+                <div className="w-full max-w-lg h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-4 text-center">
+                  {buzzerStatus === "countdown" ? (
+                    <span className="text-xs font-mono font-bold text-red-500 animate-pulse flex items-center gap-2">
+                      <Flame className="h-4 w-4" />
+                      Lampu merah menyala bertahap... Menunggu padam & HIJAU!
+                    </span>
+                  ) : buzzerStatus === "green" ? (
+                    <span className="text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-2">
+                      <Zap className="h-4 w-4 fill-emerald-500" />
+                      Lampu HIJAU aktif! Menerima refleks peserta live ({buzzerLeaderboard.length} masuk)
+                    </span>
+                  ) : buzzerStatus === "finished" ? (
+                    <span className="text-xs font-bold text-amber-500 flex items-center gap-2">
+                      <Trophy className="h-4 w-4 text-amber-500" />
+                      Podium Juara telah dikunci dan sah tersimpan ke database!
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Peserta scan QR atau buka /buzzer di HP. Klik tombol di bawah untuk menyalakan lampu F1!
+                    </span>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="w-full max-w-md space-y-2.5 pt-1">
+                  {buzzerStatus === "countdown" ? (
+                    <Button
+                      disabled
+                      className="w-full h-14 rounded-2xl font-heading text-sm sm:text-base font-black tracking-wider uppercase bg-muted text-muted-foreground border border-border"
+                    >
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      <span>LAMPU START F1 SEDANG MENGHITUNG MUNDUR...</span>
+                    </Button>
+                  ) : buzzerStatus === "green" && buzzerLeaderboard.length > 0 ? (
+                    <Button
+                      onClick={handleLockBuzzerRound}
+                      disabled={isLockingBuzzer}
+                      className="w-full h-14 rounded-2xl font-heading text-sm sm:text-base font-black tracking-wider uppercase bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-600 hover:from-emerald-600 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer font-bold"
+                    >
+                      {isLockingBuzzer ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>MENGUNCI JUARA PODIUM...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Trophy className="h-5 w-5 fill-slate-950" />
+                          <span>KUNCI JUARA PODIUM & SIMPAN KE DATABASE</span>
+                        </div>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleStartBuzzerRound}
+                      disabled={isStartingBuzzer}
+                      className="w-full h-14 rounded-2xl font-heading text-sm sm:text-base font-black tracking-wider uppercase bg-gradient-to-r from-red-600 via-red-500 to-red-600 hover:from-red-700 hover:to-red-600 text-white shadow-lg shadow-red-600/30 active:scale-95 cursor-pointer font-bold"
+                    >
+                      {isStartingBuzzer ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>MENYIAPKAN LAMPU START F1...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-5 w-5 fill-white" />
+                          <span>
+                            {buzzerStatus === "finished" ? "MULAI RONDE BUZZER BARU (START)" : "MULAI RONDE BUZZER F1 (LAMPU START)"}
+                          </span>
+                        </div>
+                      )}
+                    </Button>
+                  )}
+
+                  {/* Secondary Controls */}
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setQrDialogOpen(true)}
+                      className="text-xs h-8 gap-1.5 flex-1"
+                    >
+                      <QrCode className="h-3.5 w-3.5 text-accent" />
+                      <span>QR Peserta</span>
+                    </Button>
+                    <Link href="/buzzer" target="_blank" className="flex-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-8 gap-1.5 w-full"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        <span>Buka HP</span>
+                      </Button>
+                    </Link>
+                    {buzzerStatus !== "idle" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleResetBuzzerRound}
+                        className="text-xs h-8 text-muted-foreground hover:text-danger"
+                        title="Reset tampilan ronde saat ini"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                        <span>Reset</span>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
           </div>
         </div>
 
@@ -878,6 +1293,39 @@ export default function DashboardDoorprizePage() {
               </Button>
             </DialogFooter>
           </form>
+        </Dialog>
+        {/* Modal QR Code Masuk Buzzer Kilat Peserta */}
+        <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+          <div className="p-4 sm:p-6 text-center space-y-4">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-heading font-black">
+                QR Code Masuk Buzzer Kilat F1
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Peserta dapat scan QR ini dengan kamera HP masing-masing untuk langsung bergabung ke panggung buzzer tanpa ribet login.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex justify-center py-2">
+              <BuzzerQrCode size={220} />
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-muted/60 border border-border text-xs font-mono font-bold text-accent">
+              URL: /buzzer (atau /peserta/buzzer)
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Link href="/buzzer" target="_blank" className="w-full sm:w-auto">
+                <Button size="sm" variant="outline" className="w-full text-xs gap-1.5">
+                  <span>Buka di Layar HP / Tab</span>
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
+              </Link>
+              <Button size="sm" onClick={() => setQrDialogOpen(false)} className="w-full sm:w-auto text-xs font-bold">
+                Tutup
+              </Button>
+            </DialogFooter>
+          </div>
         </Dialog>
       </div>
     </DashboardLayout>

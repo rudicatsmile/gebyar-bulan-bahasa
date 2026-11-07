@@ -704,7 +704,7 @@ export async function cancelDoorprizeWinner(
 }
 
 /**
- * 7. Reset Riwayat Pemenang Doorprize (Untuk gladi / simulasi)
+ * 7. Bersihkan / Reset Riwayat Pemenang Doorprize (Simulasi / Uji Coba Selesai)
  */
 export async function resetDoorprizeHistory(): Promise<{ success: boolean; error?: string }> {
   const auth = await checkStaffAuth();
@@ -721,7 +721,7 @@ export async function resetDoorprizeHistory(): Promise<{ success: boolean; error
 
     await admin.from("event_settings").upsert({
       key: "doorprize_winners_history",
-      value: [] as any,
+      value: [],
       description: "Daftar riwayat pemenang undian doorprize festival",
       updated_at: new Date().toISOString(),
     });
@@ -732,7 +732,300 @@ export async function resetDoorprizeHistory(): Promise<{ success: boolean; error
     revalidatePath("/monitor/doorprize");
     return { success: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Gagal mereset riwayat undian.";
+    const message = err instanceof Error ? err.message : "Gagal membersihkan riwayat doorprize.";
+    return { success: false, error: message };
+  }
+}
+
+export interface BuzzerLeaderboardEntry {
+  participantId?: string;
+  fullName: string;
+  institution: string;
+  registrationNumber: string;
+  phone?: string | null;
+  reactionTimeMs: number; // e.g. 242
+  rank: number;
+  submittedAt: string;
+}
+
+export interface BuzzerRoundState {
+  roundId: string;
+  prizeId?: string | null;
+  prizeName: string;
+  status: "idle" | "countdown" | "green" | "finished";
+  greenDelayMs: number; // Jeda acak (2000 - 4500 ms) sebelum lampu hijau
+  startedAt: string;
+  greenAt?: string | null;
+  leaderboard: BuzzerLeaderboardEntry[];
+  falseStartsCount: number;
+}
+
+/**
+ * 8. Memulai Ronde Buzzer Kilat F1 Reflex di Panggung
+ */
+export async function startBuzzerRound(payload: {
+  prizeName: string;
+  prizeId?: string | null;
+}): Promise<{ success: boolean; round?: BuzzerRoundState; error?: string }> {
+  const auth = await checkStaffAuth();
+  if (!auth.authorized) return { success: false, error: auth.error };
+
+  try {
+    const admin = createAdminClient();
+    const roundId = `f1-${Date.now()}`;
+    const greenDelayMs = randomInt(2000, 4200); // 2.0 s/d 4.2 detik jeda acak
+    const startedAt = new Date().toISOString();
+
+    const roundState: BuzzerRoundState = {
+      roundId,
+      prizeId: payload.prizeId || null,
+      prizeName: payload.prizeName.trim() || "Doorprize Utama",
+      status: "countdown",
+      greenDelayMs,
+      startedAt,
+      greenAt: null,
+      leaderboard: [],
+      falseStartsCount: 0,
+    };
+
+    await admin.from("event_settings").upsert({
+      key: "doorprize_active_buzzer_round",
+      value: roundState as any,
+      description: "State ronde aktif permainan buzzer kilat panggung",
+      updated_at: startedAt,
+    });
+
+    // Broadcast ke seluruh layar peserta & layar panggung
+    await broadcastDoorprize("buzzer_round_starting", {
+      roundId,
+      prizeName: roundState.prizeName,
+      greenDelayMs,
+      startedAt,
+    });
+
+    return { success: true, round: roundState };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal memulai ronde buzzer.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 9. Peserta Mengirimkan Waktu Refleks (Milidetik) atau Laporan False Start
+ */
+export async function submitBuzzerReaction(payload: {
+  roundId: string;
+  fullName: string;
+  institution?: string;
+  registrationNumber?: string;
+  phone?: string | null;
+  reactionTimeMs: number;
+  isFalseStart: boolean;
+}): Promise<{ success: boolean; rank?: number; isFalseStart?: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+
+    const { data: settingRow } = await admin
+      .from("event_settings")
+      .select("value")
+      .eq("key", "doorprize_active_buzzer_round")
+      .maybeSingle();
+
+    if (!settingRow?.value) {
+      return { success: false, error: "Tidak ada ronde buzzer yang sedang berlangsung." };
+    }
+
+    const currentRound = settingRow.value as unknown as BuzzerRoundState;
+    if (currentRound.roundId !== payload.roundId) {
+      return { success: false, error: "Ronde buzzer sudah berganti atau berakhir." };
+    }
+
+    // Jika False Start (menekan sebelum hijau)
+    if (payload.isFalseStart) {
+      currentRound.falseStartsCount = (currentRound.falseStartsCount || 0) + 1;
+      await admin.from("event_settings").upsert({
+        key: "doorprize_active_buzzer_round",
+        value: currentRound as any,
+        updated_at: new Date().toISOString(),
+      });
+
+      await broadcastDoorprize("buzzer_false_start_recorded", {
+        fullName: payload.fullName,
+        roundId: payload.roundId,
+      });
+
+      return { success: true, isFalseStart: true };
+    }
+
+    // Cek duplikasi entri
+    const cleanReg = (payload.registrationNumber || payload.fullName).trim().toUpperCase();
+    const existing = currentRound.leaderboard.find(
+      (e) => (e.registrationNumber || e.fullName).trim().toUpperCase() === cleanReg
+    );
+    if (existing) {
+      return { success: true, rank: existing.rank };
+    }
+
+    const newEntry: BuzzerLeaderboardEntry = {
+      fullName: payload.fullName.trim(),
+      institution: (payload.institution || "UMUM").trim(),
+      registrationNumber: payload.registrationNumber?.trim() || "PESERTA",
+      phone: payload.phone || null,
+      reactionTimeMs: Math.max(80, Math.round(payload.reactionTimeMs)), // minimum manusiawi ~80ms
+      rank: currentRound.leaderboard.length + 1,
+      submittedAt: new Date().toISOString(),
+    };
+
+    currentRound.leaderboard.push(newEntry);
+    // Urutkan tercepat (milidetik terkecil)
+    currentRound.leaderboard.sort((a, b) => a.reactionTimeMs - b.reactionTimeMs);
+    currentRound.leaderboard.forEach((entry, idx) => {
+      entry.rank = idx + 1;
+    });
+
+    // Simpan top 10 ke event_settings
+    const topLeaderboard = currentRound.leaderboard.slice(0, 10);
+    currentRound.leaderboard = topLeaderboard;
+
+    await admin.from("event_settings").upsert({
+      key: "doorprize_active_buzzer_round",
+      value: currentRound as any,
+      updated_at: new Date().toISOString(),
+    });
+
+    const userRank = topLeaderboard.find((e) => e.fullName === newEntry.fullName)?.rank || 99;
+
+    // Broadcast pembaruan papan leaderboard panggung
+    await broadcastDoorprize("buzzer_leaderboard_updated", {
+      roundId: payload.roundId,
+      leaderboard: topLeaderboard,
+      latestWinner: newEntry,
+    });
+
+    return { success: true, rank: userRank };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal mencatat refleks buzzer.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 10. Kunci & Tetapkan Pemenang Ronde Buzzer ke Database Riwayat Doorprize
+ */
+export async function finishBuzzerRound(payload: {
+  roundId: string;
+}): Promise<{ success: boolean; winners?: BuzzerLeaderboardEntry[]; error?: string }> {
+  const auth = await checkStaffAuth();
+  if (!auth.authorized) return { success: false, error: auth.error };
+
+  try {
+    const admin = createAdminClient();
+
+    const { data: settingRow } = await admin
+      .from("event_settings")
+      .select("value")
+      .eq("key", "doorprize_active_buzzer_round")
+      .maybeSingle();
+
+    if (!settingRow?.value) {
+      return { success: false, error: "Data ronde tidak ditemukan." };
+    }
+
+    const round = settingRow.value as unknown as BuzzerRoundState;
+    round.status = "finished";
+
+    await admin.from("event_settings").upsert({
+      key: "doorprize_active_buzzer_round",
+      value: round as any,
+      updated_at: new Date().toISOString(),
+    });
+
+    // Ambil Juara 1 (Pemenang Utama)
+    const topWinner = round.leaderboard[0];
+    if (topWinner) {
+      const drawnAt = new Date().toISOString();
+      const winnerRecordId = `f1win-${Date.now()}`;
+
+      // Simpan pemenang ke tabel doorprize_winners
+      try {
+        await admin.from("doorprize_winners").insert({
+          id: winnerRecordId,
+          doorprize_name: `${round.prizeName} (Juara 1 Buzzer F1: ${topWinner.reactionTimeMs}ms)`,
+          doorprize_id: round.prizeId?.startsWith("prize-") ? null : round.prizeId || null,
+          participant_id: topWinner.participantId || "00000000-0000-0000-0000-000000000000",
+          participant_name: topWinner.fullName,
+          participant_reg_num: topWinner.registrationNumber,
+          participant_institution: topWinner.institution,
+          participant_phone: topWinner.phone || null,
+          drawn_at: drawnAt,
+          drawn_by: auth.userId || null,
+          status: "sah",
+          notes: `Menang refleks tercepat buzzer panggung dengan waktu ${topWinner.reactionTimeMs} ms`,
+        });
+      } catch (dbErr) {
+        console.warn("Gagal simpan pemenang buzzer ke tabel:", dbErr);
+      }
+
+      // Potong kuota hadiah
+      if (round.prizeId && !round.prizeId.startsWith("prize-")) {
+        try {
+          const { data: pData } = await admin
+            .from("doorprizes")
+            .select("remaining_quantity")
+            .eq("id", round.prizeId)
+            .maybeSingle();
+
+          if (pData) {
+            const newQty = Math.max(0, (Number(pData.remaining_quantity) || 1) - 1);
+            await admin
+              .from("doorprizes")
+              .update({ remaining_quantity: newQty, updated_at: drawnAt })
+              .eq("id", round.prizeId);
+          }
+        } catch {}
+      }
+    }
+
+    // Broadcast penutupan ronde ke panggung & penonton
+    await broadcastDoorprize("buzzer_round_podium_locked", {
+      roundId: payload.roundId,
+      prizeName: round.prizeName,
+      podium: round.leaderboard.slice(0, 3),
+      allResults: round.leaderboard,
+    });
+
+    revalidatePath("/dashboard/doorprize");
+    revalidatePath("/monitor/doorprize");
+    return { success: true, winners: round.leaderboard.slice(0, 3) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal mengunci hasil ronde buzzer.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 11. Ambil Status Ronde Buzzer Terkini
+ */
+export async function getBuzzerRoundState(): Promise<{
+  success: boolean;
+  round?: BuzzerRoundState | null;
+  error?: string;
+}> {
+  try {
+    const admin = createAdminClient();
+    const { data: settingRow } = await admin
+      .from("event_settings")
+      .select("value")
+      .eq("key", "doorprize_active_buzzer_round")
+      .maybeSingle();
+
+    if (!settingRow?.value) {
+      return { success: true, round: null };
+    }
+
+    return { success: true, round: settingRow.value as unknown as BuzzerRoundState };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal memuat status ronde buzzer.";
     return { success: false, error: message };
   }
 }

@@ -14,10 +14,15 @@ import {
   Users,
   Award,
   ArrowLeft,
+  Crown,
+  Zap,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { VipCardCarousel } from "@/components/doorprize/VipCardCarousel";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
+import { F1StartLights } from "@/components/doorprize/F1StartLights";
+import { BuzzerLeaderboardPodium } from "@/components/doorprize/BuzzerLeaderboardPodium";
+import { BuzzerQrCode } from "@/components/doorprize/BuzzerQrCode";
 import { renderBrandText } from "@/components/ui/BrandText";
 import {
   getDoorprizePrizes,
@@ -25,6 +30,7 @@ import {
   type DoorprizeItem,
   type DoorprizeWinnerRecord,
   type EligibleParticipantItem,
+  type BuzzerLeaderboardEntry,
 } from "@/app/actions/doorprize";
 
 function maskPhoneNumber(phone?: string | null): string {
@@ -57,6 +63,12 @@ export function MonitorDoorprizeClient({
   const [showConfetti, setShowConfetti] = React.useState(false);
   const [shufflingName, setShufflingName] = React.useState("");
   const [callCount, setCallCount] = React.useState<number>(0);
+
+  // Game mode & Buzzer states
+  const [activeMode, setActiveMode] = React.useState<"carousel" | "buzzer">("carousel");
+  const [buzzerStatus, setBuzzerStatus] = React.useState<"idle" | "countdown" | "green" | "finished">("idle");
+  const [buzzerDelayMs, setBuzzerDelayMs] = React.useState(2800);
+  const [buzzerLeaderboard, setBuzzerLeaderboard] = React.useState<BuzzerLeaderboardEntry[]>([]);
 
   // Display controls
   const [soundEnabled, setSoundEnabled] = React.useState(true);
@@ -121,6 +133,30 @@ export function MonitorDoorprizeClient({
         setWinner(null);
         setShowWinnerCard(false);
         setShowConfetti(false);
+      })
+      .on("broadcast", { event: "buzzer_round_starting" }, ({ payload }) => {
+        setActiveMode("buzzer");
+        setBuzzerStatus("countdown");
+        setBuzzerLeaderboard([]);
+        if (payload?.prizeName) setActivePrizeName(payload.prizeName);
+        if (payload?.greenDelayMs) setBuzzerDelayMs(payload.greenDelayMs);
+      })
+      .on("broadcast", { event: "buzzer_leaderboard_updated" }, ({ payload }) => {
+        if (payload?.leaderboard) {
+          setBuzzerLeaderboard(payload.leaderboard);
+        }
+      })
+      .on("broadcast", { event: "buzzer_round_podium_locked" }, ({ payload }) => {
+        setBuzzerStatus("finished");
+        if (payload?.allResults) {
+          setBuzzerLeaderboard(payload.allResults);
+        }
+        setShowConfetti(true);
+      })
+      .on("broadcast", { event: "doorprize_switch_mode" }, ({ payload }) => {
+        if (payload?.mode) {
+          setActiveMode(payload.mode);
+        }
       })
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
@@ -205,6 +241,32 @@ export function MonitorDoorprizeClient({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Mode Switcher Pills */}
+          <div className="flex items-center p-1 rounded-2xl bg-white/10 border border-white/10 text-xs font-bold">
+            <button
+              onClick={() => setActiveMode("carousel")}
+              className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeMode === "carousel"
+                  ? "bg-amber-400 text-slate-950 shadow-md font-black"
+                  : "text-white/70 hover:text-white"
+              }`}
+            >
+              <Crown className="h-3.5 w-3.5" />
+              <span>Sinematik VIP</span>
+            </button>
+            <button
+              onClick={() => setActiveMode("buzzer")}
+              className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeMode === "buzzer"
+                  ? "bg-emerald-400 text-slate-950 shadow-md font-black"
+                  : "text-white/70 hover:text-white"
+              }`}
+            >
+              <Zap className="h-3.5 w-3.5 fill-current" />
+              <span>Buzzer Kilat F1</span>
+            </button>
+          </div>
+
           {/* Status Realtime */}
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono">
             <span
@@ -238,109 +300,155 @@ export function MonitorDoorprizeClient({
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 sm:p-10 flex flex-col justify-center items-center z-10">
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          {/* Kolom Kiri: Panggung Sinematik VIP Card Carousel */}
-          <div className="lg:col-span-8 flex flex-col items-center justify-center space-y-4">
-            <div className="w-full">
-              <VipCardCarousel
-                isSpinning={isSpinning}
-                winnerName={winner?.fullName}
-                winnerDetails={winner}
-                spinDurationMs={5500}
-                onSpinComplete={handleSpinComplete}
-                soundEnabled={soundEnabled}
-                size="large"
-              />
-            </div>
-
-            {/* Status Bar Panggung Seremonial */}
-            <div className="w-full max-w-xl h-14 rounded-2xl bg-white/5 border border-amber-500/20 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
-              {isSpinning ? (
-                <div className="space-y-0.5 animate-pulse">
-                  <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
-                    ✦ PENGUNDIAN SEREMONIAL SEDANG BERLANGSUNG ✦
-                  </span>
-                  <span className="font-heading text-sm sm:text-base font-black text-white truncate block">
-                    Menyeleksi pemenang di bawah sorotan panggung...
-                  </span>
-                </div>
-              ) : showWinnerCard && winner ? (
-                <span className="text-sm font-bold text-amber-300 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-amber-400" />
-                  <span>Pemenang Sah Terkunci: <strong>{winner.fullName}</strong></span>
-                </span>
-              ) : (
-                <div className="flex items-center gap-2 text-white/60 text-xs font-semibold">
-                  <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
-                  <span>Panggung Siap • Menunggu Perintah Putar dari Panitia</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Kolom Kanan: Hadiah Aktif & Riwayat Terakhir */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* Kartu Hadiah yang Sedang Diundi */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-white/10 via-white/5 to-transparent border border-white/15 backdrop-blur-md shadow-2xl space-y-3">
-              <div className="flex items-center gap-2 text-amber-400 text-xs font-bold tracking-widest uppercase">
-                <Gift className="h-4 w-4" />
-                <span>SEDANG DIUNDI SAAT INI</span>
-              </div>
-              <h2 className="font-heading text-2xl sm:text-4xl font-black text-white leading-tight drop-shadow-md">
-                {activePrizeName}
-              </h2>
-              <p className="text-xs sm:text-sm text-white/60 leading-relaxed">
-                Hadiah resmi doorprize Gebyar Bulan Bahasa untuk peserta festival yang terpilih secara acak.
-              </p>
-            </div>
-
-            {/* Riwayat Pemenang Terakhir di Layar TV */}
-            <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md space-y-3">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-amber-400" />
-                  <span className="font-heading text-xs sm:text-sm font-bold text-white tracking-wider uppercase">
-                    Pemenang Doorprize Sebelumnya
-                  </span>
-                </div>
-                <span className="text-xs font-mono text-white/50">
-                  {history.filter((w) => w.status !== "dibatalkan").length} Pemenang Sah
-                </span>
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 flex flex-col justify-center items-center z-10">
+        {activeMode === "carousel" ? (
+          /* PANGGUNG 1: CAROUSEL VIP SINEMATIK */
+          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Kolom Kiri: Panggung Sinematik VIP Card Carousel */}
+            <div className="lg:col-span-8 flex flex-col items-center justify-center space-y-4">
+              <div className="w-full">
+                <VipCardCarousel
+                  isSpinning={isSpinning}
+                  winnerName={winner?.fullName}
+                  winnerDetails={winner}
+                  spinDurationMs={5500}
+                  onSpinComplete={handleSpinComplete}
+                  soundEnabled={soundEnabled}
+                  size="large"
+                />
               </div>
 
-              {history.filter((w) => w.status !== "dibatalkan").length === 0 ? (
-                <div className="py-6 text-center text-white/40 text-xs italic">
-                  Belum ada pemenang yang tercatat. Putaran perdana akan segera dimulai!
+              {/* Status Bar Panggung Seremonial */}
+              <div className="w-full max-w-xl h-14 rounded-2xl bg-white/5 border border-amber-500/20 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
+                {isSpinning ? (
+                  <div className="space-y-0.5 animate-pulse">
+                    <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
+                      ✦ PENGUNDIAN SEREMONIAL SEDANG BERLANGSUNG ✦
+                    </span>
+                    <span className="font-heading text-sm sm:text-base font-black text-white truncate block">
+                      Menyeleksi pemenang di bawah sorotan panggung...
+                    </span>
+                  </div>
+                ) : showWinnerCard && winner ? (
+                  <span className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-400" />
+                    <span>Pemenang Sah Terkunci: <strong>{winner.fullName}</strong></span>
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2 text-white/60 text-xs font-semibold">
+                    <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
+                    <span>Panggung Siap • Menunggu Perintah Putar dari Panitia</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Kolom Kanan: Hadiah Aktif & Riwayat Terakhir */}
+            <div className="lg:col-span-4 space-y-6">
+              {/* Kartu Hadiah yang Sedang Diundi */}
+              <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-white/10 via-white/5 to-transparent border border-white/15 backdrop-blur-md shadow-2xl space-y-3">
+                <div className="flex items-center gap-2 text-amber-400 text-xs font-bold tracking-widest uppercase">
+                  <Gift className="h-4 w-4" />
+                  <span>SEDANG DIUNDI SAAT INI</span>
                 </div>
-              ) : (
-                <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-                  {history
-                    .filter((w) => w.status !== "dibatalkan")
-                    .slice(0, 4)
-                    .map((w, i) => (
-                      <div
-                        key={w.id || i}
-                        className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between text-xs gap-3"
-                      >
-                        <div className="min-w-0 space-y-0.5">
-                          <span className="font-bold text-white block truncate text-sm">
-                            {w.participantName}
-                          </span>
-                          <span className="text-[11px] text-white/60 block truncate">
-                            {w.participantInstitution} • No: {w.participantRegNum}
+                <h2 className="font-heading text-2xl sm:text-4xl font-black text-white leading-tight drop-shadow-md">
+                  {activePrizeName}
+                </h2>
+                <p className="text-xs sm:text-sm text-white/60 leading-relaxed">
+                  Hadiah resmi doorprize Gebyar Bulan Bahasa untuk peserta festival yang terpilih secara acak.
+                </p>
+              </div>
+
+              {/* Riwayat Pemenang Terakhir di Layar TV */}
+              <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md space-y-3">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-400" />
+                    <span className="font-heading text-xs sm:text-sm font-bold text-white tracking-wider uppercase">
+                      Pemenang Doorprize Sebelumnya
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono text-white/50">
+                    {history.filter((w) => w.status !== "dibatalkan").length} Pemenang Sah
+                  </span>
+                </div>
+
+                {history.filter((w) => w.status !== "dibatalkan").length === 0 ? (
+                  <div className="py-6 text-center text-white/40 text-xs italic">
+                    Belum ada pemenang yang tercatat. Putaran perdana akan segera dimulai!
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                    {history
+                      .filter((w) => w.status !== "dibatalkan")
+                      .slice(0, 4)
+                      .map((w, i) => (
+                        <div
+                          key={w.id || i}
+                          className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between text-xs gap-3"
+                        >
+                          <div className="min-w-0 space-y-0.5">
+                            <span className="font-bold text-white block truncate text-sm">
+                              {w.participantName}
+                            </span>
+                            <span className="text-[11px] text-white/60 block truncate">
+                              {w.participantInstitution} • No: {w.participantRegNum}
+                            </span>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold text-[10px] shrink-0 border border-amber-500/30">
+                            {w.doorprizeName}
                           </span>
                         </div>
-                        <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold text-[10px] shrink-0 border border-amber-500/30">
-                          {w.doorprizeName}
-                        </span>
-                      </div>
-                    ))}
-                </div>
-              )}
+                      ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          /* PANGGUNG 2: ARENA BUZZER KILAT F1 REFLEX */
+          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Kolom Kiri: F1 Start Lights + Podium Leaderboard */}
+            <div className="lg:col-span-8 flex flex-col items-center justify-center space-y-6">
+              {/* F1 Start Lights Gantry */}
+              <F1StartLights
+                status={buzzerStatus}
+                greenDelayMs={buzzerDelayMs}
+                onGreenTrigger={() => setBuzzerStatus("green")}
+                size="large"
+              />
+
+              {/* Realtime Podium Leaderboard */}
+              <div className="w-full">
+                <BuzzerLeaderboardPodium
+                  leaderboard={buzzerLeaderboard}
+                  prizeName={activePrizeName}
+                  size="large"
+                />
+              </div>
+            </div>
+
+            {/* Kolom Kanan: Hadiah Aktif & QR Code Masuk Arena via HP */}
+            <div className="lg:col-span-4 space-y-6">
+              {/* Kartu Hadiah yang Sedang Diperebutkan */}
+              <div className="p-6 rounded-3xl bg-gradient-to-br from-emerald-500/20 via-white/5 to-transparent border border-emerald-400/30 backdrop-blur-md shadow-2xl space-y-2">
+                <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold tracking-widest uppercase font-mono">
+                  <Zap className="h-4 w-4 fill-emerald-400" />
+                  <span>DIPEREBUTKAN LEWAT REFLEKS KILAT</span>
+                </div>
+                <h2 className="font-heading text-2xl sm:text-3xl font-black text-white leading-tight">
+                  {activePrizeName}
+                </h2>
+                <p className="text-xs text-white/60 leading-relaxed">
+                  Peserta tercepat menekan tombol saat lampu berubah hijau akan dinobatkan sebagai Juara 1 di panggung!
+                </p>
+              </div>
+
+              {/* QR Code Bergabung via HP */}
+              <BuzzerQrCode url="https://bulanbahasa.smkdp2jkt.sch.id/buzzer" />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* WINNER OVERLAY POP-UP (GIANT BANNER READABLE FROM DISTANCE) */}
