@@ -261,16 +261,8 @@ export function DashboardLayout({
         }
       });
 
-    const standBroadcastChannel = supabase
-      .channel("stand-challenge-channel")
-      .on("broadcast", { event: "stand_updated" }, () => {
-        fetchBadgeCounts();
-      })
-      .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
-      supabase.removeChannel(standBroadcastChannel);
     };
   }, [role, fetchBadgeCounts]);
 

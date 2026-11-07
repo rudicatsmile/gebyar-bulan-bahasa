@@ -551,7 +551,7 @@ export default function DashboardKelolaStandPage() {
                 className="text-xs h-9 gap-1.5 cursor-pointer font-semibold border-border hover:bg-muted"
               >
                 <Users className="h-3.5 w-3.5 text-accent" />
-                <span>Penerima ({rewardStatus?.recipients.length || 0})</span>
+                <span>Penerima ({rewardStatus?.recipients?.length || 0})</span>
               </Button>
             </div>
           </div>
