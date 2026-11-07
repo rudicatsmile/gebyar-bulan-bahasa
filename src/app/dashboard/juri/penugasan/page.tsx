@@ -209,7 +209,7 @@ export default function DashboardPenugasanJuriPage() {
             <div>
               <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
                 <ShieldCheck className="h-7 w-7 text-accent" />
-                <span>Matriks Penugasan Juri × 8 Cabang Lomba</span>
+                <span>Matriks Penugasan Juri ×  Cabang-cabang Lomba</span>
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Tentukan dewan penilai untuk tiap cabang lomba. Satu lomba wajib memiliki minimal 1 juri dan 1 Juri Utama.
@@ -317,60 +317,58 @@ export default function DashboardPenugasanJuriPage() {
                 </TableRow>
               ) : (
                 judges.map((j) => {
-                const assignedList = assignments[j.id] || [];
-                return (
-                  <TableRow key={j.id}>
-                    <TableCell className="sticky left-0 bg-card z-10 border-r border-border">
-                      <div className="font-semibold text-foreground text-xs sm:text-sm">
-                        {j.fullName}
-                      </div>
-                      <span className="text-[11px] text-muted-foreground">{j.expertise}</span>
-                    </TableCell>
+                  const assignedList = assignments[j.id] || [];
+                  return (
+                    <TableRow key={j.id}>
+                      <TableCell className="sticky left-0 bg-card z-10 border-r border-border">
+                        <div className="font-semibold text-foreground text-xs sm:text-sm">
+                          {j.fullName}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">{j.expertise}</span>
+                      </TableCell>
 
-                    {competitions.map((c) => {
-                      const isAssigned = assignedList.includes(c.id);
-                      const isChief = chiefJudges[c.id] === j.id;
+                      {competitions.map((c) => {
+                        const isAssigned = assignedList.includes(c.id);
+                        const isChief = chiefJudges[c.id] === j.id;
 
-                      return (
-                        <TableCell key={c.id} className="text-center p-2">
-                          <div className="flex flex-col items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => toggleAssignment(j.id, c.id)}
-                              disabled={isMounted ? isSaving : false}
-                              suppressHydrationWarning
-                              className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
-                                isAssigned
-                                  ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
-                                  : "border-border text-muted-foreground hover:bg-muted"
-                              }`}
-                              title={isAssigned ? "Klik untuk membatalkan tugas" : "Klik untuk menugaskan"}
-                            >
-                              {isAssigned ? <Check className="h-4 w-4 text-accent" /> : null}
-                            </button>
-
-                            {isAssigned && (
+                        return (
+                          <TableCell key={c.id} className="text-center p-2">
+                            <div className="flex flex-col items-center gap-1">
                               <button
                                 type="button"
-                                onClick={() => handleSetChief(c.id, j.id)}
+                                onClick={() => toggleAssignment(j.id, c.id)}
                                 disabled={isMounted ? isSaving : false}
                                 suppressHydrationWarning
-                                className={`text-[9px] font-mono px-1 py-0.5 rounded uppercase font-bold transition-colors cursor-pointer ${
-                                  isChief
-                                    ? "bg-accent text-accent-foreground"
-                                    : "text-muted-foreground hover:text-foreground"
-                                }`}
-                                title="Klik untuk jadikan Juri Utama"
+                                className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${isAssigned
+                                    ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                                    : "border-border text-muted-foreground hover:bg-muted"
+                                  }`}
+                                title={isAssigned ? "Klik untuk membatalkan tugas" : "Klik untuk menugaskan"}
                               >
-                                {isChief ? "★ Utama" : "Jadikan Utama"}
+                                {isAssigned ? <Check className="h-4 w-4 text-accent" /> : null}
                               </button>
-                            )}
-                          </div>
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                );
+
+                              {isAssigned && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetChief(c.id, j.id)}
+                                  disabled={isMounted ? isSaving : false}
+                                  suppressHydrationWarning
+                                  className={`text-[9px] font-mono px-1 py-0.5 rounded uppercase font-bold transition-colors cursor-pointer ${isChief
+                                      ? "bg-accent text-accent-foreground"
+                                      : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                  title="Klik untuk jadikan Juri Utama"
+                                >
+                                  {isChief ? "★ Utama" : "Jadikan Utama"}
+                                </button>
+                              )}
+                            </div>
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
                 })
               )}
             </TableBody>

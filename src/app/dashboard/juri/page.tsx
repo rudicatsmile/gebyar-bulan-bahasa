@@ -343,9 +343,9 @@ export default function DashboardJuriPage() {
             <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               Manajemen Dewan Juri Lomba
             </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              Daftar dewan juri ahli bersertifikasi, bidang keahlian, dan status penugasan penjurian 8 cabang lomba.
-            </p>
+            {/* <p className="text-xs sm:text-sm text-muted-foreground">
+              Daftar dewan juri, bidang keahlian, dan status penugasan penjurian 8 cabang lomba.
+            </p> */}
           </div>
 
           <div className="flex items-center gap-2">
@@ -364,11 +364,10 @@ export default function DashboardJuriPage() {
 
         {feedback && (
           <div
-            className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs ${
-              feedback.type === "success"
+            className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs ${feedback.type === "success"
                 ? "bg-success/10 border-success/30 text-success"
                 : "bg-danger/10 border-danger/30 text-danger"
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               {feedback.type === "success" ? (
@@ -535,86 +534,86 @@ export default function DashboardJuriPage() {
                 </TableRow>
               ) : (
                 judges.map((j) => {
-                const assignedCount = j.assignedCompetitionIds.length;
-                return (
-                  <TableRow key={j.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        {j.avatarUrl ? (
-                          <img
-                            src={j.avatarUrl}
-                            alt={j.fullName}
-                            className="h-9 w-9 rounded-full object-cover border border-border shrink-0"
-                          />
-                        ) : (
-                          <div className="h-9 w-9 rounded-full bg-accent/15 border border-accent/20 flex items-center justify-center shrink-0">
-                            <UserCheck className="h-4 w-4 text-accent" />
+                  const assignedCount = j.assignedCompetitionIds.length;
+                  return (
+                    <TableRow key={j.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          {j.avatarUrl ? (
+                            <img
+                              src={j.avatarUrl}
+                              alt={j.fullName}
+                              className="h-9 w-9 rounded-full object-cover border border-border shrink-0"
+                            />
+                          ) : (
+                            <div className="h-9 w-9 rounded-full bg-accent/15 border border-accent/20 flex items-center justify-center shrink-0">
+                              <UserCheck className="h-4 w-4 text-accent" />
+                            </div>
+                          )}
+                          <div>
+                            <strong className="text-foreground text-xs sm:text-sm block">
+                              {j.fullName}
+                            </strong>
+                            <span className="text-[11px] text-muted-foreground">{j.title}</span>
                           </div>
-                        )}
-                        <div>
-                          <strong className="text-foreground text-xs sm:text-sm block">
-                            {j.fullName}
-                          </strong>
-                          <span className="text-[11px] text-muted-foreground">{j.title}</span>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-foreground font-medium">
-                      {j.expertise}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono">
-                      {j.email}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge
-                        variant={j.isChiefJudge ? "gold" : "default"}
-                        className="text-[10px]"
-                      >
-                        {j.isChiefJudge ? "JURI UTAMA" : "ANGGOTA JURI"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center text-xs">
-                      {assignedCount > 0 ? (
-                        <span className="font-mono font-bold text-accent">{assignedCount} Cabang Lomba</span>
-                      ) : (
-                        <Link
-                          href="/dashboard/juri/penugasan"
-                          className="inline-flex items-center text-muted-foreground hover:text-accent underline decoration-dotted underline-offset-2"
+                      </TableCell>
+                      <TableCell className="text-xs text-foreground font-medium">
+                        {j.expertise}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {j.email}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant={j.isChiefJudge ? "gold" : "default"}
+                          className="text-[10px]"
                         >
-                          Belum ditugaskan
-                        </Link>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-8 gap-1.5 cursor-pointer hover:border-accent hover:text-accent"
-                          onClick={() => handleOpenEditDialog(j)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          <span>Edit</span>
-                        </Button>
-                        <Link href="/dashboard/juri/penugasan">
-                          <Button variant="outline" size="sm" className="text-xs h-8">
-                            Atur Tugas
+                          {j.isChiefJudge ? "JURI UTAMA" : "ANGGOTA JURI"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center text-xs">
+                        {assignedCount > 0 ? (
+                          <span className="font-mono font-bold text-accent">{assignedCount} Cabang Lomba</span>
+                        ) : (
+                          <Link
+                            href="/dashboard/juri/penugasan"
+                            className="inline-flex items-center text-muted-foreground hover:text-accent underline decoration-dotted underline-offset-2"
+                          >
+                            Belum ditugaskan
+                          </Link>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-8 gap-1.5 cursor-pointer hover:border-accent hover:text-accent"
+                            onClick={() => handleOpenEditDialog(j)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span>Edit</span>
                           </Button>
-                        </Link>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-8 gap-1.5 cursor-pointer text-muted-foreground hover:text-danger hover:border-danger/50"
-                          onClick={() => setDeleteTarget(j)}
-                          title="Hapus data dewan juri"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>Hapus</span>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
+                          <Link href="/dashboard/juri/penugasan">
+                            <Button variant="outline" size="sm" className="text-xs h-8">
+                              Atur Tugas
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-8 gap-1.5 cursor-pointer text-muted-foreground hover:text-danger hover:border-danger/50"
+                            onClick={() => setDeleteTarget(j)}
+                            title="Hapus data dewan juri"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Hapus</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
                 })
               )}
             </TableBody>
