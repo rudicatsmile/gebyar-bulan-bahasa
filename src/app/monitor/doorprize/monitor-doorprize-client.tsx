@@ -16,7 +16,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { NameReelRoller } from "@/components/doorprize/NameReelRoller";
+import { VipCardCarousel } from "@/components/doorprize/VipCardCarousel";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
 import { renderBrandText } from "@/components/ui/BrandText";
 import {
@@ -240,10 +240,10 @@ export function MonitorDoorprizeClient({
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 sm:p-10 flex flex-col justify-center items-center z-10">
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          {/* Kolom Kiri: Drum Roller Nama Peserta Besar */}
-          <div className="lg:col-span-7 flex flex-col items-center justify-center space-y-4">
+          {/* Kolom Kiri: Panggung Sinematik VIP Card Carousel */}
+          <div className="lg:col-span-8 flex flex-col items-center justify-center space-y-4">
             <div className="w-full">
-              <NameReelRoller
+              <VipCardCarousel
                 isSpinning={isSpinning}
                 winnerName={winner?.fullName}
                 winnerDetails={winner}
@@ -254,32 +254,33 @@ export function MonitorDoorprizeClient({
               />
             </div>
 
-            {/* Shuffling Bar */}
-            <div className="w-full max-w-xl h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
+            {/* Status Bar Panggung Seremonial */}
+            <div className="w-full max-w-xl h-14 rounded-2xl bg-white/5 border border-amber-500/20 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
               {isSpinning ? (
                 <div className="space-y-0.5 animate-pulse">
-                  <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block">
-                    ⚡ DRUM ROLLER MENGACAK 100+ PESERTA DARI DATABASE...
+                  <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
+                    ✦ PENGUNDIAN SEREMONIAL SEDANG BERLANGSUNG ✦
                   </span>
                   <span className="font-heading text-sm sm:text-base font-black text-white truncate block">
-                    Menyeleksi nama pemenang secara acak...
+                    Menyeleksi pemenang di bawah sorotan panggung...
                   </span>
                 </div>
               ) : showWinnerCard && winner ? (
-                <span className="text-sm font-bold text-emerald-400">
-                  🎉 Selamat kepada pemenang undian: {winner.fullName}!
+                <span className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  <span>Pemenang Sah Terkunci: <strong>{winner.fullName}</strong></span>
                 </span>
               ) : (
                 <div className="flex items-center gap-2 text-white/60 text-xs font-semibold">
                   <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
-                  <span>Siap Mengundi • Menunggu Putaran Rol dari Panitia</span>
+                  <span>Panggung Siap • Menunggu Perintah Putar dari Panitia</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* Kolom Kanan: Hadiah Aktif & Riwayat Terakhir */}
-          <div className="lg:col-span-5 space-y-6">
+          <div className="lg:col-span-4 space-y-6">
             {/* Kartu Hadiah yang Sedang Diundi */}
             <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-white/10 via-white/5 to-transparent border border-white/15 backdrop-blur-md shadow-2xl space-y-3">
               <div className="flex items-center gap-2 text-amber-400 text-xs font-bold tracking-widest uppercase">

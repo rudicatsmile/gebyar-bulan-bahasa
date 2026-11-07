@@ -59,31 +59,70 @@ class SoundManager {
    * Suara fanfare keriaan kemenangan saat pemenang keluar
    */
   public playFanfare() {
+    this.playCeremonialChime();
+  }
+
+  /**
+   * Suara Panggung Seremonial Mewah (Crystal Chime Chord + Brass Swell)
+   */
+  public playCeremonialChime() {
     if (this.isMuted) return;
     try {
       const ctx = this.initCtx();
       if (!ctx) return;
 
-      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 (Major arpeggio)
       const now = ctx.currentTime;
+      // Akord Mewah D Mayor 9 (D4, F#4, A4, C#5, E5, A5)
+      const frequencies = [293.66, 369.99, 440.0, 554.37, 659.25, 880.0];
 
-      notes.forEach((freq, i) => {
+      frequencies.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(freq, now + i * 0.12);
+        // Sine murni dengan overtone hangat seperti lonceng kristal panggung
+        osc.type = idx % 2 === 0 ? "sine" : "triangle";
+        osc.frequency.setValueAtTime(freq, now + idx * 0.05);
 
-        gain.gain.setValueAtTime(0, now + i * 0.12);
-        gain.gain.linearRampToValueAtTime(0.28, now + i * 0.12 + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.65);
+        gain.gain.setValueAtTime(0, now + idx * 0.05);
+        gain.gain.linearRampToValueAtTime(0.18 / (idx * 0.3 + 1), now + idx * 0.05 + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.05 + 2.2);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
 
-        osc.start(now + i * 0.12);
-        osc.stop(now + i * 0.12 + 0.7);
+        osc.start(now + idx * 0.05);
+        osc.stop(now + idx * 0.05 + 2.3);
       });
+    } catch {
+      // Audio context might be restricted
+    }
+  }
+
+  /**
+   * Suara Cinematic Whoosh / Reel Sweep saat kartu bergeser
+   */
+  public playCinematicSweep(pitch: number = 1.0) {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initCtx();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(450 * pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.06);
+
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.07);
     } catch {
       // Audio context might be restricted
     }

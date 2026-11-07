@@ -54,7 +54,7 @@ import {
   type DoorprizeFilter,
   type EligibleParticipantItem,
 } from "@/app/actions/doorprize";
-import { NameReelRoller } from "@/components/doorprize/NameReelRoller";
+import { VipCardCarousel } from "@/components/doorprize/VipCardCarousel";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
 import { createClient } from "@/lib/supabase/client";
 
@@ -658,9 +658,9 @@ export default function DashboardDoorprizePage() {
                 </h3>
               </div>
 
-              {/* Drum Roller Nama Peserta */}
-              <div className="w-full py-2">
-                <NameReelRoller
+              {/* Sinematik VIP Card Carousel Stage */}
+              <div className="w-full py-1">
+                <VipCardCarousel
                   isSpinning={isSpinning}
                   winnerName={currentWinner?.fullName}
                   winnerDetails={currentWinner}
@@ -672,24 +672,24 @@ export default function DashboardDoorprizePage() {
                 />
               </div>
 
-              {/* Status Bar Drum Roller */}
+              {/* Status Bar Panggung Carousel */}
               <div className="w-full max-w-md h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-4 my-2 text-center">
                 {isSpinning ? (
                   <div className="space-y-0.5 animate-pulse">
                     <span className="text-[10px] font-mono text-accent uppercase tracking-wider block">
-                      ⚡ DRUM ROLLER MENGACAK NAMA PESERTA SECARA LIVE...
+                      ⚡ MEMILIH KANDIDAT PEMENANG DI PANGGUNG VIP...
                     </span>
                     <span className="font-heading text-xs sm:text-sm font-bold text-foreground truncate block">
-                      Menggulung daftar peserta terdaftar...
+                      Menggeser barisan kartu peserta resmi...
                     </span>
                   </div>
                 ) : currentWinner ? (
                   <span className="text-xs font-semibold text-emerald-500">
-                    🎉 Pemenang Terkunci: <strong>{currentWinner.fullName}</strong> ({currentWinner.institution})
+                    🎉 Penobatan Pemenang: <strong>{currentWinner.fullName}</strong> ({currentWinner.institution})
                   </span>
                 ) : (
                   <span className="text-xs text-muted-foreground">
-                    Siap diundi! Klik tombol putar rol drum di bawah ini.
+                    Panggung siap! Klik tombol di bawah untuk memulai undian.
                   </span>
                 )}
               </div>
@@ -704,12 +704,12 @@ export default function DashboardDoorprizePage() {
                   {isSpinning ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      <span>ROL DRUM SEDANG BERPUTAR...</span>
+                      <span>PENGACAKAN SINEMATIK BERLANGSUNG...</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-5 w-5 fill-slate-950" />
-                      <span>PUTAR ROL UNDIAN SEKARANG (SPIN)</span>
+                      <span>PUTAR UNDIAN SEREMONIAL SEKARANG</span>
                     </div>
                   )}
                 </Button>
