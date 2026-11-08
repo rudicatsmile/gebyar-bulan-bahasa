@@ -397,28 +397,50 @@ export function MonitorDoorprizeClient({
                     Belum ada pemenang yang tercatat. Putaran perdana akan segera dimulai!
                   </div>
                 ) : (
-                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                  <div className="space-y-2.5 max-h-64 sm:max-h-72 overflow-y-auto pr-1">
                     {history
                       .filter((w) => w.status !== "dibatalkan")
-                      .slice(0, 4)
-                      .map((w, i) => (
-                        <div
-                          key={w.id || i}
-                          className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between text-xs gap-3"
-                        >
-                          <div className="min-w-0 space-y-0.5">
-                            <span className="font-bold text-white block truncate text-sm">
-                              {w.participantName}
-                            </span>
-                            <span className="text-[11px] text-white/60 block truncate">
-                              {w.participantInstitution} • No: {w.participantRegNum}
-                            </span>
+                      .slice(0, 5)
+                      .map((w, i) => {
+                        const timeStr = w.drawnAt
+                          ? new Date(w.drawnAt).toLocaleTimeString("id-ID", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }) + " WIB"
+                          : "";
+
+                        return (
+                          <div
+                            key={w.id || i}
+                            className="p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-400/30 transition-colors text-xs space-y-2"
+                          >
+                            {/* Baris Atas: Nama Pemenang & Asal Sekolah (100% Lebar Penuh) */}
+                            <div className="min-w-0 space-y-0.5">
+                              <span className="font-heading font-bold text-white text-sm sm:text-base block truncate tracking-wide">
+                                {w.participantName}
+                              </span>
+                              <span className="text-[11px] sm:text-xs text-white/70 block truncate">
+                                {w.participantInstitution} • No: {w.participantRegNum}
+                              </span>
+                            </div>
+
+                            {/* Baris Bawah: Badge Hadiah (Kiri) + Jam Pengundian (Kanan) */}
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/5">
+                              <span
+                                className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 font-semibold text-[11px] border border-amber-500/30 truncate max-w-[75%]"
+                                title={w.doorprizeName}
+                              >
+                                🎁 {w.doorprizeName}
+                              </span>
+                              {timeStr && (
+                                <span className="text-[10px] font-mono text-white/40 shrink-0">
+                                  {timeStr}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold text-[10px] shrink-0 border border-amber-500/30">
-                            {w.doorprizeName}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 )}
               </div>
