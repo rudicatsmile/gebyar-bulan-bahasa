@@ -84,6 +84,7 @@ export default function DashboardDoorprizePage() {
   const [loading, setLoading] = React.useState(true);
 
   // Spin states
+  const [isWarmingUp, setIsWarmingUp] = React.useState(false);
   const [isSpinning, setIsSpinning] = React.useState(false);
   const [targetSegment, setTargetSegment] = React.useState(0);
   const [currentWinner, setCurrentWinner] = React.useState<EligibleParticipantItem | null>(null);
@@ -252,7 +253,7 @@ export default function DashboardDoorprizePage() {
 
   // Handle Action: Spin Doorprize
   const handleSpin = async () => {
-    if (isSpinning) return;
+    if (isSpinning || isWarmingUp) return;
     if (!selectedPrizeName.trim()) {
       setFeedback({ type: "error", message: "Silakan pilih hadiah doorprize terlebih dahulu." });
       return;
@@ -267,8 +268,17 @@ export default function DashboardDoorprizePage() {
     setShowConfetti(false);
     setMcCallCount(0);
 
+    // 1. RESPON INSTAN 0ms: Aktifkan pemanasan visual/audio seketika di dashboard
+    setIsWarmingUp(true);
+
+    // Siarkan sinyal pembuka seketika ke Layar Monitor TV (Panggung Utama)
+    sendLiveBroadcast("doorprize_spin_initiating", {
+      prizeName: selectedPrizeName,
+      eligibleCount,
+    });
+
     try {
-      // 1. Eksekusi randomisasi aman di server
+      // 2. Eksekusi randomisasi aman di server
       const res = await spinDoorprize({
         prizeName: selectedPrizeName,
         prizeId: selectedPrizeId,
@@ -276,16 +286,19 @@ export default function DashboardDoorprizePage() {
       });
 
       if (!res.success || !res.winner) {
+        setIsWarmingUp(false);
+        sendLiveBroadcast("doorprize_spin_cancelled", {});
         setFeedback({ type: "error", message: res.error || "Gagal mengundi pemenang." });
         return;
       }
 
-      // 2. Set parameter putaran roda / drum
+      // 3. Data pemenang siap dari server -> Alihkan dari Pemanasan ke Putaran Kencang
       setTargetSegment(res.targetSegmentIndex ?? 0);
       setCurrentWinner(res.winner);
+      setIsWarmingUp(false);
       setIsSpinning(true);
 
-      // 3. Broadcast langsung dari client browser ke Layar Monitor TV (WebSocket Realtime)
+      // 4. Broadcast data pemenang ke Layar Monitor TV untuk akselerasi kencang bersamaan
       sendLiveBroadcast("doorprize_spin_started", {
         winner: {
           id: res.winner.id,
@@ -301,6 +314,8 @@ export default function DashboardDoorprizePage() {
         spinDurationMs: 5500,
       });
     } catch (err) {
+      setIsWarmingUp(false);
+      sendLiveBroadcast("doorprize_spin_cancelled", {});
       const message = err instanceof Error ? err.message : "Terjadi kesalahan saat memutar undian.";
       setFeedback({ type: "error", message });
     }
@@ -355,6 +370,8 @@ export default function DashboardDoorprizePage() {
         // 1. Bersihkan state visual seketika di client
         setHistory([]);
         setCurrentWinner(null);
+        setIsWarmingUp(false);
+        setIsSpinning(false);
         setShowWinnerModal(false);
         setShowConfetti(false);
         setBuzzerStatus("idle");
@@ -862,17 +879,17 @@ export default function DashboardDoorprizePage() {
           {/* Kolom Kanan: Panggung Undian (Sinematik VIP vs Buzzer Kilat) */}
           <div className="lg:col-span-7 flex flex-col items-center space-y-5">
             {activeMode === "vip_carousel" ? (
-              <Card className="p-6 sm:p-8 rounded-3xl border-2 border-accent/40 bg-gradient-to-b from-card via-card to-background shadow-xl w-full flex flex-col items-center relative overflow-hidden">
+              <Card className="p-4 sm:p-6 lg:p-8 rounded-3xl border-2 border-accent/40 bg-gradient-to-b from-card via-card to-background shadow-xl w-full flex flex-col items-center relative overflow-hidden">
                 {/* Stage Lights Banner */}
-                <div className="w-full flex items-center justify-between pb-4 border-b border-border/80">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
-                    <span className="font-heading text-xs sm:text-sm font-bold tracking-wider text-foreground uppercase">
+                <div className="w-full flex items-center justify-between pb-3 sm:pb-4 border-b border-border/80 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                    <span className="font-heading text-xs sm:text-sm font-bold tracking-wider text-foreground uppercase truncate">
                       PANGGUNG SINEMATIK VIP CARD
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => setSoundEnabled(!soundEnabled)}
                       className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
@@ -887,11 +904,11 @@ export default function DashboardDoorprizePage() {
                 </div>
 
                 {/* Hadiah Aktif Badge */}
-                <div className="py-3 text-center space-y-1">
-                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase block">
+                <div className="py-2.5 sm:py-3 text-center space-y-1 w-full px-2">
+                  <span className="text-[10px] sm:text-[11px] font-semibold tracking-wider text-muted-foreground uppercase block">
                     SEDANG MENGUNDI HADIAH:
                   </span>
-                  <h3 className="font-heading text-lg sm:text-2xl font-black text-accent drop-shadow-xs">
+                  <h3 className="font-heading text-lg sm:text-2xl font-black text-accent drop-shadow-xs truncate max-w-full">
                     {selectedPrizeName || "Belum Memilih Hadiah"}
                   </h3>
                 </div>
@@ -900,6 +917,7 @@ export default function DashboardDoorprizePage() {
                 <div className="w-full py-1">
                   <VipCardCarousel
                     isSpinning={isSpinning}
+                    isWarmingUp={isWarmingUp}
                     winnerName={currentWinner?.fullName}
                     winnerDetails={currentWinner}
                     sampleParticipants={sampleParticipants}
@@ -911,18 +929,27 @@ export default function DashboardDoorprizePage() {
                 </div>
 
                 {/* Status Bar Panggung Carousel */}
-                <div className="w-full max-w-md h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-4 my-2 text-center">
-                  {isSpinning ? (
+                <div className="w-full max-w-md min-h-12 py-2 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-3 sm:px-4 my-2 text-center">
+                  {isWarmingUp ? (
                     <div className="space-y-0.5 animate-pulse">
-                      <span className="text-[10px] font-mono text-accent uppercase tracking-wider block">
-                        ⚡ MEMILIH KANDIDAT PEMENANG DI PANGGUNG VIP...
+                      <span className="text-[10px] font-mono text-amber-500 uppercase tracking-wider block font-bold">
+                        ⚡ MENGHUBUNGI SERVER & MENGACAK 100+ PESERTA...
                       </span>
                       <span className="font-heading text-xs sm:text-sm font-bold text-foreground truncate block">
-                        Menggeser barisan kartu peserta resmi...
+                        Menyaring {eligibleCount > 0 ? `${eligibleCount} ` : ""}peserta yang eligible...
+                      </span>
+                    </div>
+                  ) : isSpinning ? (
+                    <div className="space-y-0.5 animate-pulse">
+                      <span className="text-[10px] font-mono text-accent uppercase tracking-wider block font-bold">
+                        ⚡ MEMUTAR PANGGUNG VIP SINEMATIK...
+                      </span>
+                      <span className="font-heading text-xs sm:text-sm font-bold text-foreground truncate block">
+                        {shufflingName || "Menggeser barisan kartu peserta resmi..."}
                       </span>
                     </div>
                   ) : currentWinner ? (
-                    <span className="text-xs font-semibold text-emerald-500">
+                    <span className="text-xs font-semibold text-emerald-500 break-words">
                       🎉 Penobatan Pemenang: <strong>{currentWinner.fullName}</strong> ({currentWinner.institution})
                     </span>
                   ) : (
@@ -933,39 +960,44 @@ export default function DashboardDoorprizePage() {
                 </div>
 
                 {/* Tombol Spin Raksasa */}
-                <div className="pt-3 w-full max-w-sm">
+                <div className="pt-2 sm:pt-3 w-full max-w-sm px-2 sm:px-0">
                   <Button
                     onClick={handleSpin}
-                    disabled={isSpinning || eligibleCount === 0}
-                    className="w-full h-14 rounded-2xl font-heading text-base sm:text-lg font-black tracking-wider uppercase bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 shadow-lg hover:shadow-amber-500/30 transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isSpinning || isWarmingUp || eligibleCount === 0}
+                    className="w-full h-12 sm:h-14 rounded-2xl font-heading text-sm sm:text-base md:text-lg font-black tracking-wider uppercase bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 shadow-lg hover:shadow-amber-500/30 transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSpinning ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        <span>PENGACAKAN SINEMATIK BERLANGSUNG...</span>
+                    {isWarmingUp ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin shrink-0 text-slate-950" />
+                        <span className="truncate">MENGACAK 100+ PESERTA...</span>
+                      </div>
+                    ) : isSpinning ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 animate-spin shrink-0 fill-slate-950 text-slate-950" />
+                        <span className="truncate">MEMUTAR PANGGUNG VIP...</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 fill-slate-950" />
-                        <span>PUTAR UNDIAN SEREMONIAL SEKARANG</span>
+                      <div className="flex items-center justify-center gap-2">
+                        <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 fill-slate-950 shrink-0" />
+                        <span>PUTAR DOORPRIZE</span>
                       </div>
                     )}
                   </Button>
                 </div>
               </Card>
             ) : (
-              <Card className="p-6 sm:p-8 rounded-3xl border-2 border-red-500/50 bg-gradient-to-b from-card via-card to-background shadow-xl w-full flex flex-col items-center relative overflow-hidden space-y-6">
+              <Card className="p-4 sm:p-6 lg:p-8 rounded-3xl border-2 border-red-500/50 bg-gradient-to-b from-card via-card to-background shadow-xl w-full flex flex-col items-center relative overflow-hidden space-y-5 sm:space-y-6">
                 {/* Buzzer Stage Banner */}
-                <div className="w-full flex items-center justify-between pb-4 border-b border-border/80">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-ping" />
-                    <span className="font-heading text-xs sm:text-sm font-bold tracking-wider text-foreground uppercase flex items-center gap-1.5">
-                      <Zap className="h-4 w-4 text-red-500 fill-red-500" />
-                      <span>ARENA BUZZER KILAT F1 REFLEX • LIVE</span>
+                <div className="w-full flex items-center justify-between pb-3 sm:pb-4 border-b border-border/80 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-ping shrink-0" />
+                    <span className="font-heading text-xs sm:text-sm font-bold tracking-wider text-foreground uppercase flex items-center gap-1.5 truncate">
+                      <Zap className="h-4 w-4 text-red-500 fill-red-500 shrink-0" />
+                      <span className="truncate">ARENA BUZZER KILAT F1 REFLEX</span>
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Button
                       size="sm"
                       variant="outline"
@@ -991,11 +1023,11 @@ export default function DashboardDoorprizePage() {
                 </div>
 
                 {/* Hadiah Aktif Badge */}
-                <div className="text-center space-y-1">
-                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase block">
+                <div className="text-center space-y-1 w-full px-2">
+                  <span className="text-[10px] sm:text-[11px] font-semibold tracking-wider text-muted-foreground uppercase block">
                     SEDANG MEMPEREBUTKAN HADIAH:
                   </span>
-                  <h3 className="font-heading text-lg sm:text-2xl font-black text-red-500 drop-shadow-xs">
+                  <h3 className="font-heading text-lg sm:text-2xl font-black text-red-500 drop-shadow-xs truncate max-w-full">
                     {selectedPrizeName || "Belum Memilih Hadiah"}
                   </h3>
                 </div>
@@ -1020,54 +1052,54 @@ export default function DashboardDoorprizePage() {
                 </div>
 
                 {/* Status Bar */}
-                <div className="w-full max-w-lg h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-4 text-center">
+                <div className="w-full max-w-lg min-h-12 py-2 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center px-3 sm:px-4 text-center">
                   {buzzerStatus === "countdown" ? (
-                    <span className="text-xs font-mono font-bold text-red-500 animate-pulse flex items-center gap-2">
-                      <Flame className="h-4 w-4" />
-                      Lampu merah menyala bertahap... Menunggu padam & HIJAU!
+                    <span className="text-xs font-mono font-bold text-red-500 animate-pulse flex items-center justify-center gap-2 break-words">
+                      <Flame className="h-4 w-4 shrink-0" />
+                      <span>Lampu merah menyala bertahap... Menunggu padam & HIJAU!</span>
                     </span>
                   ) : buzzerStatus === "green" ? (
-                    <span className="text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-2">
-                      <Zap className="h-4 w-4 fill-emerald-500" />
-                      Lampu HIJAU aktif! Menerima refleks peserta live ({buzzerLeaderboard.length} masuk)
+                    <span className="text-xs font-bold text-emerald-500 animate-pulse flex items-center justify-center gap-2 break-words">
+                      <Zap className="h-4 w-4 fill-emerald-500 shrink-0" />
+                      <span>Lampu HIJAU aktif! Menerima refleks peserta live ({buzzerLeaderboard.length} masuk)</span>
                     </span>
                   ) : buzzerStatus === "finished" ? (
-                    <span className="text-xs font-bold text-amber-500 flex items-center gap-2">
-                      <Trophy className="h-4 w-4 text-amber-500" />
-                      Podium Juara telah dikunci dan sah tersimpan ke database!
+                    <span className="text-xs font-bold text-amber-500 flex items-center justify-center gap-2 break-words">
+                      <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
+                      <span>Podium Juara telah dikunci dan sah tersimpan ke database!</span>
                     </span>
                   ) : (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground break-words">
                       Peserta scan QR atau buka /buzzer di HP. Klik tombol di bawah untuk menyalakan lampu F1!
                     </span>
                   )}
                 </div>
 
                 {/* Action Buttons */}
-                <div className="w-full max-w-md space-y-2.5 pt-1">
+                <div className="w-full max-w-md space-y-2.5 pt-1 px-2 sm:px-0">
                   {buzzerStatus === "countdown" ? (
                     <Button
                       disabled
-                      className="w-full h-14 rounded-2xl font-heading text-sm sm:text-base font-black tracking-wider uppercase bg-muted text-muted-foreground border border-border"
+                      className="w-full h-12 sm:h-14 rounded-2xl font-heading text-xs sm:text-sm md:text-base font-black tracking-wider uppercase bg-muted text-muted-foreground border border-border"
                     >
-                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                      <span>LAMPU START F1 SEDANG MENGHITUNG MUNDUR...</span>
+                      <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin mr-2 shrink-0" />
+                      <span className="truncate">LAMPU START SEDANG COUNTDOWN...</span>
                     </Button>
                   ) : buzzerStatus === "green" && buzzerLeaderboard.length > 0 ? (
                     <Button
                       onClick={handleLockBuzzerRound}
                       disabled={isLockingBuzzer}
-                      className="w-full h-14 rounded-2xl font-heading text-sm sm:text-base font-black tracking-wider uppercase bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-600 hover:from-emerald-600 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer font-bold"
+                      className="w-full h-12 sm:h-14 rounded-2xl font-heading text-xs sm:text-sm md:text-base font-black tracking-wider uppercase bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-600 hover:from-emerald-600 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer font-bold"
                     >
                       {isLockingBuzzer ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>MENGUNCI JUARA PODIUM...</span>
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin shrink-0" />
+                          <span className="truncate">MENGUNCI JUARA PODIUM...</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <Trophy className="h-5 w-5 fill-slate-950" />
-                          <span>KUNCI JUARA PODIUM & SIMPAN KE DATABASE</span>
+                        <div className="flex items-center justify-center gap-2">
+                          <Trophy className="h-4 w-4 sm:h-5 sm:w-5 fill-slate-950 shrink-0" />
+                          <span className="truncate">KUNCI JUARA PODIUM & SIMPAN</span>
                         </div>
                       )}
                     </Button>
@@ -1075,18 +1107,18 @@ export default function DashboardDoorprizePage() {
                     <Button
                       onClick={handleStartBuzzerRound}
                       disabled={isStartingBuzzer}
-                      className="w-full h-14 rounded-2xl font-heading text-sm sm:text-base font-black tracking-wider uppercase bg-gradient-to-r from-red-600 via-red-500 to-red-600 hover:from-red-700 hover:to-red-600 text-white shadow-lg shadow-red-600/30 active:scale-95 cursor-pointer font-bold"
+                      className="w-full h-12 sm:h-14 rounded-2xl font-heading text-xs sm:text-sm md:text-base font-black tracking-wider uppercase bg-gradient-to-r from-red-600 via-red-500 to-red-600 hover:from-red-700 hover:to-red-600 text-white shadow-lg shadow-red-600/30 active:scale-95 cursor-pointer font-bold"
                     >
                       {isStartingBuzzer ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>MENYIAPKAN LAMPU START F1...</span>
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin shrink-0" />
+                          <span className="truncate">MENYIAPKAN LAMPU START F1...</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <Zap className="h-5 w-5 fill-white" />
-                          <span>
-                            {buzzerStatus === "finished" ? "MULAI RONDE BUZZER BARU (START)" : "MULAI RONDE BUZZER F1 (LAMPU START)"}
+                        <div className="flex items-center justify-center gap-2">
+                          <Zap className="h-4 w-4 sm:h-5 sm:w-5 fill-white shrink-0" />
+                          <span className="truncate">
+                            {buzzerStatus === "finished" ? "MULAI RONDE BUZZER BARU" : "MULAI RONDE BUZZER F1"}
                           </span>
                         </div>
                       )}
@@ -1139,38 +1171,38 @@ export default function DashboardDoorprizePage() {
         {/* Modal Pengumuman Pemenang (Winner Dialog) */}
         <Dialog open={showWinnerModal} onOpenChange={setShowWinnerModal}>
           {currentWinner && (
-            <div className="space-y-5 text-center p-2 sm:p-4">
-              <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-lg ring-4 ring-amber-300/30 animate-bounce">
-                <Trophy className="h-8 w-8" />
+            <div className="space-y-3.5 sm:space-y-5 text-center p-0.5 sm:p-2">
+              <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-lg ring-4 ring-amber-300/30 animate-bounce">
+                <Trophy className="h-6 w-6 sm:h-8 sm:w-8" />
               </div>
 
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold tracking-widest text-accent uppercase block">
+              <div className="space-y-1">
+                <span className="text-[10px] sm:text-xs font-bold tracking-widest text-accent uppercase block">
                   SELAMAT KEPADA PEMENANG!
                 </span>
-                <DialogTitle className="font-heading text-2xl sm:text-3xl font-black text-foreground">
+                <DialogTitle className="font-heading text-lg sm:text-2xl md:text-3xl font-black text-foreground break-words leading-tight px-1">
                   {currentWinner.fullName}
                 </DialogTitle>
-                <DialogDescription className="text-sm font-semibold text-muted-foreground">
+                <DialogDescription className="text-xs sm:text-sm font-semibold text-muted-foreground break-words px-1">
                   {currentWinner.institution} • No: {currentWinner.registrationNumber}
                 </DialogDescription>
               </div>
 
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-accent/10 to-amber-500/15 border border-amber-500/40 text-center space-y-1">
-                <span className="text-[11px] font-mono text-muted-foreground uppercase">
+              <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-accent/10 to-amber-500/15 border border-amber-500/40 text-center space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-mono text-muted-foreground uppercase block">
                   BERHAK MEMPEROLEH HADIAH:
                 </span>
-                <p className="font-heading text-lg sm:text-xl font-black text-accent">
+                <p className="font-heading text-base sm:text-xl font-black text-accent break-words leading-snug">
                   🎁 {selectedPrizeName}
                 </p>
               </div>
 
               {/* Kontrol Panggilan MC Kehadiran Panggung */}
-              <div className="p-3.5 rounded-2xl border border-border bg-muted/40 space-y-2.5 text-left">
-                <div className="flex items-center justify-between">
+              <div className="p-3 sm:p-3.5 rounded-2xl border border-border bg-muted/40 space-y-2 sm:space-y-2.5 text-left">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
                   <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    <Radio className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
-                    Panggilan Kehadiran MC Panggung:
+                    <Radio className="h-3.5 w-3.5 text-amber-500 animate-pulse shrink-0" />
+                    <span>Panggilan Kehadiran MC:</span>
                   </span>
                   <span className="text-[11px] font-mono font-semibold text-accent">
                     {mcCallCount === 0
@@ -1179,7 +1211,7 @@ export default function DashboardDoorprizePage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                   {[1, 2, 3].map((num) => (
                     <Button
                       key={num}
@@ -1187,9 +1219,9 @@ export default function DashboardDoorprizePage() {
                       size="sm"
                       variant={mcCallCount >= num ? "accent" : "outline"}
                       onClick={() => handleMcCall(num)}
-                      className="text-xs h-8 font-mono font-bold"
+                      className="text-[11px] sm:text-xs h-9 sm:h-8 font-mono font-bold px-1 sm:px-2 flex items-center justify-center cursor-pointer shadow-xs"
                     >
-                      Panggilan {num}
+                      <span className="truncate">Panggilan {num}</span>
                     </Button>
                   ))}
                 </div>
@@ -1199,7 +1231,7 @@ export default function DashboardDoorprizePage() {
                 </p>
               </div>
 
-              <DialogFooter className="flex-col sm:flex-row gap-2 justify-between pt-2">
+              <DialogFooter className="flex flex-col gap-2 pt-3 sm:flex-row sm:items-center sm:justify-between border-t border-border/70 mt-3 sm:mt-5">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1210,26 +1242,27 @@ export default function DashboardDoorprizePage() {
                     }
                     setShowWinnerModal(false);
                   }}
-                  className="w-full sm:w-auto text-xs text-danger hover:bg-danger/10 border-danger/30"
+                  className="w-full sm:w-auto text-xs text-danger hover:bg-danger/10 border-danger/30 order-2 sm:order-1 h-9 sm:h-8"
                 >
                   Peserta Tidak Hadir (Batalkan)
                 </Button>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto order-1 sm:order-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowWinnerModal(false)}
-                    className="w-full sm:w-auto text-xs"
+                    className="w-full sm:w-auto text-xs h-9 sm:h-8"
                   >
                     Tutup
                   </Button>
                   <Button
                     size="sm"
+                    variant="accent"
                     onClick={() => {
                       setShowWinnerModal(false);
                     }}
-                    className="w-full sm:w-auto text-xs font-bold"
+                    className="w-full sm:w-auto text-xs font-bold h-9 sm:h-8"
                   >
                     Selesai & Lanjut
                   </Button>

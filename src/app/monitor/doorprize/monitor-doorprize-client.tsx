@@ -57,6 +57,7 @@ export function MonitorDoorprizeClient({
   );
 
   // Spin states
+  const [isWarmingUp, setIsWarmingUp] = React.useState(false);
   const [isSpinning, setIsSpinning] = React.useState(false);
   const [targetSegment, setTargetSegment] = React.useState(0);
   const [winner, setWinner] = React.useState<EligibleParticipantItem | null>(null);
@@ -109,7 +110,17 @@ export function MonitorDoorprizeClient({
     const supabase = createClient();
     const channel = supabase
       .channel("doorprize-live-channel")
+      .on("broadcast", { event: "doorprize_spin_initiating" }, ({ payload }) => {
+        setActiveMode("vip_carousel");
+        setShowWinnerCard(false);
+        setShowConfetti(false);
+        setCallCount(0);
+        if (payload?.prizeName) setActivePrizeName(payload.prizeName);
+        setIsWarmingUp(true);
+        setIsSpinning(false);
+      })
       .on("broadcast", { event: "doorprize_spin_started" }, ({ payload }) => {
+        setIsWarmingUp(false);
         if (payload?.winner) {
           setActiveMode("vip_carousel");
           setShowWinnerCard(false);
@@ -129,6 +140,10 @@ export function MonitorDoorprizeClient({
           setIsSpinning(true);
         }
       })
+      .on("broadcast", { event: "doorprize_spin_cancelled" }, () => {
+        setIsWarmingUp(false);
+        setIsSpinning(false);
+      })
       .on("broadcast", { event: "doorprize_call_winner" }, ({ payload }) => {
         if (payload?.count) {
           setCallCount(payload.count);
@@ -144,6 +159,7 @@ export function MonitorDoorprizeClient({
         setWinner(null);
         setShowWinnerCard(false);
         setShowConfetti(false);
+        setIsWarmingUp(false);
         setIsSpinning(false);
         setCallCount(0);
         setBuzzerStatus("idle");
@@ -328,6 +344,7 @@ export function MonitorDoorprizeClient({
               <div className="w-full">
                 <VipCardCarousel
                   isSpinning={isSpinning}
+                  isWarmingUp={isWarmingUp}
                   winnerName={winner?.fullName}
                   winnerDetails={winner}
                   spinDurationMs={5500}
@@ -339,7 +356,16 @@ export function MonitorDoorprizeClient({
 
               {/* Status Bar Panggung Seremonial */}
               <div className="w-full max-w-xl h-14 rounded-2xl bg-white/5 border border-amber-500/20 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
-                {isSpinning ? (
+                {isWarmingUp ? (
+                  <div className="space-y-0.5 animate-pulse">
+                    <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
+                      ⚡ MENGHUBUNGI SERVER & MENGACAK 100+ PESERTA ⚡
+                    </span>
+                    <span className="font-heading text-sm sm:text-base font-black text-amber-300 truncate block">
+                      Mengacak database dari ratusan peserta festival...
+                    </span>
+                  </div>
+                ) : isSpinning ? (
                   <div className="space-y-0.5 animate-pulse">
                     <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
                       ✦ PENGUNDIAN SEREMONIAL SEDANG BERLANGSUNG ✦

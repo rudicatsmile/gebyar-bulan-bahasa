@@ -3,6 +3,7 @@
 class SoundManager {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
+  private warmupInterval: NodeJS.Timeout | null = null;
 
   private initCtx() {
     if (typeof window === "undefined") return null;
@@ -66,6 +67,7 @@ class SoundManager {
    * Suara Panggung Seremonial Mewah (Crystal Chime Chord + Brass Swell)
    */
   public playCeremonialChime() {
+    this.stopWarmupSound();
     if (this.isMuted) return;
     try {
       const ctx = this.initCtx();
@@ -125,6 +127,31 @@ class SoundManager {
       osc.stop(now + 0.07);
     } catch {
       // Audio context might be restricted
+    }
+  }
+
+  /**
+   * Suara Pemanasan / Anticipation Drumroll Ticking (Warmup 0ms saat tombol ditekan)
+   */
+  public startWarmupSound() {
+    if (this.isMuted) return;
+    this.stopWarmupSound();
+    let tickCount = 0;
+    // Mainkan tick pembuka seketika
+    this.playTick(0.85);
+
+    this.warmupInterval = setInterval(() => {
+      tickCount++;
+      // Ketukan ritmis drumroll dengan modulasi lembut
+      const pitch = 0.8 + ((tickCount % 4) * 0.08);
+      this.playTick(pitch);
+    }, 115);
+  }
+
+  public stopWarmupSound() {
+    if (this.warmupInterval) {
+      clearInterval(this.warmupInterval);
+      this.warmupInterval = null;
     }
   }
 }

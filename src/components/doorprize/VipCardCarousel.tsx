@@ -14,6 +14,7 @@ export interface VipCardItem {
 
 interface VipCardCarouselProps {
   isSpinning: boolean;
+  isWarmingUp?: boolean;
   winnerName?: string | null;
   winnerDetails?: VipCardItem | null;
   sampleParticipants?: VipCardItem[];
@@ -46,6 +47,7 @@ function getInitials(name: string): string {
 
 export function VipCardCarousel({
   isSpinning,
+  isWarmingUp = false,
   winnerName,
   winnerDetails,
   sampleParticipants = [],
@@ -82,9 +84,9 @@ export function VipCardCarousel({
     soundEffects.setMuted(!soundEnabled);
   }, [soundEnabled]);
 
-  // Inisialisasi awal saat tidak berputar
+  // Inisialisasi awal saat tidak berputar dan tidak pemanasan
   React.useEffect(() => {
-    if (!isSpinning) {
+    if (!isSpinning && !isWarmingUp) {
       const pool = sampleParticipants.length > 0 ? sampleParticipants : DEFAULT_SAMPLE_CARDS;
       if (winnerName || winnerDetails) {
         const finalWinner: VipCardItem = {
@@ -111,7 +113,42 @@ export function VipCardCarousel({
         setWinnerCrestRevealed(false);
       }
     }
-  }, [sampleParticipants, winnerName, winnerDetails, isSpinning, cardWidth]);
+  }, [sampleParticipants, winnerName, winnerDetails, isSpinning, isWarmingUp, cardWidth]);
+
+  // Efek Pemanasan / Anticipation Drift saat tombol baru saja ditekan (0ms)
+  React.useEffect(() => {
+    if (!isWarmingUp) {
+      soundEffects.stopWarmupSound();
+      return;
+    }
+
+    setIsLocked(false);
+    setWinnerCrestRevealed(false);
+
+    if (soundEnabled) {
+      soundEffects.startWarmupSound();
+    }
+
+    // Siapkan barisan kartu kandidat acak dari pool untuk pemanasan visual
+    const pool = sampleParticipants.length > 0 ? sampleParticipants : DEFAULT_SAMPLE_CARDS;
+    const warmupCards: VipCardItem[] = [];
+    for (let i = 0; i < 25; i++) {
+      warmupCards.push(pool[i % pool.length]);
+    }
+    setCards(warmupCards);
+
+    // Geser pelan kartu secara berkelanjutan (efek carousel warmup mengalir)
+    let currentShift = -2 * cardWidth;
+    const interval = setInterval(() => {
+      currentShift -= cardWidth * 0.7;
+      setTranslateX(currentShift);
+    }, 280);
+
+    return () => {
+      clearInterval(interval);
+      soundEffects.stopWarmupSound();
+    };
+  }, [isWarmingUp, soundEnabled, cardWidth, sampleParticipants]);
 
   // Efek Perputaran Sinematik (Carousel Sweep)
   React.useEffect(() => {
@@ -209,21 +246,21 @@ export function VipCardCarousel({
         {/* Lampu Sorot Kiri Atas */}
         <div
           className={`absolute -top-10 left-1/4 w-72 sm:w-96 h-[500px] bg-gradient-to-b from-amber-400/25 via-amber-500/10 to-transparent blur-2xl transform -rotate-12 transition-opacity duration-700 pointer-events-none ${
-            isSpinning || isLocked ? "opacity-100" : "opacity-40"
+            isSpinning || isWarmingUp || isLocked ? "opacity-100" : "opacity-40"
           }`}
         />
 
         {/* Lampu Sorot Kanan Atas */}
         <div
           className={`absolute -top-10 right-1/4 w-72 sm:w-96 h-[500px] bg-gradient-to-b from-amber-400/25 via-amber-500/10 to-transparent blur-2xl transform rotate-12 transition-opacity duration-700 pointer-events-none ${
-            isSpinning || isLocked ? "opacity-100" : "opacity-40"
+            isSpinning || isWarmingUp || isLocked ? "opacity-100" : "opacity-40"
           }`}
         />
 
         {/* Golden Central Aura Halo saat Pemenang Terkunci */}
         <div
           className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gradient-to-tr from-amber-500/30 via-yellow-400/20 to-transparent blur-3xl transition-all duration-700 pointer-events-none ${
-            isLocked ? "scale-125 opacity-100" : "scale-75 opacity-0"
+            isLocked ? "scale-125 opacity-100" : isWarmingUp ? "scale-100 opacity-60 animate-pulse" : "scale-75 opacity-0"
           }`}
         />
       </div>
@@ -238,12 +275,14 @@ export function VipCardCarousel({
           className={`flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-400/40 bg-slate-950/80 backdrop-blur-md transition-all duration-300 ${
             isLocked
               ? "border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.6)] scale-105"
+              : isWarmingUp
+              ? "border-amber-400/80 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.4)] animate-pulse scale-105"
               : "text-amber-400/70"
           }`}
         >
-          <Crown className={`h-3.5 w-3.5 ${isLocked ? "animate-bounce text-amber-300" : "text-amber-400/70"}`} />
+          <Crown className={`h-3.5 w-3.5 ${isLocked ? "animate-bounce text-amber-300" : isWarmingUp ? "animate-pulse text-amber-300" : "text-amber-400/70"}`} />
           <span className="font-mono text-[10px] tracking-widest uppercase font-bold">
-            {isLocked ? "PEMENANG TERPILIH" : "SOROTAN PEMENANG"}
+            {isLocked ? "PEMENANG TERPILIH" : isWarmingUp ? "MENGACAK 100+ PESERTA..." : "SOROTAN PEMENANG"}
           </span>
         </div>
         <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-400/80 -mt-0.5" />
@@ -268,6 +307,8 @@ export function VipCardCarousel({
             transform: `translateX(calc(${translateX}px - ${cardWidth / 2}px))`,
             transition: isSpinning
               ? `transform ${spinDurationMs}ms cubic-bezier(0.12, 0.85, 0.18, 1.0)`
+              : isWarmingUp
+              ? "transform 300ms linear"
               : "transform 400ms ease-out",
           }}
           onTransitionEnd={() => {

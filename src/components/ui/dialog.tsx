@@ -8,9 +8,10 @@ export interface DialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
+  className?: string;
 }
 
-export function Dialog({ open, onOpenChange, children }: DialogProps) {
+export function Dialog({ open, onOpenChange, children, className }: DialogProps) {
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onOpenChange(false);
@@ -30,18 +31,18 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-primary/60 backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-200"
         onClick={() => onOpenChange(false)}
       />
       {/* Modal Dialog Content */}
-      <div className="relative z-50 w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-md transition-all animate-in zoom-in-95 duration-200">
+      <div className={cn("relative z-50 w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl sm:rounded-xl border border-border bg-card p-4 sm:p-6 shadow-md transition-all animate-in zoom-in-95 duration-200", className)}>
         {children}
         <button
           onClick={() => onOpenChange(false)}
-          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground transition-opacity hover:opacity-100 hover:bg-muted cursor-pointer"
+          className="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 rounded-sm p-1 text-muted-foreground transition-opacity hover:opacity-100 hover:bg-muted cursor-pointer"
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Tutup</span>
