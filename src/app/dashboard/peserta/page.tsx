@@ -32,6 +32,7 @@ import { PindahLombaModal, ParticipantTransferTarget } from "@/components/dashbo
 import { VerifikasiPesertaModal, ParticipantVerificationTarget } from "@/components/dashboard/VerifikasiPesertaModal";
 import { DaftarPesertaLombaModal } from "@/components/dashboard/DaftarPesertaLombaModal";
 import { ImportPesertaLombaModal } from "@/components/dashboard/ImportPesertaLombaModal";
+import { downloadParticipantsExcel } from "@/lib/excel-participant-export";
 
 export default function DashboardPesertaPage() {
   const [participants, setParticipants] = React.useState<Participant[]>([]);
@@ -55,6 +56,7 @@ export default function DashboardPesertaPage() {
     registrationNumber?: string;
   } | null>(null);
   const [importExcelOpen, setImportExcelOpen] = React.useState(false);
+  const [isExportingExcel, setIsExportingExcel] = React.useState(false);
 
   const fetchParticipants = React.useCallback(async () => {
     setIsLoading(true);
@@ -125,6 +127,21 @@ export default function DashboardPesertaPage() {
   });
 
   const pendingCount = participants.filter((p) => p.status === "menunggu_verifikasi").length;
+
+  const handleExportExcel = () => {
+    if (filtered.length === 0) return;
+    try {
+      setIsExportingExcel(true);
+      downloadParticipantsExcel(filtered, {
+        statusFilter,
+        searchQuery: search.trim() || undefined,
+      });
+    } catch (err) {
+      console.error("Gagal mendownload file Excel data peserta:", err);
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
 
   const handleExportCSV = () => {
     const headers = "Nomor Registrasi,Nama Lengkap,Asal Instansi,Cabang Lomba,Status,Poin\n";
@@ -198,8 +215,25 @@ export default function DashboardPesertaPage() {
             <Button
               size="sm"
               variant="outline"
+              onClick={handleExportExcel}
+              disabled={isMounted ? (isLoading || isExportingExcel || filtered.length === 0) : false}
+              className="text-xs gap-1.5 cursor-pointer border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold shadow-xs"
+              title="Download data peserta ke format Excel (.xlsx)"
+            >
+              {isExportingExcel ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              )}
+              <span>Download Excel</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               onClick={handleExportCSV}
+              disabled={isMounted ? (isLoading || filtered.length === 0) : false}
               className="text-xs gap-1.5 cursor-pointer"
+              title="Download data peserta ke format CSV"
             >
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">CSV</span>
