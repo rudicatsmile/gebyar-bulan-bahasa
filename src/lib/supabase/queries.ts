@@ -345,7 +345,7 @@ function formatChallenge(row: DbChallenge): Challenge {
 /**
  * Format PostgreSQL reward row into frontend Reward interface
  */
-function formatReward(row: DbReward): Reward {
+function formatReward(row: DbReward, specialRewardId?: string | null): Reward {
   return {
     id: row.id,
     name: row.name,
@@ -354,6 +354,7 @@ function formatReward(row: DbReward): Reward {
     quota: row.quota ?? 100,
     claimedCount: row.claimed_count ?? 0,
     category: row.points_required >= 200 ? "Merchandise" : "Voucher",
+    isExclusiveStandReward: Boolean(specialRewardId && row.id === specialRewardId),
   };
 }
 
@@ -734,16 +735,28 @@ export async function getChallenges(): Promise<Challenge[]> {
 
 export async function getRewards(): Promise<Reward[]> {
   try {
-    const { data, error } = await publicClient
-      .from("rewards")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true });
+    const adminClient = createAdminClient();
+    const [{ data, error }, { data: standCfgRow }] = await Promise.all([
+      publicClient
+        .from("rewards")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
+      adminClient
+        .from("event_settings")
+        .select("value")
+        .eq("key", "stand_special_reward_config")
+        .maybeSingle(),
+    ]);
 
     if (error || !data || data.length === 0) {
       return [];
     }
-    return data.map(formatReward);
+
+    const standCfg = standCfgRow?.value as { enabled?: boolean; rewardId?: string } | null;
+    const specialRewardId = standCfg?.enabled && standCfg?.rewardId ? standCfg.rewardId : null;
+
+    return data.map((row) => formatReward(row, specialRewardId));
   } catch (err) {
     console.error("Supabase getRewards error:", err);
     return [];

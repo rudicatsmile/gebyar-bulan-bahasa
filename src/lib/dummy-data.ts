@@ -126,6 +126,7 @@ export interface Reward {
   quota: number;
   claimedCount: number;
   category: "Merchandise" | "Voucher" | "Buku" | "Akses";
+  isExclusiveStandReward?: boolean;
 }
 
 export interface Announcement {

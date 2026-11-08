@@ -230,12 +230,32 @@ export async function updateStandSpecialRewardConfig(payload: {
       ...((oldRow?.value as any) || {}),
     };
 
+    let resolvedRewardName = payload.rewardName;
+    let resolvedQuota = payload.quota !== undefined ? Math.max(1, Number(payload.quota) || 50) : current.quota;
+
+    if (payload.rewardId) {
+      const { data: dbReward } = await supabase
+        .from("rewards")
+        .select("name, quota")
+        .eq("id", payload.rewardId)
+        .maybeSingle();
+
+      if (dbReward) {
+        if (!resolvedRewardName || resolvedRewardName === DEFAULT_CONFIG.rewardName) {
+          resolvedRewardName = dbReward.name;
+        }
+        if (payload.quota === undefined && dbReward.quota) {
+          resolvedQuota = dbReward.quota;
+        }
+      }
+    }
+
     const updated: StandSpecialRewardConfig = {
       ...current,
       ...(payload.enabled !== undefined ? { enabled: payload.enabled } : {}),
-      ...(payload.quota !== undefined ? { quota: Math.max(1, Number(payload.quota) || 50) } : {}),
+      quota: resolvedQuota,
       ...(payload.rewardId !== undefined ? { rewardId: payload.rewardId } : {}),
-      ...(payload.rewardName !== undefined ? { rewardName: payload.rewardName } : {}),
+      rewardName: resolvedRewardName || current.rewardName,
       ...(payload.description !== undefined ? { description: payload.description } : {}),
       ...(payload.minDurationMinutes !== undefined ? { minDurationMinutes: Math.max(1, Number(payload.minDurationMinutes) || 15) } : {}),
       ...(payload.validationMode !== undefined ? { validationMode: payload.validationMode } : {}),
@@ -428,6 +448,19 @@ export async function checkAndProcessStandCompletionReward(
     ...((configRow?.value as any) || {}),
   };
 
+  // Sinkronkan nama dan info reward dari tabel rewards jika rewardId terhubung
+  if (config.rewardId) {
+    const { data: dbRew } = await supabase
+      .from("rewards")
+      .select("name, quota, claimed_count, is_active")
+      .eq("id", config.rewardId)
+      .maybeSingle();
+
+    if (dbRew) {
+      if (dbRew.name) config.rewardName = dbRew.name;
+    }
+  }
+
   if (existing) {
     // Peserta sudah pernah diverifikasi sebelumnya
     const wasGranted = existing.status === "diterima";
@@ -513,6 +546,22 @@ export async function checkAndProcessStandCompletionReward(
       status: "diterima",
       rank,
     });
+
+    try {
+      const qChannel = supabase.channel("reward-redemptions-channel");
+      await qChannel.send({
+        type: "broadcast",
+        event: "queue_updated",
+        payload: {
+          action: "created",
+          pickupCode,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      supabase.removeChannel(qChannel);
+    } catch (e) {
+      console.warn("Realtime broadcast reward-redemptions error:", e);
+    }
 
     revalidatePath("/dashboard/challenge/stand");
     revalidatePath("/dashboard/challenge/reward");

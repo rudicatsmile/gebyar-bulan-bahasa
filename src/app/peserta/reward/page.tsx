@@ -52,6 +52,10 @@ export default function PesertaRewardPage() {
   }, [participant]);
 
   const handleOpenClaim = (r: Reward) => {
+    if (r.isExclusiveStandReward) {
+      setErrorMsg(`Hadiah "${r.name}" merupakan reward eksklusif untuk misi Keliling Stand Pameran dan tidak dapat ditukarkan menggunakan poin umum. Kunjungi menu Scan QR Stand untuk menuntaskan misi tersebut.`);
+      return;
+    }
     if (balance < r.pointsRequired) {
       setErrorMsg(`Saldo poin Anda (${balance} Pts) tidak mencukupi untuk reward "${r.name}" (${r.pointsRequired} Pts). Selesaikan misi challenge atau kunjungi stand festival untuk mengumpulkan lebih banyak poin.`);
       return;
@@ -171,22 +175,47 @@ export default function PesertaRewardPage() {
               const remaining = rew.quota - rew.claimedCount;
 
               return (
-                <Card key={rew.id} className="p-6 flex flex-col justify-between space-y-4 hover:border-accent transition-colors">
+                <Card
+                  key={rew.id}
+                  className={`p-6 flex flex-col justify-between space-y-4 hover:border-accent transition-colors ${
+                    rew.isExclusiveStandReward
+                      ? "border-amber-500/40 bg-gradient-to-b from-amber-500/5 to-transparent ring-1 ring-amber-500/20"
+                      : ""
+                  }`}
+                >
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="gold" className="text-[10px]">
-                        {rew.category}
-                      </Badge>
-                      <span className="font-mono text-xs font-bold text-accent">
-                        {rew.pointsRequired} Poin
-                      </span>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="gold" className="text-[10px]">
+                          {rew.category}
+                        </Badge>
+                        {rew.isExclusiveStandReward && (
+                          <Badge
+                            variant="default"
+                            className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/50 font-bold"
+                          >
+                            Eksklusif Misi Stand
+                          </Badge>
+                        )}
+                      </div>
+                      {rew.isExclusiveStandReward ? (
+                        <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                          Misi Seluruh Stand
+                        </span>
+                      ) : (
+                        <span className="font-mono text-xs font-bold text-accent">
+                          {rew.pointsRequired} Poin
+                        </span>
+                      )}
                     </div>
 
                     <h3 className="font-heading text-lg font-bold text-foreground">
                       {rew.name}
                     </h3>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      {rew.description}
+                      {rew.isExclusiveStandReward
+                        ? `${rew.description} Hadiah ini didapatkan khusus dengan menyelesaikan seluruh stand pameran budaya (bukan dari penukaran poin umum).`
+                        : rew.description}
                     </p>
                   </div>
 
@@ -196,18 +225,36 @@ export default function PesertaRewardPage() {
                       <strong>{remaining} unit</strong>
                     </div>
 
-                    <Button
-                      size="sm"
-                      disabled={!isAffordable || remaining <= 0}
-                      onClick={() => handleOpenClaim(rew)}
-                      className="w-full text-xs font-semibold"
-                    >
-                      {remaining <= 0
-                        ? "Kuota Habis"
-                        : isAffordable
-                        ? `Tukar (${rew.pointsRequired} Poin)`
-                        : `Kurang ${rew.pointsRequired - balance} Poin`}
-                    </Button>
+                    {rew.isExclusiveStandReward ? (
+                      remaining <= 0 ? (
+                        <Button size="sm" disabled className="w-full text-xs font-semibold">
+                          Kuota Habis
+                        </Button>
+                      ) : (
+                        <Link href="/peserta/scan" className="w-full block">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full text-xs font-semibold border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                          >
+                            Buka Misi Keliling Stand &rarr;
+                          </Button>
+                        </Link>
+                      )
+                    ) : (
+                      <Button
+                        size="sm"
+                        disabled={!isAffordable || remaining <= 0}
+                        onClick={() => handleOpenClaim(rew)}
+                        className="w-full text-xs font-semibold"
+                      >
+                        {remaining <= 0
+                          ? "Kuota Habis"
+                          : isAffordable
+                          ? `Tukar (${rew.pointsRequired} Poin)`
+                          : `Kurang ${rew.pointsRequired - balance} Poin`}
+                      </Button>
+                    )}
                   </div>
                 </Card>
               );

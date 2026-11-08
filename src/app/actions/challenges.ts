@@ -378,6 +378,21 @@ export async function redeemReward(data: RedeemRewardInput) {
       return { success: false, error: "Reward tidak aktif atau tidak ditemukan." };
     }
 
+    // 2b. Proteksi Reward Khusus Stand: Tidak boleh ditukarkan menggunakan poin misi umum
+    const { data: standCfgRow } = await adminSupabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "stand_special_reward_config")
+      .maybeSingle();
+
+    const standCfg = standCfgRow?.value as { enabled?: boolean; rewardId?: string; rewardName?: string } | null;
+    if (standCfg && standCfg.enabled && standCfg.rewardId === reward.id) {
+      return {
+        success: false,
+        error: `Hadiah "${reward.name}" merupakan reward eksklusif untuk misi Keliling Stand Pameran dan tidak dapat ditukarkan menggunakan poin umum. Selesaikan kunjungan seluruh stand pameran budaya di menu Scan QR Stand untuk memperoleh hadiah ini.`,
+      };
+    }
+
     // Hitung total reservasi aktif (menunggu + diserahkan) agar kuota penukaran tidak melebihi stok
     const { count: activeBookingsCount } = await adminSupabase
       .from("reward_redemptions")

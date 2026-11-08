@@ -598,10 +598,18 @@ export default function DashboardKelolaRewardPage() {
                   <Card key={rew.id} className={`p-5 space-y-3 flex flex-col justify-between ${!rew.isActive ? "opacity-60 border-dashed" : ""}`}>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <Badge variant="gold" className="text-[10px]">
                             {rew.category}
                           </Badge>
+                          {rew.isExclusiveStandReward && (
+                            <Badge
+                              variant="default"
+                              className="text-[9px] bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/50 font-bold"
+                            >
+                              EKSKLUSIF MISI STAND
+                            </Badge>
+                          )}
                           {!rew.isActive && (
                             <Badge variant="danger" className="text-[9px]">
                               NONAKTIF

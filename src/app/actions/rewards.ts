@@ -16,6 +16,7 @@ export interface DbRewardItem {
   category: string;
   isActive: boolean;
   sortOrder?: number;
+  isExclusiveStandReward?: boolean;
 }
 
 export interface RedemptionQueueItem {
@@ -59,7 +60,7 @@ export async function getAdminRewards(): Promise<{
 }> {
   try {
     const supabase = createAdminClient();
-    const [{ data, error }, { data: diserahkanList }] = await Promise.all([
+    const [{ data, error }, { data: diserahkanList }, { data: standCfgRow }] = await Promise.all([
       supabase
         .from("rewards")
         .select("*")
@@ -69,9 +70,17 @@ export async function getAdminRewards(): Promise<{
         .from("reward_redemptions")
         .select("reward_id")
         .eq("status", "diserahkan"),
+      supabase
+        .from("event_settings")
+        .select("value")
+        .eq("key", "stand_special_reward_config")
+        .maybeSingle(),
     ]);
 
     if (error) throw error;
+
+    const standCfg = standCfgRow?.value as { enabled?: boolean; rewardId?: string } | null;
+    const specialRewardId = standCfg?.enabled && standCfg?.rewardId ? standCfg.rewardId : null;
 
     // Hitung jumlah fisik yang sudah diserahkan per reward
     const handedMap: Record<string, number> = {};
@@ -97,6 +106,7 @@ export async function getAdminRewards(): Promise<{
         category: r.points_required >= 300 ? "Akses/Buku" : r.points_required >= 200 ? "Merchandise" : "Voucher",
         isActive: Boolean(r.is_active),
         sortOrder: r.sort_order,
+        isExclusiveStandReward: Boolean(specialRewardId && r.id === specialRewardId),
       };
     });
 
