@@ -46,6 +46,7 @@ import {
   Database,
   ShieldAlert,
   ArrowRight,
+  FlaskConical,
 } from "lucide-react";
 
 export default function DashboardPengaturanPage() {
@@ -514,9 +515,31 @@ export default function DashboardPengaturanPage() {
         <div
           className={cn(
             "grid gap-3",
-            currentUserRole === "super_admin" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"
+            currentUserRole === "super_admin" ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1"
           )}
         >
+          {currentUserRole === "super_admin" && (
+            <Link
+              href="/dashboard/pengaturan/simulasi-juri"
+              className="p-3.5 rounded-xl border border-border bg-card hover:border-amber-500/60 hover:bg-muted/30 transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                  <FlaskConical className="h-5 w-5" />
+                </div>
+                <div>
+                  <strong className="text-xs font-bold text-foreground block group-hover:text-amber-500 transition-colors">
+                    Simulasi Sosialisasi Juri
+                  </strong>
+                  <span className="text-[11px] text-muted-foreground">
+                    Isi & kosongkan peserta dummy DP 2 untuk sosialisasi juri
+                  </span>
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all" />
+            </Link>
+          )}
+
           {currentUserRole === "super_admin" && (
             <Link
               href="/dashboard/pengaturan/backup-restore"

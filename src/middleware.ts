@@ -85,6 +85,17 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
+    // Khusus rute super_admin di dalam dashboard pengaturan
+    if (
+      (pathname.startsWith("/dashboard/pengaturan/backup-restore") ||
+        pathname.startsWith("/dashboard/pengaturan/simulasi-juri")) &&
+      role !== "super_admin"
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard/pengaturan";
+      return NextResponse.redirect(url);
+    }
+
     if (pathname.startsWith("/juri") && role !== "juri" && role !== "seksi_acara" && role !== "super_admin") {
       const url = request.nextUrl.clone();
       url.pathname = "/peserta";
