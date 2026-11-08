@@ -18,6 +18,7 @@ import {
   Zap,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { soundEffects } from "@/components/doorprize/sound-effects";
 import { VipCardCarousel } from "@/components/doorprize/VipCardCarousel";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
 import { F1StartLights } from "@/components/doorprize/F1StartLights";
@@ -59,6 +60,7 @@ export function MonitorDoorprizeClient({
   // Spin states
   const [isWarmingUp, setIsWarmingUp] = React.useState(false);
   const [isSpinning, setIsSpinning] = React.useState(false);
+  const [suspensePhase, setSuspensePhase] = React.useState<"idle" | "suspense" | "flash" | "revealed">("idle");
   const [targetSegment, setTargetSegment] = React.useState(0);
   const [winner, setWinner] = React.useState<EligibleParticipantItem | null>(null);
   const [showWinnerCard, setShowWinnerCard] = React.useState(false);
@@ -113,6 +115,7 @@ export function MonitorDoorprizeClient({
       .on("broadcast", { event: "doorprize_spin_initiating" }, ({ payload }) => {
         setActiveMode("vip_carousel");
         setShowWinnerCard(false);
+        setSuspensePhase("idle");
         setShowConfetti(false);
         setCallCount(0);
         if (payload?.prizeName) setActivePrizeName(payload.prizeName);
@@ -121,6 +124,7 @@ export function MonitorDoorprizeClient({
       })
       .on("broadcast", { event: "doorprize_spin_started" }, ({ payload }) => {
         setIsWarmingUp(false);
+        setSuspensePhase("idle");
         if (payload?.winner) {
           setActiveMode("vip_carousel");
           setShowWinnerCard(false);
@@ -143,6 +147,7 @@ export function MonitorDoorprizeClient({
       .on("broadcast", { event: "doorprize_spin_cancelled" }, () => {
         setIsWarmingUp(false);
         setIsSpinning(false);
+        setSuspensePhase("idle");
       })
       .on("broadcast", { event: "doorprize_call_winner" }, ({ payload }) => {
         if (payload?.count) {
@@ -158,6 +163,7 @@ export function MonitorDoorprizeClient({
         setHistory([]);
         setWinner(null);
         setShowWinnerCard(false);
+        setSuspensePhase("idle");
         setShowConfetti(false);
         setIsWarmingUp(false);
         setIsSpinning(false);
@@ -232,14 +238,30 @@ export function MonitorDoorprizeClient({
 
   const handleSpinComplete = React.useCallback(() => {
     setIsSpinning(false);
-    setShowConfetti(true);
-    setShowWinnerCard(true);
 
-    // Refresh history
-    getDoorprizeHistory().then((res) => {
-      if (res.success && res.winners) setHistory(res.winners);
-    });
-  }, []);
+    // 1. Fase Suspense (500ms): Panggung hening sejenak membangun ketegangan & antisipasi
+    setSuspensePhase("suspense");
+
+    setTimeout(() => {
+      // 2. Fase Flash & Sub-Boom (220ms): Kilatan cahaya emas meledak + dentuman bass panggung + konfeti
+      setSuspensePhase("flash");
+      setShowConfetti(true);
+      if (soundEnabled) {
+        soundEffects.playWinnerRevealSound();
+      }
+
+      setTimeout(() => {
+        // 3. Fase Revealed: Popup Obsidian-Gold Megah tampil membesar di layar utama
+        setSuspensePhase("revealed");
+        setShowWinnerCard(true);
+
+        // Refresh riwayat pemenang di database
+        getDoorprizeHistory().then((res) => {
+          if (res.success && res.winners) setHistory(res.winners);
+        });
+      }, 220);
+    }, 500);
+  }, [soundEnabled]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-amber-500 selection:text-black relative overflow-hidden">
@@ -518,74 +540,151 @@ export function MonitorDoorprizeClient({
         )}
       </main>
 
-      {/* WINNER OVERLAY POP-UP (GIANT BANNER READABLE FROM DISTANCE) */}
+      {/* 1. SUSPENSE STAGE DIMMER (Saat putaran baru berhenti) */}
+      {suspensePhase === "suspense" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-300 pointer-events-none">
+          <div className="text-center space-y-4 animate-pulse">
+            <div className="relative w-24 h-24 mx-auto flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-4 border-amber-400 border-t-transparent animate-spin" />
+              <Crown className="h-10 w-10 text-amber-300 animate-bounce" />
+            </div>
+            <div className="space-y-1">
+              <span className="font-heading text-xl sm:text-3xl font-black text-amber-300 tracking-widest uppercase block drop-shadow-[0_0_20px_rgba(245,158,11,0.6)]">
+                ✦ MENGUNCI KANDIDAT JUARA... ✦
+              </span>
+              <p className="font-mono text-xs sm:text-sm text-white/70">
+                Panggung sedang menyiapkan penobatan pemenang resmi
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. FULL-SCREEN GOLDEN FLASH BLAST */}
+      {suspensePhase === "flash" && (
+        <div className="fixed inset-0 z-[70] bg-gradient-to-tr from-amber-400 via-yellow-100 to-amber-500 pointer-events-none animate-out fade-out duration-300" />
+      )}
+
+      {/* 3. WINNER OVERLAY POP-UP (GRAND OBSIDIAN-GOLD CEREMONIAL MASTERPIECE) */}
       {showWinnerCard && winner && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-lg animate-in zoom-in-95 duration-300">
-          <div className="relative max-w-3xl w-full p-8 sm:p-12 rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-4 border-amber-400 shadow-[0_0_80px_rgba(245,158,11,0.3)] text-center space-y-6">
-            {/* Top Close Button */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-xl animate-in fade-in-0 duration-300 overflow-y-auto">
+          {/* Latar Belakang Sinar Matahari Emas Berputar (Rotating Sunburst Rays) */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
+            <div
+              className="w-[1400px] h-[1400px] rounded-full opacity-35 animate-spin"
+              style={{
+                animationDuration: "50s",
+                background:
+                  "repeating-conic-gradient(from 0deg, rgba(245, 158, 11, 0.45) 0deg 12deg, transparent 12deg 24deg)",
+                maskImage: "radial-gradient(circle, black 32%, transparent 72%)",
+                WebkitMaskImage: "radial-gradient(circle, black 32%, transparent 72%)",
+              }}
+            />
+            {/* Ambient Golden Core Aura */}
+            <div className="absolute w-[650px] h-[650px] rounded-full bg-gradient-to-tr from-amber-500/35 via-yellow-400/25 to-transparent blur-3xl animate-pulse pointer-events-none" />
+          </div>
+
+          {/* KARTU OBSIDIAN-GOLD MEWAH */}
+          <div className="relative max-w-4xl w-full p-8 sm:p-12 md:p-14 rounded-[36px] bg-gradient-to-b from-slate-900/95 via-slate-950/98 to-slate-900/95 border-2 border-amber-400/80 shadow-[0_0_120px_rgba(245,158,11,0.45)] text-center space-y-6 sm:space-y-7 overflow-hidden z-10 animate-in zoom-in-75 duration-500 ease-out">
+            {/* Ornamen Sudut Emas Klasik Kerajaan */}
+            <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-amber-400 pointer-events-none">
+              <div className="w-1.5 h-1.5 bg-amber-400 absolute -top-1 -left-1 rounded-full shadow-[0_0_6px_#f59e0b]" />
+            </div>
+            <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-amber-400 pointer-events-none">
+              <div className="w-1.5 h-1.5 bg-amber-400 absolute -top-1 -right-1 rounded-full shadow-[0_0_6px_#f59e0b]" />
+            </div>
+            <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-amber-400 pointer-events-none">
+              <div className="w-1.5 h-1.5 bg-amber-400 absolute -bottom-1 -left-1 rounded-full shadow-[0_0_6px_#f59e0b]" />
+            </div>
+            <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-amber-400 pointer-events-none">
+              <div className="w-1.5 h-1.5 bg-amber-400 absolute -bottom-1 -right-1 rounded-full shadow-[0_0_6px_#f59e0b]" />
+            </div>
+
+            {/* Tombol Tutup Pojok */}
             <button
-              onClick={() => setShowWinnerCard(false)}
-              className="absolute top-4 right-4 text-white/50 hover:text-white text-xs px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+              onClick={() => {
+                setShowWinnerCard(false);
+                setSuspensePhase("idle");
+              }}
+              className="absolute top-5 right-5 text-white/50 hover:text-white text-xs px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer z-20"
             >
               ✕ Tutup
             </button>
 
-            {/* Glowing Trophy */}
-            <div className="mx-auto w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-tr from-amber-400 via-amber-300 to-amber-600 text-slate-950 flex items-center justify-center shadow-2xl ring-8 ring-amber-400/20 animate-bounce">
-              <Trophy className="h-14 w-14 sm:h-16 sm:w-16" />
+            {/* Top Royal Crest Badge */}
+            <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 border border-amber-400/60 shadow-[0_0_20px_rgba(245,158,11,0.35)]">
+              <Crown className="h-4 w-4 text-amber-300 animate-bounce" />
+              <span className="font-mono text-xs sm:text-sm font-black tracking-widest text-amber-200 uppercase">
+                ★ PENOBATAN RESMI PEMENANG DOORPRIZE ★
+              </span>
+              <Sparkles className="h-4 w-4 text-amber-300" />
             </div>
 
-            <div className="space-y-3">
-              <span className="font-mono text-sm sm:text-base font-bold text-amber-400 uppercase tracking-widest">
-                🎉 SELAMAT KEPADA PEMENANG DOORPRIZE! 🎉
-              </span>
+            {/* Glowing Trophy Centerpiece with Royal Ring */}
+            <div className="relative mx-auto w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-amber-400 via-amber-300 to-amber-600 blur-xl opacity-60 animate-pulse" />
+              <div className="relative w-full h-full rounded-full bg-gradient-to-tr from-amber-400 via-yellow-300 to-amber-600 text-slate-950 flex items-center justify-center shadow-2xl ring-4 sm:ring-8 ring-amber-400/30 animate-bounce">
+                <Trophy className="h-12 w-12 sm:h-16 sm:w-16 drop-shadow-md text-slate-950" />
+              </div>
+            </div>
 
-              {/* Massive Name */}
-              <h1 className="font-heading text-4xl sm:text-6xl font-black text-white tracking-tight leading-none drop-shadow-lg">
+            {/* Massive Winner Name with Gold Glow */}
+            <div className="space-y-2.5 sm:space-y-3">
+              <h1 className="font-heading text-4xl sm:text-6xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-amber-100 to-amber-400 tracking-tight leading-tight drop-shadow-[0_4px_35px_rgba(245,158,11,0.7)] break-words px-2">
                 {winner.fullName}
               </h1>
 
-              {/* Institution & No Registrasi */}
-              <p className="font-heading text-lg sm:text-2xl font-bold text-white/80">
+              {/* Institution / School */}
+              <p className="font-heading text-xl sm:text-3xl font-extrabold text-white/90 drop-shadow-md break-words">
                 {winner.institution}
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-3 text-xs sm:text-sm font-mono text-amber-300">
-                <span>No. Registrasi: {winner.registrationNumber}</span>
+
+              {/* Registration & Phone */}
+              <div className="flex flex-wrap items-center justify-center gap-2.5 text-xs sm:text-sm font-mono text-amber-300/90 pt-1">
+                <span className="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/30">
+                  No. Registrasi: <strong className="text-amber-200 font-bold">{winner.registrationNumber}</strong>
+                </span>
                 {winner.phone && maskPhoneNumber(winner.phone) && (
-                  <span>• No. HP: {maskPhoneNumber(winner.phone)}</span>
+                  <span className="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/30">
+                    No. HP: <strong className="text-amber-200 font-bold">{maskPhoneNumber(winner.phone)}</strong>
+                  </span>
                 )}
               </div>
             </div>
 
             {/* Status Panggilan Kehadiran MC */}
             {callCount > 0 && (
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/25 via-amber-400/35 to-amber-500/25 border-2 border-amber-400 text-amber-300 animate-pulse shadow-xl space-y-1">
-                <span className="font-mono text-xs uppercase tracking-wider block text-amber-200">
-                  PANGGILAN KEHADIRAN PANGGUNG
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-red-600/30 via-amber-500/30 to-red-600/30 border-2 border-amber-400 text-amber-200 animate-pulse shadow-[0_0_40px_rgba(245,158,11,0.4)] space-y-1">
+                <span className="font-mono text-xs uppercase tracking-widest block font-bold text-amber-300">
+                  📢 PANGGILAN KEHADIRAN PANGGUNG UTAMA
                 </span>
-                <p className="font-heading text-2xl sm:text-3xl font-black text-amber-400">
-                  📢 PANGGILAN KE-{callCount}!
+                <p className="font-heading text-3xl sm:text-4xl font-black text-amber-400 drop-shadow-md">
+                  PANGGILAN KE-{callCount}!
                 </p>
-                <p className="text-xs sm:text-sm font-semibold text-white/95">
-                  Peserta atas nama <strong>{winner.fullName}</strong> dipersilakan segera menuju ke depan panggung utama.
+                <p className="text-xs sm:text-base font-semibold text-white/95 max-w-xl mx-auto">
+                  Peserta atas nama <strong>{winner.fullName}</strong> dipersilakan segera menuju ke depan panggung utama sekarang.
                 </p>
               </div>
             )}
 
-            {/* Prize Card */}
-            <div className="p-5 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 space-y-1">
-              <span className="text-xs font-mono text-amber-200 uppercase tracking-wider block">
-                MEMENANGKAN HADIAH:
+            {/* Prize Showcase Pedestal */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/20 via-amber-400/15 to-amber-500/20 border-2 border-amber-400/50 shadow-inner space-y-1.5">
+              <span className="text-xs sm:text-sm font-mono text-amber-300 uppercase tracking-widest block font-bold">
+                MEMENANGKAN HADIAH DOORPRIZE:
               </span>
-              <p className="font-heading text-2xl sm:text-3xl font-black text-amber-400">
+              <p className="font-heading text-2xl sm:text-4xl font-black text-amber-300 drop-shadow-md break-words">
                 🎁 {activePrizeName}
               </p>
             </div>
 
-            <div className="pt-2">
+            {/* Action Button */}
+            <div className="pt-2 flex items-center justify-center gap-3">
               <button
-                onClick={() => setShowWinnerCard(false)}
-                className="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-heading text-sm font-bold uppercase tracking-wider hover:opacity-90 transition-opacity shadow-lg cursor-pointer"
+                onClick={() => {
+                  setShowWinnerCard(false);
+                  setSuspensePhase("idle");
+                }}
+                className="px-8 sm:px-12 py-3.5 sm:py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-heading text-sm sm:text-base font-black uppercase tracking-wider shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:shadow-[0_0_45px_rgba(245,158,11,0.6)] active:scale-95 transition-all cursor-pointer"
               >
                 Lanjutkan Undian Berikutnya
               </button>

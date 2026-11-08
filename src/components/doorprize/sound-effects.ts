@@ -64,6 +64,62 @@ class SoundManager {
   }
 
   /**
+   * Suara Grand Reveal Pemenang:
+   * 1. Cinematic Sub-Boom (dentuman bass panggung megah meluncur turun)
+   * 2. Grand Ceremonial Chime Fanfare (paduan kristal lonceng D Mayor 9 berkumandang megah)
+   */
+  public playWinnerRevealSound() {
+    this.stopWarmupSound();
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initCtx();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+
+      // 1. Cinematic Sub-Boom Impact (Dentuman Bass Panggung)
+      const boomOsc = ctx.createOscillator();
+      const boomGain = ctx.createGain();
+
+      boomOsc.type = "sine";
+      boomOsc.frequency.setValueAtTime(150, now);
+      boomOsc.frequency.exponentialRampToValueAtTime(32, now + 0.8);
+
+      boomGain.gain.setValueAtTime(0.38, now);
+      boomGain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
+
+      boomOsc.connect(boomGain);
+      boomGain.connect(ctx.destination);
+
+      boomOsc.start(now);
+      boomOsc.stop(now + 1.5);
+
+      // 2. Grand Fanfare Chime Chord (D Mayor 9 + Shimmer)
+      const frequencies = [293.66, 369.99, 440.0, 554.37, 659.25, 880.0, 1108.73];
+      frequencies.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = idx % 2 === 0 ? "sine" : "triangle";
+        const startTime = now + 0.08 + idx * 0.04;
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.22 / (idx * 0.25 + 1), startTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 2.8);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(startTime + 2.9);
+      });
+    } catch {
+      // Audio context might be restricted
+    }
+  }
+
+  /**
    * Suara Panggung Seremonial Mewah (Crystal Chime Chord + Brass Swell)
    */
   public playCeremonialChime() {
