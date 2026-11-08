@@ -28,16 +28,13 @@ interface NameReelRollerProps {
 }
 
 const DEFAULT_NAMES: ParticipantReelItem[] = [
-  { fullName: "Ahmad Fauzi", institution: "SMKN 2 Jakarta", registrationNumber: "GBB-0101" },
-  { fullName: "Siti Nurhaliza", institution: "SMAN 70 Jakarta", registrationNumber: "GBB-0102" },
-  { fullName: "Budi Santoso", institution: "SMK Diponegoro 2", registrationNumber: "GBB-0103" },
-  { fullName: "Rina Anggraini", institution: "SMKN 26 Jakarta", registrationNumber: "GBB-0104" },
-  { fullName: "Dimas Pratama", institution: "SMA Labschool", registrationNumber: "GBB-0105" },
-  { fullName: "Dewi Lestari", institution: "SMKN 48 Jakarta", registrationNumber: "GBB-0106" },
-  { fullName: "Eko Kurniawan", institution: "SMAN 8 Jakarta", registrationNumber: "GBB-0107" },
-  { fullName: "Fitri Handayani", institution: "SMK Grafika", registrationNumber: "GBB-0108" },
-  { fullName: "Gita Rahayu", institution: "SMAN 68 Jakarta", registrationNumber: "GBB-0109" },
-  { fullName: "Hadi Wibowo", institution: "SMK Negeri 1 Jakarta", registrationNumber: "GBB-0110" },
+  { fullName: "Kandidat Beruntung #01", institution: "Gebyar Bulan Bahasa", registrationNumber: "GBB-PASS" },
+  { fullName: "Siapakah Juaranya?", institution: "Panggung Festival", registrationNumber: "DOORPRIZE" },
+  { fullName: "Kandidat Beruntung #02", institution: "SMK Diponegoro 2", registrationNumber: "GBB-PASS" },
+  { fullName: "Siapakah Pemenangnya?", institution: "Gebyar Bulan Bahasa", registrationNumber: "DOORPRIZE" },
+  { fullName: "Kandidat Beruntung #03", institution: "Gebyar Bulan Bahasa", registrationNumber: "GBB-PASS" },
+  { fullName: "Bintang Keberuntungan", institution: "Panggung Festival", registrationNumber: "DOORPRIZE" },
+  { fullName: "Kandidat Beruntung #04", institution: "Gebyar Bulan Bahasa", registrationNumber: "GBB-PASS" },
 ];
 
 export function NameReelRoller({

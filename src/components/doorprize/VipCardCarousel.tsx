@@ -25,17 +25,14 @@ interface VipCardCarouselProps {
   className?: string;
 }
 
-const DEFAULT_SAMPLE_CARDS: VipCardItem[] = [
-  { fullName: "Ahmad Fauzi", institution: "SMKN 2 JAKARTA", registrationNumber: "GBB-0101" },
-  { fullName: "Siti Nurhaliza", institution: "SMAN 70 JAKARTA", registrationNumber: "GBB-0102" },
-  { fullName: "Budi Santoso", institution: "SMK DIPONEGORO 2", registrationNumber: "GBB-0103" },
-  { fullName: "Rina Anggraini", institution: "SMKN 26 JAKARTA", registrationNumber: "GBB-0104" },
-  { fullName: "Dimas Pratama", institution: "SMA LABSCHOOL", registrationNumber: "GBB-0105" },
-  { fullName: "Dewi Lestari", institution: "SMKN 48 JAKARTA", registrationNumber: "GBB-0106" },
-  { fullName: "Eko Kurniawan", institution: "SMAN 8 JAKARTA", registrationNumber: "GBB-0107" },
-  { fullName: "Fitri Handayani", institution: "SMK GRAFIKA", registrationNumber: "GBB-0108" },
-  { fullName: "Gita Rahayu", institution: "SMAN 68 JAKARTA", registrationNumber: "GBB-0109" },
-  { fullName: "Hadi Wibowo", institution: "SMKN 1 JAKARTA", registrationNumber: "GBB-0110" },
+const MYSTERY_TEASER_CARDS: VipCardItem[] = [
+  { fullName: "Kandidat Beruntung #01", institution: "GEBYAR BULAN BAHASA", registrationNumber: "GBB-PASS" },
+  { fullName: "Siapakah Juaranya?", institution: "PANGGUNG FESTIVAL 2026", registrationNumber: "DOORPRIZE" },
+  { fullName: "Kandidat Beruntung #02", institution: "SMK DIPONEGORO 2 JAKARTA", registrationNumber: "GBB-PASS" },
+  { fullName: "Siapakah Pemenangnya?", institution: "FESTIVAL SASTRA & BAHASA", registrationNumber: "DOORPRIZE" },
+  { fullName: "Kandidat Beruntung #03", institution: "GEBYAR BULAN BAHASA", registrationNumber: "GBB-PASS" },
+  { fullName: "Bintang Keberuntungan", institution: "PANGGUNG UTAMA", registrationNumber: "DOORPRIZE" },
+  { fullName: "Kandidat Beruntung #04", institution: "GEBYAR BULAN BAHASA", registrationNumber: "GBB-PASS" },
 ];
 
 function getInitials(name: string): string {
@@ -65,7 +62,7 @@ export function VipCardCarousel({
   const stageHeight = isLarge ? 490 : 380;
   const targetIndex = 28; // Urutan kartu pemenang pada pita horizontal
 
-  const [cards, setCards] = React.useState<VipCardItem[]>(DEFAULT_SAMPLE_CARDS);
+  const [cards, setCards] = React.useState<VipCardItem[]>(MYSTERY_TEASER_CARDS);
   const [translateX, setTranslateX] = React.useState(0);
   const [isLocked, setIsLocked] = React.useState(false);
   const [winnerCrestRevealed, setWinnerCrestRevealed] = React.useState(false);
@@ -87,13 +84,14 @@ export function VipCardCarousel({
   // Inisialisasi awal saat tidak berputar dan tidak pemanasan
   React.useEffect(() => {
     if (!isSpinning && !isWarmingUp) {
-      const pool = sampleParticipants.length > 0 ? sampleParticipants : DEFAULT_SAMPLE_CARDS;
       if (winnerName || winnerDetails) {
+        // Tampilkan pemenang terakhir yang sah di tengah panggung
         const finalWinner: VipCardItem = {
           fullName: winnerName || winnerDetails?.fullName || "Pemenang Terpilih",
           institution: winnerDetails?.institution || "UMUM",
           registrationNumber: winnerDetails?.registrationNumber || "GBB-WIN",
         };
+        const pool = sampleParticipants.length > 0 ? sampleParticipants : MYSTERY_TEASER_CARDS;
         const initialCards = [
           pool[0 % pool.length],
           pool[1 % pool.length],
@@ -107,7 +105,8 @@ export function VipCardCarousel({
         setIsLocked(true);
         setWinnerCrestRevealed(true);
       } else {
-        setCards(pool.slice(0, 7));
+        // Kondisi standby awal (sebelum diputar): Tampilkan Kartu Misteri Teaser Festival
+        setCards(MYSTERY_TEASER_CARDS);
         setTranslateX(-2 * cardWidth);
         setIsLocked(false);
         setWinnerCrestRevealed(false);
@@ -129,8 +128,8 @@ export function VipCardCarousel({
       soundEffects.startWarmupSound();
     }
 
-    // Siapkan barisan kartu kandidat acak dari pool untuk pemanasan visual
-    const pool = sampleParticipants.length > 0 ? sampleParticipants : DEFAULT_SAMPLE_CARDS;
+    // Gunakan peserta asli dari database jika ada, atau kartu misteri
+    const pool = sampleParticipants.length > 0 ? sampleParticipants : MYSTERY_TEASER_CARDS;
     const warmupCards: VipCardItem[] = [];
     for (let i = 0; i < 25; i++) {
       warmupCards.push(pool[i % pool.length]);
@@ -162,7 +161,8 @@ export function VipCardCarousel({
     setWinnerCrestRevealed(false);
 
     // 1. Bangun deretan ~35 kartu dengan target pemenang diletakkan di `targetIndex`
-    const pool = sampleParticipants.length > 0 ? sampleParticipants : DEFAULT_SAMPLE_CARDS;
+    // Menggunakan pool peserta ASLI dari database festival
+    const pool = sampleParticipants.length > 0 ? sampleParticipants : MYSTERY_TEASER_CARDS;
     const finalWinnerName = winnerName || winnerDetails?.fullName || "Peserta Beruntung";
     const finalInstitution = winnerDetails?.institution || "GEBYAR BULAN BAHASA";
     const finalRegNum = winnerDetails?.registrationNumber || "GBB-WIN";
@@ -360,7 +360,7 @@ export function VipCardCarousel({
                       {item.registrationNumber || "VIP-GBB"}
                     </span>
                     <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-[9px] font-mono text-amber-300 uppercase tracking-widest font-semibold">
-                      VIP PASS
+                      {item.registrationNumber === "DOORPRIZE" ? "TEASER" : "VIP PASS"}
                     </span>
                   </div>
 
@@ -374,7 +374,13 @@ export function VipCardCarousel({
                           : "w-12 h-12 sm:w-14 sm:h-14 bg-white/5 border border-amber-500/30 text-amber-300 text-sm sm:text-base"
                       }`}
                     >
-                      {getInitials(item.fullName)}
+                      {item.registrationNumber === "DOORPRIZE" || item.fullName.includes("Siapakah") ? (
+                        <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-amber-300 animate-pulse" />
+                      ) : item.registrationNumber === "GBB-PASS" || item.fullName.includes("Kandidat") ? (
+                        <Crown className="h-5 w-5 sm:h-6 sm:w-6 text-amber-300" />
+                      ) : (
+                        getInitials(item.fullName)
+                      )}
                     </div>
 
                     {/* Nama Peserta dengan Tipografi Emas */}

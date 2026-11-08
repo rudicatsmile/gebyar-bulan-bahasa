@@ -47,12 +47,15 @@ function maskPhoneNumber(phone?: string | null): string {
 export function MonitorDoorprizeClient({
   initialPrizes,
   initialHistory,
+  initialParticipants = [],
 }: {
   initialPrizes: DoorprizeItem[];
   initialHistory: DoorprizeWinnerRecord[];
+  initialParticipants?: EligibleParticipantItem[];
 }) {
   const [prizes, setPrizes] = React.useState<DoorprizeItem[]>(initialPrizes);
   const [history, setHistory] = React.useState<DoorprizeWinnerRecord[]>(initialHistory);
+  const [participants, setParticipants] = React.useState<EligibleParticipantItem[]>(initialParticipants);
   const [activePrizeName, setActivePrizeName] = React.useState<string>(
     initialPrizes[0]?.name || "Doorprize Gebyar Bulan Bahasa"
   );
@@ -62,7 +65,20 @@ export function MonitorDoorprizeClient({
   const [isSpinning, setIsSpinning] = React.useState(false);
   const [suspensePhase, setSuspensePhase] = React.useState<"idle" | "suspense" | "flash" | "revealed">("idle");
   const [targetSegment, setTargetSegment] = React.useState(0);
-  const [winner, setWinner] = React.useState<EligibleParticipantItem | null>(null);
+  // Inisialisasi pemenang dari pemenang sah terakhir jika ada, atau null (menampilkan kartu teaser misteri)
+  const [winner, setWinner] = React.useState<EligibleParticipantItem | null>(() => {
+    const latest = initialHistory.find((w) => w.status === "sah");
+    if (!latest) return null;
+    return {
+      id: latest.participantId,
+      fullName: latest.participantName,
+      registrationNumber: latest.participantRegNum,
+      institution: latest.participantInstitution,
+      totalPoints: 0,
+      status: "terverifikasi",
+      phone: latest.participantPhone || null,
+    };
+  });
   const [showWinnerCard, setShowWinnerCard] = React.useState(false);
   const [showConfetti, setShowConfetti] = React.useState(false);
   const [shufflingName, setShufflingName] = React.useState("");
@@ -212,29 +228,22 @@ export function MonitorDoorprizeClient({
     };
   }, []);
 
-  // Shuffling animation during spin
+  // Shuffling animation during spin (Mengacak dari data peserta asli database festival)
   React.useEffect(() => {
     if (!isSpinning) return;
-    const dummyNames = [
-      "Ahmad Fauzi • SMKN 2 Jakarta",
-      "Siti Nurhaliza • SMAN 70 Jakarta",
-      "Budi Santoso • SMK Diponegoro 2",
-      "Rina Anggraini • SMKN 26 Jakarta",
-      "Dimas Pratama • SMA Labschool",
-      "Dewi Lestari • SMKN 48 Jakarta",
-      "Eko Kurniawan • SMAN 8 Jakarta",
-      "Fitri Handayani • SMK Grafika",
-      "Gita Rahayu • SMAN 68 Jakarta",
-      "Hadi Wibowo • SMK Negeri 1 Jakarta",
-    ];
 
     const interval = setInterval(() => {
-      const idx = Math.floor(Math.random() * dummyNames.length);
-      setShufflingName(dummyNames[idx]);
+      if (participants.length > 0) {
+        const idx = Math.floor(Math.random() * participants.length);
+        const p = participants[idx];
+        setShufflingName(`${p.fullName} • ${p.institution}`);
+      } else {
+        setShufflingName("Mengacak Peserta Terdaftar • Gebyar Bulan Bahasa");
+      }
     }, 70);
 
     return () => clearInterval(interval);
-  }, [isSpinning]);
+  }, [isSpinning, participants]);
 
   const handleSpinComplete = React.useCallback(() => {
     setIsSpinning(false);
@@ -369,6 +378,7 @@ export function MonitorDoorprizeClient({
                   isWarmingUp={isWarmingUp}
                   winnerName={winner?.fullName}
                   winnerDetails={winner}
+                  sampleParticipants={participants}
                   spinDurationMs={5500}
                   onSpinComplete={handleSpinComplete}
                   soundEnabled={soundEnabled}
