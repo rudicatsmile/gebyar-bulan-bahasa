@@ -604,6 +604,7 @@ export function MonitorDoorprizeClient({
             <button
               onClick={() => {
                 setShowWinnerCard(false);
+                setShowConfetti(false);
                 setSuspensePhase("idle");
               }}
               className="absolute top-5 right-5 text-white/50 hover:text-white text-xs px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer z-20"
@@ -682,6 +683,7 @@ export function MonitorDoorprizeClient({
               <button
                 onClick={() => {
                   setShowWinnerCard(false);
+                  setShowConfetti(false);
                   setSuspensePhase("idle");
                 }}
                 className="px-8 sm:px-12 py-3.5 sm:py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-heading text-sm sm:text-base font-black uppercase tracking-wider shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:shadow-[0_0_45px_rgba(245,158,11,0.6)] active:scale-95 transition-all cursor-pointer"
