@@ -529,10 +529,10 @@ export default function DashboardPengaturanPage() {
                 </div>
                 <div>
                   <strong className="text-xs font-bold text-foreground block group-hover:text-amber-500 transition-colors">
-                    Simulasi Sosialisasi Juri
+                    Simulasi Juri & Panitia (Rekap/Juara)
                   </strong>
                   <span className="text-[11px] text-muted-foreground">
-                    Isi & kosongkan peserta dummy DP 2 untuk sosialisasi juri
+                    Latihan penilaian juri, rekap skor, & penetapan juara
                   </span>
                 </div>
               </div>

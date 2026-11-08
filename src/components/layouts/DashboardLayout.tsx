@@ -95,7 +95,7 @@ const SEKSI_ACARA_NAV: NavItem[] = [
   { title: "Template Twibbon", href: "/dashboard/twibbon/template", icon: LayoutTemplate },
   { title: "Kelola Pengguna", href: "/dashboard/pengguna", icon: Users },
   { title: "Pengaturan Acara", href: "/dashboard/pengaturan", icon: Settings },
-  { title: "Simulasi Juri", href: "/dashboard/pengaturan/simulasi-juri", icon: FlaskConical },
+  { title: "Simulasi Juri & Panitia", href: "/dashboard/pengaturan/simulasi-juri", icon: FlaskConical },
   { title: "Backup & Restore", href: "/dashboard/pengaturan/backup-restore", icon: Database },
   { title: "Reset Data Acara", href: "/dashboard/pengaturan/reset-data", icon: ShieldAlert },
 ];
