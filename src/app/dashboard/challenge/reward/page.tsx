@@ -61,6 +61,7 @@ export default function DashboardKelolaRewardPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [handingOverId, setHandingOverId] = React.useState<string | null>(null);
 
   // Modal State Tambah Reward
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
@@ -298,19 +299,30 @@ export default function DashboardKelolaRewardPage() {
 
   // Handle Penyerahan Hadiah
   const handleHandover = async (id: string) => {
+    setHandingOverId(id);
+    setFeedback(null);
     try {
       const res = await handoverRedemption(id);
       if (res.success) {
         setQueue((prev) =>
           prev.map((q) => (q.id === id ? { ...q, status: "diserahkan" } : q))
         );
-        setFeedback({ type: "success", message: "Status klaim hadiah berhasil ditandai sebagai diserahkan!" });
-        loadData(false);
+        setFeedback({
+          type: "success",
+          message: res.message || "Status klaim hadiah berhasil ditandai sebagai diserahkan dan stok hadiah telah diperbarui!",
+        });
+        await loadData(false);
       } else {
-        setFeedback({ type: "error", message: res.error || "Gagal mengubah status penyerahan." });
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal mengubah status penyerahan hadiah.",
+        });
+        await loadData(false);
       }
     } catch (err: any) {
-      setFeedback({ type: "error", message: err.message || "Terjadi kesalahan." });
+      setFeedback({ type: "error", message: err.message || "Terjadi kesalahan saat memproses penyerahan hadiah." });
+    } finally {
+      setHandingOverId(null);
     }
   };
 
@@ -473,7 +485,22 @@ export default function DashboardKelolaRewardPage() {
                         {item.participantName}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {item.rewardName}
+                        <div>
+                          <span className="font-medium text-foreground">{item.rewardName}</span>
+                          {item.status === "menunggu" && (
+                            <div className="mt-0.5 flex items-center gap-1.5">
+                              {item.isRewardOutOfStock ? (
+                                <Badge variant="danger" className="text-[9px] px-1.5 py-0 font-semibold">
+                                  Stok Habis (0 unit)
+                                </Badge>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  Sisa: <strong className={item.rewardStock <= 3 ? "text-amber-500 font-bold" : "text-foreground font-bold"}>{item.rewardStock} unit</strong>
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center font-mono font-bold text-xs">
                         -{item.pointsSpent} Pts
@@ -497,14 +524,30 @@ export default function DashboardKelolaRewardPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {item.status === "menunggu" ? (
-                          <Button
-                            size="sm"
-                            variant="accent"
-                            onClick={() => handleHandover(item.id)}
-                            className="text-xs h-7"
-                          >
-                            Tandai Diserahkan
-                          </Button>
+                          item.isRewardOutOfStock ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled
+                              className="text-xs h-7 border-danger/40 text-danger bg-danger/5 opacity-75 cursor-not-allowed"
+                              title="Stok hadiah ini sudah habis. Tambah kuota terlebih dahulu di katalog merchandise untuk menyerahkan hadiah ini."
+                            >
+                              Stok Habis
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="accent"
+                              onClick={() => handleHandover(item.id)}
+                              disabled={handingOverId === item.id}
+                              className="text-xs h-7 cursor-pointer"
+                            >
+                              {handingOverId === item.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                              ) : null}
+                              Tandai Diserahkan
+                            </Button>
+                          )
                         ) : item.status === "diserahkan" ? (
                           <span className="text-[11px] text-success font-medium flex items-center justify-end gap-1">
                             <CheckCircle2 className="h-3.5 w-3.5" /> Selesai

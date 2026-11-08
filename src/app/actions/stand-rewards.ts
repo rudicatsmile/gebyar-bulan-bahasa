@@ -482,19 +482,7 @@ export async function checkAndProcessStandCompletionReward(
           note: `Reward Khusus Stand: Penyelesaian Seluruh Stand Budaya (Penerima #${rank} dari ${config.quota})`,
         });
 
-        // Tambah claimed_count di tabel rewards
-        const { data: rew } = await supabase
-          .from("rewards")
-          .select("claimed_count")
-          .eq("id", config.rewardId)
-          .maybeSingle();
-
-        if (rew) {
-          await supabase
-            .from("rewards")
-            .update({ claimed_count: (rew.claimed_count || 0) + 1 })
-            .eq("id", config.rewardId);
-        }
+        // Pengurangan stok fisik rewards dilakukan saat penyerahan hadiah fisik oleh panitia di antrean meja lokasi (handoverRedemption)
       } catch (err) {
         console.error("Gagal mencatat redemption reward khusus:", err);
       }

@@ -367,7 +367,7 @@ export async function redeemReward(data: RedeemRewardInput) {
       return { success: false, error: "Data peserta tidak ditemukan di sistem." };
     }
 
-    // 2. Cek reward dan kuota
+    // 2. Cek reward dan kuota ketersediaan
     const { data: reward } = await adminSupabase
       .from("rewards")
       .select("id, name, points_required, quota, claimed_count, is_active")
@@ -378,7 +378,16 @@ export async function redeemReward(data: RedeemRewardInput) {
       return { success: false, error: "Reward tidak aktif atau tidak ditemukan." };
     }
 
-    if (reward.quota !== null && (reward.claimed_count || 0) >= reward.quota) {
+    // Hitung total reservasi aktif (menunggu + diserahkan) agar kuota penukaran tidak melebihi stok
+    const { count: activeBookingsCount } = await adminSupabase
+      .from("reward_redemptions")
+      .select("id", { count: "exact", head: true })
+      .eq("reward_id", reward.id)
+      .in("status", ["menunggu", "diserahkan"]);
+
+    const currentUsedQuota = Math.max(Number(reward.claimed_count) || 0, Number(activeBookingsCount) || 0);
+
+    if (reward.quota !== null && currentUsedQuota >= reward.quota) {
       return {
         success: false,
         error: `Mohon maaf, kuota penukaran reward "${reward.name}" telah habis.`,
@@ -442,11 +451,8 @@ export async function redeemReward(data: RedeemRewardInput) {
       return { success: false, error: `Gagal menyimpan riwayat penukaran: ${rErr.message}` };
     }
 
-    // 7. Update claimed_count reward
-    await adminSupabase
-      .from("rewards")
-      .update({ claimed_count: (reward.claimed_count || 0) + 1 })
-      .eq("id", reward.id);
+    // 7. Pengurangan stok fisik dilakukan saat verifikasi penyerahan hadiah oleh panitia di lokasi (handoverRedemption)
+    // agar stok tidak terpotong ganda dan diverifikasi langsung terhadap ketersediaan barang fisik di meja.
 
     // 8. Update eksplisit total_points di participants
     const newTotalPoints = Math.max(0, participant.total_points - reward.points_required);

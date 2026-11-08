@@ -21,7 +21,10 @@ export interface DbRewardItem {
 export interface RedemptionQueueItem {
   id: string;
   participantName: string;
+  rewardId: string;
   rewardName: string;
+  rewardStock: number;
+  isRewardOutOfStock: boolean;
   pointsSpent: number;
   pickupCode: string;
   status: "menunggu" | "diserahkan" | "ditolak";
@@ -56,25 +59,46 @@ export async function getAdminRewards(): Promise<{
 }> {
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("rewards")
-      .select("*")
-      .order("sort_order", { ascending: true })
-      .order("points_required", { ascending: true });
+    const [{ data, error }, { data: diserahkanList }] = await Promise.all([
+      supabase
+        .from("rewards")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("points_required", { ascending: true }),
+      supabase
+        .from("reward_redemptions")
+        .select("reward_id")
+        .eq("status", "diserahkan"),
+    ]);
 
     if (error) throw error;
 
-    const mapped: DbRewardItem[] = (data || []).map((r: any) => ({
-      id: r.id,
-      name: r.name,
-      description: r.description || "",
-      pointsRequired: Number(r.points_required) || 0,
-      quota: Number(r.quota) || 0,
-      claimedCount: Number(r.claimed_count) || 0,
-      category: r.points_required >= 300 ? "Akses/Buku" : r.points_required >= 200 ? "Merchandise" : "Voucher",
-      isActive: Boolean(r.is_active),
-      sortOrder: r.sort_order,
-    }));
+    // Hitung jumlah fisik yang sudah diserahkan per reward
+    const handedMap: Record<string, number> = {};
+    for (const item of diserahkanList || []) {
+      if (item.reward_id) {
+        handedMap[item.reward_id] = (handedMap[item.reward_id] || 0) + 1;
+      }
+    }
+
+    const mapped: DbRewardItem[] = (data || []).map((r: any) => {
+      const dbClaimed = Number(r.claimed_count) || 0;
+      const actualDiserahkan = handedMap[r.id] || 0;
+      // Gunakan nilai maksimum agar sinkron dengan database
+      const claimedCount = Math.max(dbClaimed, actualDiserahkan);
+
+      return {
+        id: r.id,
+        name: r.name,
+        description: r.description || "",
+        pointsRequired: Number(r.points_required) || 0,
+        quota: Number(r.quota) || 0,
+        claimedCount,
+        category: r.points_required >= 300 ? "Akses/Buku" : r.points_required >= 200 ? "Merchandise" : "Voucher",
+        isActive: Boolean(r.is_active),
+        sortOrder: r.sort_order,
+      };
+    });
 
     return { success: true, rewards: mapped };
   } catch (err: unknown) {
@@ -96,28 +120,38 @@ export async function getRedemptionQueue(): Promise<{
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("reward_redemptions")
-      .select("*, participants(full_name), rewards(name, points_required)")
+      .select("*, participants(full_name), rewards(id, name, points_required, quota, claimed_count, is_active)")
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    const mapped: RedemptionQueueItem[] = (data || []).map((q: any) => ({
-      id: q.id,
-      participantName: q.participants?.full_name || "Peserta",
-      rewardName: q.rewards?.name || "Merchandise Festival",
-      pointsSpent: Number(q.points_spent) || Number(q.rewards?.points_required) || 0,
-      pickupCode: q.pickup_code || "KLAIM",
-      status: q.status === "diserahkan" ? "diserahkan" : q.status === "ditolak" ? "ditolak" : "menunggu",
-      requestedAt: q.created_at
-        ? new Date(q.created_at).toLocaleDateString("id-ID", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          }) + " WIB"
-        : "-",
-    }));
+    const mapped: RedemptionQueueItem[] = (data || []).map((q: any) => {
+      const rewardQuota = Number(q.rewards?.quota) || 0;
+      const rewardClaimed = Number(q.rewards?.claimed_count) || 0;
+      const rewardStock = Math.max(0, rewardQuota - rewardClaimed);
+      const isRewardOutOfStock = rewardStock <= 0;
+
+      return {
+        id: q.id,
+        participantName: q.participants?.full_name || "Peserta",
+        rewardId: q.rewards?.id || q.reward_id || "",
+        rewardName: q.rewards?.name || "Merchandise Festival",
+        rewardStock,
+        isRewardOutOfStock,
+        pointsSpent: Number(q.points_spent) || Number(q.rewards?.points_required) || 0,
+        pickupCode: q.pickup_code || "KLAIM",
+        status: q.status === "diserahkan" ? "diserahkan" : q.status === "ditolak" ? "ditolak" : "menunggu",
+        requestedAt: q.created_at
+          ? new Date(q.created_at).toLocaleDateString("id-ID", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }) + " WIB"
+          : "-",
+      };
+    });
 
     return { success: true, queue: mapped };
   } catch (err: unknown) {
@@ -207,7 +241,12 @@ export async function deleteReward(id: string) {
   }
 }
 
-export async function handoverRedemption(id: string) {
+export async function handoverRedemption(id: string): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+  remainingStock?: number;
+}> {
   if (!id) return { success: false, error: "ID Klaim tidak valid" };
 
   try {
@@ -215,24 +254,141 @@ export async function handoverRedemption(id: string) {
     const userClient = await createClient();
     const { data: { user } } = await userClient.auth.getUser();
 
-    const { error } = await supabase
+    // 1. Ambil data redemption saat ini
+    const { data: redemption, error: rErr } = await supabase
+      .from("reward_redemptions")
+      .select("id, reward_id, participant_id, status, pickup_code, points_spent")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (rErr || !redemption) {
+      return { success: false, error: "Data klaim hadiah tidak ditemukan." };
+    }
+
+    // 2. Validasi status klaim antrean (idempotency check)
+    if (redemption.status === "diserahkan") {
+      return { success: false, error: "Hadiah ini sudah pernah diserahkan sebelumnya." };
+    }
+    if (redemption.status === "ditolak") {
+      return { success: false, error: "Klaim hadiah ini telah dibatalkan dan tidak dapat diserahkan." };
+    }
+    if (redemption.status !== "menunggu") {
+      return { success: false, error: `Status antrean saat ini (${redemption.status}) tidak memenuhi syarat penyerahan.` };
+    }
+
+    if (!redemption.reward_id) {
+      return { success: false, error: "Klaim ini tidak terhubung dengan item hadiah di katalog." };
+    }
+
+    // 3. Ambil data reward terkait
+    const { data: reward, error: rewErr } = await supabase
+      .from("rewards")
+      .select("id, name, quota, claimed_count, is_active")
+      .eq("id", redemption.reward_id)
+      .maybeSingle();
+
+    if (rewErr || !reward) {
+      return { success: false, error: "Item hadiah tidak ditemukan di katalog." };
+    }
+
+    if (!reward.is_active) {
+      return { success: false, error: `Hadiah "${reward.name}" sedang dinonaktifkan.` };
+    }
+
+    const quota = Number(reward.quota) || 0;
+    const currentClaimed = Number(reward.claimed_count) || 0;
+    const remainingStock = quota - currentClaimed;
+
+    // 4. VALIDASI STOK: Jangan izinkan jika stok <= 0 (Cegah defisit)
+    if (remainingStock <= 0 || currentClaimed >= quota) {
+      return {
+        success: false,
+        error: `Stok hadiah habis. Hadiah "${reward.name}" sudah tidak memiliki sisa stok (Tersedia: 0 unit). Penyerahan hadiah ditolak.`,
+      };
+    }
+
+    // 5. ATOMIC UPDATE STOK DENGAN COMPARE-AND-SWAP (OCC):
+    // Kondisi filter: eq('claimed_count', currentClaimed) AND lt('claimed_count', quota)
+    // Menjamin secara transaksional di database bahwa:
+    // a. Dua panitia yang klik bersamaan tidak akan membuat stok defisit (< 0).
+    // b. claimed_count tidak pernah melebihi quota.
+    const { data: updatedReward, error: stockUpdateErr } = await supabase
+      .from("rewards")
+      .update({ claimed_count: currentClaimed + 1 })
+      .eq("id", reward.id)
+      .eq("claimed_count", currentClaimed)
+      .lt("claimed_count", quota)
+      .select("id, claimed_count, quota");
+
+    if (stockUpdateErr || !updatedReward || updatedReward.length === 0) {
+      // Terjadi konkurensi: panitia lain baru saja memproses sisa stok terakhir atau kuota berubah
+      return {
+        success: false,
+        error: `Stok hadiah habis. Stok hadiah "${reward.name}" baru saja habis atau diperbarui oleh panitia lain. Penyerahan dibatalkan.`,
+      };
+    }
+
+    // 6. UPDATE STATUS ANTREAN PENYERAHAN MENJADI 'diserahkan'
+    const { data: updatedRedemption, error: redemptionUpdateErr } = await supabase
       .from("reward_redemptions")
       .update({
         status: "diserahkan",
         processed_by: user?.id || null,
         processed_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("status", "menunggu")
+      .select("id, status");
 
-    if (error) return { success: false, error: error.message };
+    if (redemptionUpdateErr || !updatedRedemption || updatedRedemption.length === 0) {
+      // Rollback stok reward karena status antrean gagal diupdate (misal sudah diproses panitia lain)
+      await supabase
+        .from("rewards")
+        .update({ claimed_count: currentClaimed })
+        .eq("id", reward.id)
+        .eq("claimed_count", currentClaimed + 1);
 
-    // Siarkan broadcast realtime ke channel antrean
+      return {
+        success: false,
+        error: "Gagal memperbarui antrean karena klaim ini sudah diproses atau dibatalkan oleh pihak lain.",
+      };
+    }
+
+    const newRemainingStock = Math.max(0, quota - (currentClaimed + 1));
+
+    // 7. Catat Log Aktivitas
+    try {
+      await supabase.from("activity_logs").insert({
+        actor_id: user?.id || null,
+        actor_role: "seksi_acara",
+        action: "penyerahan_reward",
+        entity: "reward_redemptions",
+        entity_id: id,
+        description: `Panitia menyerahkan hadiah "${reward.name}" (Kode: ${redemption.pickup_code || "-"}). Sisa stok: ${newRemainingStock} unit.`,
+        metadata: {
+          reward_id: reward.id,
+          reward_name: reward.name,
+          pickup_code: redemption.pickup_code,
+          remaining_stock: newRemainingStock,
+        },
+      });
+    } catch {
+      // Non-fatal
+    }
+
+    // 8. Siarkan broadcast realtime ke antrean & monitor
     try {
       const channel = supabase.channel("reward-redemptions-channel");
       await channel.send({
         type: "broadcast",
         event: "queue_updated",
-        payload: { action: "handover", id, timestamp: new Date().toISOString() },
+        payload: {
+          action: "handover",
+          id,
+          rewardId: reward.id,
+          remainingStock: newRemainingStock,
+          timestamp: new Date().toISOString(),
+        },
       });
       supabase.removeChannel(channel);
     } catch (realtimeErr) {
@@ -240,7 +396,14 @@ export async function handoverRedemption(id: string) {
     }
 
     revalidatePath("/dashboard/challenge/reward");
-    return { success: true };
+    revalidatePath("/peserta/reward");
+    revalidatePath("/peserta");
+
+    return {
+      success: true,
+      remainingStock: newRemainingStock,
+      message: `Hadiah "${reward.name}" (Kode: ${redemption.pickup_code}) berhasil diserahkan! Sisa stok sekarang: ${newRemainingStock} unit.`,
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal memperbarui status penyerahan.";
     return { success: false, error: message };
@@ -604,13 +767,23 @@ export async function cancelRewardRedemption(redemptionId: string, participantId
       }
     }
 
-    // 7. Kembalikan kuota/stok reward (kurangi claimed_count)
+    // 7. Kembalikan kuota/stok reward jika claimed_count pernah terpotong (jaga agar tidak pernah < 0)
     if (reward?.id) {
       const currentClaimed = Number(reward.claimed_count) || 0;
-      await adminSupabase
-        .from("rewards")
-        .update({ claimed_count: Math.max(0, currentClaimed - 1) })
-        .eq("id", reward.id);
+      if (currentClaimed > 0) {
+        const { count: handedOverCount } = await adminSupabase
+          .from("reward_redemptions")
+          .select("id", { count: "exact", head: true })
+          .eq("reward_id", reward.id)
+          .eq("status", "diserahkan");
+
+        if (currentClaimed > (handedOverCount || 0)) {
+          await adminSupabase
+            .from("rewards")
+            .update({ claimed_count: Math.max(0, currentClaimed - 1) })
+            .eq("id", reward.id);
+        }
+      }
     }
 
     // 8. Ambil saldo terbaru setelah trigger sync points
