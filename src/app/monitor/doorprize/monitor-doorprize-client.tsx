@@ -144,6 +144,13 @@ export function MonitorDoorprizeClient({
         setWinner(null);
         setShowWinnerCard(false);
         setShowConfetti(false);
+        setIsSpinning(false);
+        setCallCount(0);
+        setBuzzerStatus("idle");
+        setBuzzerLeaderboard([]);
+        getDoorprizePrizes().then((res) => {
+          if (res.success && res.prizes) setPrizes(res.prizes);
+        });
       })
       .on("broadcast", { event: "buzzer_round_starting" }, ({ payload }) => {
         setActiveMode("buzzer");

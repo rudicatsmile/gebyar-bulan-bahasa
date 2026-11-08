@@ -123,6 +123,8 @@ export default function DashboardDoorprizePage() {
   const [isStartingBuzzer, setIsStartingBuzzer] = React.useState(false);
   const [isLockingBuzzer, setIsLockingBuzzer] = React.useState(false);
   const [qrDialogOpen, setQrDialogOpen] = React.useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
+  const [isResetting, setIsResetting] = React.useState(false);
 
   // Persistent channel ref for reliable, immediate broadcasts
   const channelRef = React.useRef<any>(null);
@@ -342,22 +344,48 @@ export default function DashboardDoorprizePage() {
     }
   };
 
-  // Handle Reset History
-  const handleResetHistory = async () => {
-    const confirmReset = confirm("Reset seluruh riwayat pemenang doorprize? Tindakan ini biasanya untuk simulasi / uji coba.");
-    if (!confirmReset) return;
+  // Handle Eksekusi Reset Lengkap Riwayat & Kuota Hadiah
+  const handleExecuteReset = async () => {
+    setIsResetting(true);
+    setFeedback(null);
 
     try {
       const res = await resetDoorprizeHistory();
       if (res.success) {
-        // Broadcast reset ke monitor
+        // 1. Bersihkan state visual seketika di client
+        setHistory([]);
+        setCurrentWinner(null);
+        setShowWinnerModal(false);
+        setShowConfetti(false);
+        setBuzzerStatus("idle");
+        setBuzzerLeaderboard([]);
+        setResetDialogOpen(false);
+
+        // 2. Broadcast reset ke layar TV panggung
         sendLiveBroadcast("doorprize_history_reset", {});
 
-        setFeedback({ type: "success", message: "Riwayat undian doorprize telah dibersihkan." });
-        loadData();
+        setFeedback({
+          type: "success",
+          message: "Seluruh riwayat pemenang telah berhasil dibersihkan dan kuota stok hadiah telah dipulihkan.",
+        });
+
+        // 3. Muat ulang data terbaru dari database
+        await loadData();
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal membersihkan riwayat doorprize.",
+        });
+        setResetDialogOpen(false);
       }
     } catch (err) {
-      console.error("Gagal reset:", err);
+      setFeedback({
+        type: "error",
+        message: "Terjadi kesalahan saat memproses reset riwayat doorprize.",
+      });
+      setResetDialogOpen(false);
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -760,8 +788,8 @@ export default function DashboardDoorprizePage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={handleResetHistory}
-                    className="text-[11px] h-7 text-danger hover:bg-danger/10"
+                    onClick={() => setResetDialogOpen(true)}
+                    className="text-[11px] h-7 text-danger hover:bg-danger/10 font-bold cursor-pointer"
                     title="Bersihkan riwayat undian"
                   >
                     <RotateCcw className="h-3 w-3 mr-1" />
@@ -1298,6 +1326,83 @@ export default function DashboardDoorprizePage() {
               </Link>
               <Button size="sm" onClick={() => setQrDialogOpen(false)} className="w-full sm:w-auto text-xs font-bold">
                 Tutup
+              </Button>
+            </DialogFooter>
+          </div>
+        </Dialog>
+        {/* Modal Konfirmasi Reset Riwayat & Stok Doorprize */}
+        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <div className="p-4 sm:p-6 space-y-4">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-danger/15 text-danger flex items-center justify-center shrink-0">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base sm:text-lg font-heading font-black text-foreground">
+                    Konfirmasi Reset Riwayat Doorprize
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground">
+                    Tindakan ini akan mengosongkan seluruh riwayat undian dan memulihkan stok hadiah.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="p-3.5 rounded-2xl bg-danger/5 border border-danger/20 space-y-2 text-xs">
+              <span className="font-bold text-danger block">
+                Item yang akan di-reset:
+              </span>
+              <ul className="list-disc pl-4 space-y-1.5 text-muted-foreground">
+                <li>
+                  <strong className="text-foreground">{history.length} Data Pemenang</strong> yang tercatat akan dihapus secara permanen.
+                </li>
+                <li>
+                  <strong className="text-foreground">Sisa Stok Hadiah</strong> doorprize akan dikembalikan penuh ke kuota awal (total quantity).
+                </li>
+                <li>
+                  <strong className="text-foreground">Status Ronde Buzzer F1</strong> dan catatan refleks peserta akan dibersihkan ke standby.
+                </li>
+                <li>
+                  <strong className="text-foreground">Layar TV Monitor Panggung</strong> akan otomatis bersih kembali ke status panggung siap.
+                </li>
+              </ul>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              Apakah Anda yakin ingin melanjutkan proses pembersihan total ini?
+            </p>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setResetDialogOpen(false)}
+                disabled={isResetting}
+                className="w-full sm:w-auto text-xs"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleExecuteReset}
+                disabled={isResetting}
+                className="w-full sm:w-auto text-xs font-bold gap-1.5"
+              >
+                {isResetting ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Sedang Membersihkan...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Ya, Bersihkan & Reset Semuanya</span>
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </div>

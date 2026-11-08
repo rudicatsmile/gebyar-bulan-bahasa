@@ -705,6 +705,10 @@ export async function cancelDoorprizeWinner(
 
 /**
  * 7. Bersihkan / Reset Riwayat Pemenang Doorprize (Simulasi / Uji Coba Selesai)
+ *
+ * Mengosongkan seluruh riwayat pemenang (tabel doorprize_winners & event_settings),
+ * mengembalikan sisa stok kuota seluruh hadiah ke jumlah awal, dan membersihkan status
+ * ronde aktif buzzer.
  */
 export async function resetDoorprizeHistory(): Promise<{ success: boolean; error?: string }> {
   const auth = await checkStaffAuth();
@@ -712,20 +716,89 @@ export async function resetDoorprizeHistory(): Promise<{ success: boolean; error
 
   try {
     const admin = createAdminClient();
+    const nowIso = new Date().toISOString();
 
+    // 1. Hapus seluruh data di tabel doorprize_winners
     try {
-      await admin.from("doorprize_winners").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    } catch {
-      // ignore
+      const { data: rows } = await admin.from("doorprize_winners").select("id");
+      if (rows && rows.length > 0) {
+        const ids = rows.map((r: any) => r.id).filter(Boolean);
+        if (ids.length > 0) {
+          await admin.from("doorprize_winners").delete().in("id", ids);
+        }
+      }
+      // Backup pembersihan universal
+      await admin.from("doorprize_winners").delete().not("id", "is", null);
+    } catch (delErr) {
+      console.warn("Catatan delete tabel doorprize_winners:", delErr);
     }
 
+    // 2. Kosongkan riwayat cadangan di event_settings
     await admin.from("event_settings").upsert({
       key: "doorprize_winners_history",
       value: [],
       description: "Daftar riwayat pemenang undian doorprize festival",
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso,
     });
 
+    // 3. Reset status ronde aktif Buzzer F1
+    await admin.from("event_settings").upsert({
+      key: "doorprize_active_buzzer_round",
+      value: {
+        roundId: "",
+        prizeName: "",
+        status: "idle",
+        greenDelayMs: 2800,
+        startedAt: nowIso,
+        leaderboard: [],
+        falseStartsCount: 0,
+      },
+      description: "State ronde aktif permainan buzzer kilat panggung",
+      updated_at: nowIso,
+    });
+
+    // 4. Pulihkan sisa kuota seluruh hadiah doorprize (remaining_quantity = total_quantity)
+    try {
+      const { data: dbPrizes } = await admin.from("doorprizes").select("id, total_quantity");
+      if (dbPrizes && dbPrizes.length > 0) {
+        for (const p of dbPrizes) {
+          const totalQty = Math.max(1, Number(p.total_quantity) || 1);
+          await admin
+            .from("doorprizes")
+            .update({
+              remaining_quantity: totalQty,
+              updated_at: nowIso,
+            })
+            .eq("id", p.id);
+        }
+      }
+    } catch (qtyResetErr) {
+      console.warn("Gagal reset kuota tabel doorprizes:", qtyResetErr);
+    }
+
+    try {
+      const { data: pSetting } = await admin
+        .from("event_settings")
+        .select("value")
+        .eq("key", "doorprize_prizes_list")
+        .maybeSingle();
+
+      if (Array.isArray(pSetting?.value)) {
+        const restored = (pSetting.value as any[]).map((p) => ({
+          ...p,
+          remainingQuantity: Math.max(1, Number(p.totalQuantity) || 1),
+        }));
+        await admin.from("event_settings").upsert({
+          key: "doorprize_prizes_list",
+          value: restored,
+          updated_at: nowIso,
+        });
+      }
+    } catch (pSettingErr) {
+      console.warn("Gagal reset kuota setting doorprize_prizes_list:", pSettingErr);
+    }
+
+    // 5. Broadcast reset ke seluruh layar panggung & monitor publik
     await broadcastDoorprize("doorprize_history_reset", {});
 
     revalidatePath("/dashboard/doorprize");
