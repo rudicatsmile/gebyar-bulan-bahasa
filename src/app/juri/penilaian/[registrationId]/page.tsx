@@ -654,64 +654,65 @@ export default function FormPenilaianDigitalPage() {
         {/* ====================================================================== */}
         {/* MODAL 1: KONFIRMASI MODERN PENGIRIMAN NILAI FINAL                      */}
         {/* ====================================================================== */}
-        <Dialog open={confirmModalOpen} onOpenChange={setConfirmModalOpen} className="max-w-xl p-0 overflow-hidden">
-          <div className="p-5 sm:p-6 space-y-4">
-            {/* Header */}
-            <div className="flex items-start gap-3.5">
-              <div className="h-11 w-11 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 flex items-center justify-center shrink-0">
-                <Trophy className="h-6 w-6" />
+        <Dialog
+          open={confirmModalOpen}
+          onOpenChange={setConfirmModalOpen}
+          className="max-w-xl p-0 flex flex-col max-h-[85vh] sm:max-h-[88vh] overflow-hidden"
+        >
+          {/* Body Konten yang Dapat Di-scroll Secara Mandiri */}
+          <div className="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0 space-y-3.5">
+            {/* Header Dialog */}
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-500 flex items-center justify-center shrink-0">
+                <Trophy className="h-5 w-5" />
               </div>
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="text-base sm:text-lg font-bold text-foreground">
+              <div className="min-w-0 flex-1 pr-6">
+                <DialogTitle className="text-base font-bold text-foreground leading-tight">
                   Konfirmasi Kirim Nilai Final
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Pastikan seluruh evaluasi telah sesuai sebelum nilai resmi dimasukkan ke rekapitulasi kejuaraan.
+                  Periksa kembali ringkasan nilai sebelum dikirim ke rekapitulasi kejuaraan.
                 </DialogDescription>
               </div>
             </div>
 
-            {/* Profil Singkat Peserta */}
-            <div className="p-3.5 rounded-xl border border-border bg-muted/40 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-[11px] font-mono font-bold text-accent px-2 py-0.5 rounded bg-accent/10 border border-accent/20">
-                  {participant.registrationNumber}
-                </span>
-                <span className="text-[11px] font-medium text-muted-foreground truncate">
-                  {competition.name} {competition.stageName ? `• ${competition.stageName}` : ""}
-                </span>
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-foreground truncate">
-                  {competition.category?.toLowerCase() === "kelompok" ||
-                  competition.type === "kelompok" ||
-                  Boolean(participant.teamName)
-                    ? (participant.teamName || participant.fullName)
-                    : participant.fullName}
-                </h4>
-                <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
-                  <School className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span>{participant.institution}</span>
+            {/* Grid Kompak: Identitas Peserta & Total Skor Terbobot */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-stretch">
+              {/* Kolom Kiri: Info Peserta */}
+              <div className="sm:col-span-7 p-3 rounded-xl border border-border bg-muted/40 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                    <span className="text-[10px] font-mono font-bold text-accent px-1.5 py-0.5 rounded bg-accent/10 border border-accent/20">
+                      {participant.registrationNumber}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground truncate">
+                      {competition.name} {competition.stageName ? `• ${competition.stageName}` : ""}
+                    </span>
+                  </div>
+                  <h4 className="text-xs sm:text-sm font-bold text-foreground truncate">
+                    {competition.category?.toLowerCase() === "kelompok" ||
+                    competition.type === "kelompok" ||
+                    Boolean(participant.teamName)
+                      ? (participant.teamName || participant.fullName)
+                      : participant.fullName}
+                  </h4>
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5 mt-1.5">
+                  <School className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{participant.institution}</span>
                 </p>
               </div>
-            </div>
 
-            {/* Banner Skor Terbobot Utama */}
-            <div className="p-4 rounded-xl border border-accent/40 bg-gradient-to-br from-accent/15 via-accent/5 to-transparent flex items-center justify-between gap-4">
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-accent font-bold block">
-                  Total Skor Terbobot
+              {/* Kolom Kanan: Skor Terbobot */}
+              <div className="sm:col-span-5 p-3 rounded-xl border border-accent/40 bg-accent/10 flex sm:flex-col items-center sm:items-end justify-between sm:justify-center text-right shrink-0">
+                <span className="text-[9px] font-mono uppercase tracking-wider text-accent font-bold">
+                  Total Terbobot
                 </span>
-                <span className="text-[11px] text-muted-foreground">
-                  Kalkulasi otomatis dari {criteria.length} kriteria
-                </span>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="font-mono text-3xl font-black text-accent leading-none">
+                <div className="font-mono text-2xl sm:text-3xl font-black text-accent leading-none my-0.5">
                   {weightedTotal.toFixed(2)}
                 </div>
-                <span className="text-[10px] text-muted-foreground block mt-1">
-                  dari skor maks 100.00 pts
+                <span className="text-[10px] text-muted-foreground">
+                  dari 100.00 pts
                 </span>
               </div>
             </div>
@@ -719,23 +720,23 @@ export default function FormPenilaianDigitalPage() {
             {/* Rincian Aspek Penilaian */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs font-semibold text-foreground px-0.5">
-                <span>Rincian Nilai per Kriteria</span>
-                <span className="text-[11px] text-muted-foreground font-normal">
+                <span>Rincian Aspek Penilaian</span>
+                <span className="text-[10px] text-muted-foreground font-normal">
                   Skor (Bobot) → Kontribusi
                 </span>
               </div>
-              <div className="border border-border rounded-lg overflow-hidden divide-y divide-border text-xs max-h-40 overflow-y-auto bg-card">
+              <div className="border border-border rounded-lg overflow-hidden divide-y divide-border text-xs max-h-36 overflow-y-auto bg-card">
                 {criteria.map((c) => {
                   const score = scores[c.id] || 0;
                   const contribution = (score * c.weight) / 100;
                   return (
-                    <div key={c.id} className="p-2.5 flex items-center justify-between gap-2 hover:bg-muted/30 transition-colors">
+                    <div key={c.id} className="p-2 sm:p-2.5 flex items-center justify-between gap-2 hover:bg-muted/30 transition-colors">
                       <div className="min-w-0 pr-2">
-                        <p className="font-medium text-foreground truncate">{c.name}</p>
-                        <span className="text-[10px] text-muted-foreground">Bobot aspek: {c.weight}%</span>
+                        <p className="font-medium text-foreground truncate text-xs">{c.name}</p>
+                        <span className="text-[10px] text-muted-foreground">Bobot: {c.weight}%</span>
                       </div>
                       <div className="text-right shrink-0 font-mono">
-                        <span className="font-bold text-foreground">{score}</span>
+                        <span className="font-bold text-foreground text-xs">{score}</span>
                         <span className="text-[10px] text-accent block">
                           +{contribution.toFixed(2)} pts
                         </span>
@@ -748,8 +749,8 @@ export default function FormPenilaianDigitalPage() {
 
             {/* Catatan Juri jika ada */}
             {notes.trim() && (
-              <div className="p-3 rounded-lg border border-border bg-muted/20 space-y-1">
-                <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+              <div className="p-2.5 rounded-lg border border-border bg-muted/20 space-y-0.5">
+                <span className="text-[10px] font-semibold text-foreground flex items-center gap-1">
                   <FileText className="h-3 w-3 text-muted-foreground" />
                   Catatan Evaluasi Dewan Juri:
                 </span>
@@ -760,16 +761,16 @@ export default function FormPenilaianDigitalPage() {
             )}
 
             {/* Peringatan Informatif */}
-            <div className="p-3 rounded-xl border border-blue-500/30 bg-blue-500/5 text-blue-900 dark:text-blue-200 text-xs flex items-start gap-2.5">
-              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
-              <span className="leading-relaxed text-[11px]">
-                Setelah dikirim, nilai ini akan langsung diagregasikan ke papan skor panitia untuk penentuan pemenang. Anda tetap dapat memperbarui nilai selama lomba belum dikunci oleh panitia.
+            <div className="p-2.5 rounded-lg border border-blue-500/30 bg-blue-500/5 text-blue-900 dark:text-blue-200 text-xs flex items-center gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+              <span className="leading-snug text-[11px]">
+                Nilai ini akan langsung masuk ke rekapitulasi dewan juri & papan skor panitia.
               </span>
             </div>
           </div>
 
-          {/* Action Buttons Footer */}
-          <div className="p-4 bg-muted/40 border-t border-border flex items-center justify-end gap-2.5">
+          {/* Action Buttons Footer (Selalu Terlihat di Bagian Bawah) */}
+          <div className="p-3 sm:p-4 bg-card/95 border-t border-border flex items-center justify-end gap-2.5 shrink-0 z-10 backdrop-blur-xs">
             <Button
               type="button"
               variant="outline"
@@ -800,14 +801,18 @@ export default function FormPenilaianDigitalPage() {
         {/* ====================================================================== */}
         {/* MODAL 2: PERINGATAN MODERN KRITERIA BELUM LENGKAP                       */}
         {/* ====================================================================== */}
-        <Dialog open={incompleteModalOpen} onOpenChange={setIncompleteModalOpen} className="max-w-md p-0 overflow-hidden">
-          <div className="p-5 sm:p-6 space-y-4">
-            <div className="flex items-start gap-3.5">
-              <div className="h-11 w-11 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-6 w-6" />
+        <Dialog
+          open={incompleteModalOpen}
+          onOpenChange={setIncompleteModalOpen}
+          className="max-w-md p-0 flex flex-col max-h-[85vh] overflow-hidden"
+        >
+          <div className="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5" />
               </div>
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="text-base sm:text-lg font-bold text-foreground">
+              <div className="min-w-0 flex-1 pr-6">
+                <DialogTitle className="text-base font-bold text-foreground">
                   Kriteria Nilai Belum Lengkap
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
@@ -816,18 +821,18 @@ export default function FormPenilaianDigitalPage() {
               </div>
             </div>
 
-            <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs leading-relaxed">
+            <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs leading-relaxed">
               Seluruh kriteria penilaian wajib diisi dengan skor minimal 1 sebelum Anda dapat mengirimkan nilai final peserta ini.
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
                 Kriteria yang Perlu Dilengkapi:
               </span>
-              <div className="border border-border rounded-lg overflow-hidden divide-y divide-border text-xs max-h-44 overflow-y-auto bg-card">
+              <div className="border border-border rounded-lg overflow-hidden divide-y divide-border text-xs max-h-36 overflow-y-auto bg-card">
                 {unfilledCriteria.map((c) => (
-                  <div key={c.id} className="p-2.5 flex items-center justify-between gap-2">
-                    <span className="font-medium text-foreground truncate">{c.name}</span>
+                  <div key={c.id} className="p-2 flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground truncate text-xs">{c.name}</span>
                     <Badge variant="warning" className="text-[10px] shrink-0 border border-amber-500/40">
                       Bobot {c.weight}%
                     </Badge>
@@ -837,7 +842,7 @@ export default function FormPenilaianDigitalPage() {
             </div>
           </div>
 
-          <div className="p-4 bg-muted/40 border-t border-border flex items-center justify-end">
+          <div className="p-3 sm:p-4 bg-card/95 border-t border-border flex items-center justify-end shrink-0">
             <Button
               type="button"
               size="sm"
