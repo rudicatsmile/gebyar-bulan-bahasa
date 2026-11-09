@@ -1354,6 +1354,7 @@ export default function DashboardDoorprizePage() {
                     variant="accent"
                     onClick={() => {
                       setShowWinnerModal(false);
+                      sendLiveBroadcast("doorprize_dismiss_winner", {});
                     }}
                     className="w-full sm:w-auto text-xs font-bold h-9 sm:h-8"
                   >

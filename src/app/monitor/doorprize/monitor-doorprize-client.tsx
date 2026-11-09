@@ -186,9 +186,25 @@ export function MonitorDoorprizeClient({
         }
       })
       .on("broadcast", { event: "doorprize_winner_cancelled" }, () => {
+        setShowWinnerCard(false);
+        setShowConfetti(false);
+        setSuspensePhase("idle");
+        setCallCount(0);
         getDoorprizeHistory().then((res) => {
           if (res.success && res.winners) setHistory(res.winners);
         });
+      })
+      .on("broadcast", { event: "doorprize_dismiss_winner" }, () => {
+        setShowWinnerCard(false);
+        setShowConfetti(false);
+        setSuspensePhase("idle");
+        setCallCount(0);
+      })
+      .on("broadcast", { event: "doorprize_close_winner_popup" }, () => {
+        setShowWinnerCard(false);
+        setShowConfetti(false);
+        setSuspensePhase("idle");
+        setCallCount(0);
       })
       .on("broadcast", { event: "doorprize_history_reset" }, () => {
         setHistory([]);
@@ -655,16 +671,6 @@ export function MonitorDoorprizeClient({
                 </p>
               </div>
             )}
-
-            {/* Prize Showcase Pedestal */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/20 via-amber-400/15 to-amber-500/20 border-2 border-amber-400/50 shadow-inner space-y-1.5">
-              <span className="text-xs sm:text-sm font-mono text-amber-300 uppercase tracking-widest block font-bold">
-                MEMENANGKAN HADIAH DOORPRIZE:
-              </span>
-              <p className="font-heading text-2xl sm:text-4xl font-black text-amber-300 drop-shadow-md break-words">
-                🎁 {activePrizeName}
-              </p>
-            </div>
 
             {/* Action Button */}
             <div className="pt-2 flex items-center justify-center gap-3">
