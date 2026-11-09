@@ -75,7 +75,7 @@ export async function getSimulationStatus(): Promise<{
   error?: string;
 }> {
   try {
-    await verifySuperAdmin();
+    const { user } = await verifySuperAdmin();
     const admin = createAdminClient();
 
     // 1. Ambil seluruh cabang lomba aktif
@@ -191,7 +191,7 @@ export async function generateSimulationParticipants(payload?: {
   error?: string;
 }> {
   try {
-    const { profile } = await verifySuperAdmin();
+    const { user, profile } = await verifySuperAdmin();
     const admin = createAdminClient();
 
     const targetCount = Math.min(10, Math.max(1, payload?.countPerComp || 3));
@@ -240,7 +240,7 @@ export async function generateSimulationParticipants(payload?: {
             email: `simulasi.${compCode.toLowerCase()}.${i + 1}@smkdp2jkt.sch.id`,
             total_points: 0,
             verified_at: new Date().toISOString(),
-            verified_by: profile?.full_name || "Super Admin",
+            verified_by: user.id,
           })
           .select("id")
           .single();
@@ -385,7 +385,7 @@ export async function generateSimulationParticipants(payload?: {
     // Catat ke activity_logs
     try {
       await admin.from("activity_logs").insert({
-        actor_id: null,
+        actor_id: user.id,
         actor_role: "super_admin",
         action: "generate_simulasi_juri",
         entity: "simulation",
@@ -439,7 +439,7 @@ export async function generateSimulationJudgeScores(payload?: {
   error?: string;
 }> {
   try {
-    const { profile } = await verifySuperAdmin();
+    const { user, profile } = await verifySuperAdmin();
     const admin = createAdminClient();
 
     // 1. Ambil kompetisi sasaran
@@ -620,7 +620,7 @@ export async function generateSimulationJudgeScores(payload?: {
     // Catat ke activity_logs
     try {
       await admin.from("activity_logs").insert({
-        actor_id: null,
+        actor_id: user.id,
         actor_role: "super_admin",
         action: "generate_simulasi_nilai_juri",
         entity: "simulation",
@@ -667,7 +667,7 @@ export async function clearSimulationWinners(payload?: {
   error?: string;
 }> {
   try {
-    await verifySuperAdmin();
+    const { user } = await verifySuperAdmin();
     const admin = createAdminClient();
 
     let regQuery = admin
@@ -720,7 +720,7 @@ export async function clearSimulationWinners(payload?: {
     // Catat ke activity_logs
     try {
       await admin.from("activity_logs").insert({
-        actor_id: null,
+        actor_id: user.id,
         actor_role: "super_admin",
         action: "reset_simulasi_pemenang",
         entity: "simulation",
@@ -769,74 +769,70 @@ async function cleanSimulationForCompetition(admin: any, competitionId?: string)
   }
 
   const { data: simRegs } = await simQuery;
-  if (!simRegs || simRegs.length === 0) return 0;
-
-  const regIds: string[] = simRegs.map((r: any) => r.id);
+  const regIds: string[] = (simRegs || []).map((r: any) => r.id);
   const partIds: string[] = Array.from(
     new Set(
-      simRegs
+      (simRegs || [])
         .map((r: any) => r.participant_id)
         .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
     )
   );
 
   // 1. Hapus nilai juri & skor
-  const { data: assData } = await admin
-    .from("assessments")
-    .select("id")
-    .in("registration_id", regIds);
+  if (regIds.length > 0) {
+    const { data: assData } = await admin
+      .from("assessments")
+      .select("id")
+      .in("registration_id", regIds);
 
-  if (assData && assData.length > 0) {
-    const assIds = assData.map((a: any) => a.id);
-    await admin.from("assessment_scores").delete().in("assessment_id", assIds);
-    await admin.from("assessments").delete().in("id", assIds);
-  }
+    if (assData && assData.length > 0) {
+      const assIds = assData.map((a: any) => a.id);
+      await admin.from("assessment_scores").delete().in("assessment_id", assIds);
+      await admin.from("assessments").delete().in("id", assIds);
+    }
 
-  // 2. Hapus stage_assessments di event_settings jika ada
-  try {
-    const { data: stRow } = await admin
-      .from("event_settings")
-      .select("value")
-      .eq("key", "stage_assessments")
-      .maybeSingle();
+    // 2. Hapus stage_assessments di event_settings jika ada
+    try {
+      const { data: stRow } = await admin
+        .from("event_settings")
+        .select("value")
+        .eq("key", "stage_assessments")
+        .maybeSingle();
 
-    if (stRow?.value && typeof stRow.value === "object") {
-      const stMap = { ...(stRow.value as Record<string, any>) };
-      let changed = false;
-      for (const [key, val] of Object.entries(stMap)) {
-        if (regIds.includes((val as any)?.registrationId)) {
-          delete stMap[key];
-          changed = true;
+      if (stRow?.value && typeof stRow.value === "object") {
+        const stMap = { ...(stRow.value as Record<string, any>) };
+        let changed = false;
+        for (const [key, val] of Object.entries(stMap)) {
+          if (regIds.includes((val as any)?.registrationId)) {
+            delete stMap[key];
+            changed = true;
+          }
+        }
+        if (changed) {
+          await admin.from("event_settings").upsert({
+            key: "stage_assessments",
+            value: stMap as any,
+            updated_at: new Date().toISOString(),
+          });
         }
       }
-      if (changed) {
-        await admin.from("event_settings").upsert({
-          key: "stage_assessments",
-          value: stMap as any,
-          updated_at: new Date().toISOString(),
-        });
-      }
+    } catch {
+      // Non-fatal
     }
-  } catch {
-    // Non-fatal
+
+    // 3. Hapus pemenang terkait
+    await admin.from("winners").delete().in("registration_id", regIds);
+
+    // 4. Hapus anggota tim
+    await admin.from("registration_members").delete().in("registration_id", regIds);
+
+    // 5. Hapus pendaftaran
+    await admin.from("registrations").delete().in("id", regIds);
   }
 
-  // 3. Hapus pemenang terkait
-  await admin.from("winners").delete().in("registration_id", regIds);
-
-  // 4. Hapus anggota tim
-  await admin.from("registration_members").delete().in("registration_id", regIds);
-
-  // 5. Hapus berkas dokumen peserta simulasi
+  // 6. Hapus berkas dokumen dan biodata peserta simulasi
   if (partIds.length > 0) {
     await admin.from("participant_documents").delete().in("participant_id", partIds);
-  }
-
-  // 6. Hapus pendaftaran
-  await admin.from("registrations").delete().in("id", regIds);
-
-  // 7. Hapus biodata peserta simulasi
-  if (partIds.length > 0) {
     await admin
       .from("participants")
       .delete()
@@ -844,7 +840,29 @@ async function cleanSimulationForCompetition(admin: any, competitionId?: string)
       .like("registration_number", "SIM-JURI%");
   }
 
-  // 8. Bersihkan dari duta_bahasa_progress
+  // 8. Bersihkan peserta simulasi orphan yang mungkin tersisa
+  if (competitionId) {
+    const { data: targetComp } = await admin
+      .from("competitions")
+      .select("slug")
+      .eq("id", competitionId)
+      .maybeSingle();
+
+    if (targetComp?.slug) {
+      const compCode = targetComp.slug.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 3) || "LMB";
+      await admin
+        .from("participants")
+        .delete()
+        .like("registration_number", `SIM-JURI-${compCode}%`);
+    }
+  } else {
+    await admin
+      .from("participants")
+      .delete()
+      .like("registration_number", "SIM-JURI%");
+  }
+
+  // 9. Bersihkan dari duta_bahasa_progress
   if (partIds.length > 0) {
     try {
       const { data: curProgData } = await admin
@@ -890,7 +908,7 @@ export async function clearSimulationData(payload?: {
   error?: string;
 }> {
   try {
-    await verifySuperAdmin();
+    const { user } = await verifySuperAdmin();
     const admin = createAdminClient();
 
     const clearedCount = await cleanSimulationForCompetition(admin, payload?.competitionId);
@@ -937,7 +955,7 @@ export async function clearSimulationData(payload?: {
     // Catat ke activity_logs
     try {
       await admin.from("activity_logs").insert({
-        actor_id: null,
+        actor_id: user.id,
         actor_role: "super_admin",
         action: "reset_simulasi_juri_total",
         entity: "simulation",
