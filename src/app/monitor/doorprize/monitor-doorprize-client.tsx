@@ -16,6 +16,8 @@ import {
   ArrowLeft,
   Crown,
   Zap,
+  Menu,
+  X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { soundEffects } from "@/components/doorprize/sound-effects";
@@ -98,6 +100,7 @@ export function MonitorDoorprizeClient({
   const [soundEnabled, setSoundEnabled] = React.useState(true);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [realtimeConnected, setRealtimeConnected] = React.useState(true);
+  const [showHistoryDrawer, setShowHistoryDrawer] = React.useState(false);
 
   // Toggle Fullscreen
   const toggleFullscreen = () => {
@@ -299,33 +302,63 @@ export function MonitorDoorprizeClient({
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Top Header Bar */}
-      <header className="h-20 border-b border-white/10 bg-slate-950/80 backdrop-blur-md px-6 sm:px-10 flex items-center justify-between z-20">
-        <div className="flex items-center gap-4">
+      <header className="h-20 border-b border-white/10 bg-slate-950/80 backdrop-blur-md px-4 sm:px-8 flex items-center justify-between z-20 gap-3">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <Link
             href="/media/monitor"
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors shrink-0"
             title="Kembali ke Konsol Monitor"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-heading text-lg sm:text-xl font-black tracking-tight text-white">
+              <span className="font-heading text-base sm:text-xl font-black tracking-tight text-white truncate">
                 {renderBrandText("GEBYAR BULAN BAHASA")}
               </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30">
+              <span className="hidden sm:inline-block text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30 shrink-0">
                 PANGGUNG UTAMA
               </span>
             </div>
-            <p className="text-xs text-white/50 font-medium">
+            <p className="text-[11px] sm:text-xs text-white/50 font-medium truncate">
               Sistem Undian Roda Keberuntungan & Doorprize Resmi
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Info Hadiah Aktif di Header (Ringkas & Elegan) */}
+        <div className="hidden lg:flex items-center gap-2.5 px-3.5 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-white/5 to-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-xs sm:text-sm shadow-sm max-w-sm xl:max-w-md shrink min-w-0">
+          <Gift className="h-4 w-4 text-amber-400 shrink-0 animate-bounce" />
+          <div className="flex flex-col min-w-0">
+            <span className="text-[9px] font-mono text-amber-400/80 uppercase tracking-wider font-semibold">
+              Hadiah Diundi:
+            </span>
+            <span className="text-white font-extrabold truncate text-xs drop-shadow-sm">
+              {activePrizeName}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Tombol Hamburger: Pemenang Doorprize Sebelumnya */}
+          <button
+            onClick={() => setShowHistoryDrawer(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 transition-all cursor-pointer group shadow-sm"
+            title="Buka Daftar Pemenang Doorprize Sebelumnya"
+          >
+            <Menu className="h-5 w-5 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span className="hidden md:inline text-xs font-bold tracking-wide">
+              Pemenang Sebelumnya
+            </span>
+            {history.filter((w) => w.status !== "dibatalkan").length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
+                {history.filter((w) => w.status !== "dibatalkan").length}
+              </span>
+            )}
+          </button>
+
           {/* Mode Switcher Pills */}
-          <div className="flex items-center p-1 rounded-2xl bg-white/10 border border-white/10 text-xs font-bold">
+          <div className="hidden sm:flex items-center p-1 rounded-2xl bg-white/10 border border-white/10 text-xs font-bold">
             <button
               onClick={() => setActiveMode("vip_carousel")}
               className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
@@ -351,14 +384,14 @@ export function MonitorDoorprizeClient({
           </div>
 
           {/* Status Realtime */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono">
+          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono">
             <span
               className={`h-2.5 w-2.5 rounded-full ${
                 realtimeConnected ? "bg-emerald-400 animate-pulse" : "bg-amber-400"
               }`}
             />
             <span className="text-white/80">
-              {realtimeConnected ? "KONEKSI LIVE PANGGUNG" : "MENYAMBUNGKAN..."}
+              {realtimeConnected ? "LIVE PANGGUNG" : "CONNECTING..."}
             </span>
           </div>
 
@@ -385,154 +418,68 @@ export function MonitorDoorprizeClient({
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 flex flex-col justify-center items-center z-10">
         {activeMode === "vip_carousel" ? (
-          /* PANGGUNG 1: CAROUSEL VIP SINEMATIK */
-          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Kolom Kiri: Panggung Sinematik VIP Card Carousel */}
-            <div className="lg:col-span-8 flex flex-col items-center justify-center space-y-4">
-              <div className="w-full">
-                {animationStyle === "matrix" ? (
-                  <MatrixRainDraw
-                    isSpinning={isSpinning}
-                    isWarmingUp={isWarmingUp}
-                    winnerName={winner?.fullName}
-                    winnerDetails={winner}
-                    allParticipants={participants}
-                    spinDurationMs={5500}
-                    onSpinComplete={handleSpinComplete}
-                    soundEnabled={soundEnabled}
-                    size="large"
-                  />
-                ) : (
-                  <VipCardCarousel
-                    isSpinning={isSpinning}
-                    isWarmingUp={isWarmingUp}
-                    winnerName={winner?.fullName}
-                    winnerDetails={winner}
-                    sampleParticipants={participants}
-                    spinDurationMs={5500}
-                    onSpinComplete={handleSpinComplete}
-                    soundEnabled={soundEnabled}
-                    size="large"
-                  />
-                )}
-              </div>
-
-              {/* Status Bar Panggung Seremonial */}
-              <div className="w-full max-w-xl h-14 rounded-2xl bg-white/5 border border-amber-500/20 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
-                {isWarmingUp ? (
-                  <div className="space-y-0.5 animate-pulse">
-                    <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
-                      ⚡ MENGHUBUNGI SERVER & MENGACAK 100+ PESERTA ⚡
-                    </span>
-                    <span className="font-heading text-sm sm:text-base font-black text-amber-300 truncate block">
-                      Mengacak database dari ratusan peserta festival...
-                    </span>
-                  </div>
-                ) : isSpinning ? (
-                  <div className="space-y-0.5 animate-pulse">
-                    <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
-                      ✦ PENGUNDIAN SEREMONIAL SEDANG BERLANGSUNG ✦
-                    </span>
-                    <span className="font-heading text-sm sm:text-base font-black text-white truncate block">
-                      Menyeleksi pemenang di bawah sorotan panggung...
-                    </span>
-                  </div>
-                ) : showWinnerCard && winner ? (
-                  <span className="text-sm font-bold text-amber-300 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-amber-400" />
-                    <span>Pemenang Sah Terkunci: <strong>{winner.fullName}</strong></span>
-                  </span>
-                ) : (
-                  <div className="flex items-center gap-2 text-white/60 text-xs font-semibold">
-                    <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
-                    <span>Panggung Siap • Menunggu Perintah Putar dari Panitia</span>
-                  </div>
-                )}
-              </div>
+          /* PANGGUNG 1: CAROUSEL VIP SINEMATIK & MATRIX NAMA PESERTA (TAMPIL FULL) */
+          <div className="w-full flex-1 flex flex-col items-center justify-center space-y-5 my-auto">
+            {/* Card Utama: Tampil Penuh Memanfaatkan Seluruh Ruang Layar */}
+            <div className="w-full">
+              {animationStyle === "matrix" ? (
+                <MatrixRainDraw
+                  isSpinning={isSpinning}
+                  isWarmingUp={isWarmingUp}
+                  winnerName={winner?.fullName}
+                  winnerDetails={winner}
+                  allParticipants={participants}
+                  spinDurationMs={5500}
+                  onSpinComplete={handleSpinComplete}
+                  soundEnabled={soundEnabled}
+                  size="large"
+                />
+              ) : (
+                <VipCardCarousel
+                  isSpinning={isSpinning}
+                  isWarmingUp={isWarmingUp}
+                  winnerName={winner?.fullName}
+                  winnerDetails={winner}
+                  sampleParticipants={participants}
+                  spinDurationMs={5500}
+                  onSpinComplete={handleSpinComplete}
+                  soundEnabled={soundEnabled}
+                  size="large"
+                />
+              )}
             </div>
 
-            {/* Kolom Kanan: Hadiah Aktif & Riwayat Terakhir */}
-            <div className="lg:col-span-4 space-y-6">
-              {/* Kartu Hadiah yang Sedang Diundi */}
-              <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-white/10 via-white/5 to-transparent border border-white/15 backdrop-blur-md shadow-2xl space-y-3">
-                <div className="flex items-center gap-2 text-amber-400 text-xs font-bold tracking-widest uppercase">
-                  <Gift className="h-4 w-4" />
-                  <span>SEDANG DIUNDI SAAT INI</span>
-                </div>
-                <h2 className="font-heading text-2xl sm:text-4xl font-black text-white leading-tight drop-shadow-md">
-                  {activePrizeName}
-                </h2>
-                <p className="text-xs sm:text-sm text-white/60 leading-relaxed">
-                  Hadiah resmi doorprize Gebyar Bulan Bahasa untuk peserta festival yang terpilih secara acak.
-                </p>
-              </div>
-
-              {/* Riwayat Pemenang Terakhir di Layar TV */}
-              <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md space-y-3">
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Trophy className="h-4 w-4 text-amber-400" />
-                    <span className="font-heading text-xs sm:text-sm font-bold text-white tracking-wider uppercase">
-                      Pemenang Doorprize Sebelumnya
-                    </span>
-                  </div>
-                  <span className="text-xs font-mono text-white/50">
-                    {history.filter((w) => w.status !== "dibatalkan").length} Pemenang Sah
+            {/* Status Bar Panggung Seremonial */}
+            <div className="w-full max-w-2xl h-14 rounded-2xl bg-white/5 border border-amber-500/20 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
+              {isWarmingUp ? (
+                <div className="space-y-0.5 animate-pulse">
+                  <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
+                    ⚡ MENGHUBUNGI SERVER & MENGACAK 100+ PESERTA ⚡
+                  </span>
+                  <span className="font-heading text-sm sm:text-base font-black text-amber-300 truncate block">
+                    Mengacak database dari ratusan peserta festival...
                   </span>
                 </div>
-
-                {history.filter((w) => w.status !== "dibatalkan").length === 0 ? (
-                  <div className="py-6 text-center text-white/40 text-xs italic">
-                    Belum ada pemenang yang tercatat. Putaran perdana akan segera dimulai!
-                  </div>
-                ) : (
-                  <div className="space-y-2.5 max-h-64 sm:max-h-72 overflow-y-auto pr-1">
-                    {history
-                      .filter((w) => w.status !== "dibatalkan")
-                      .slice(0, 5)
-                      .map((w, i) => {
-                        const timeStr = w.drawnAt
-                          ? new Date(w.drawnAt).toLocaleTimeString("id-ID", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }) + " WIB"
-                          : "";
-
-                        return (
-                          <div
-                            key={w.id || i}
-                            className="p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-400/30 transition-colors text-xs space-y-2"
-                          >
-                            {/* Baris Atas: Nama Pemenang & Asal Sekolah (100% Lebar Penuh) */}
-                            <div className="min-w-0 space-y-0.5">
-                              <span className="font-heading font-bold text-white text-sm sm:text-base block truncate tracking-wide">
-                                {w.participantName}
-                              </span>
-                              <span className="text-[11px] sm:text-xs text-white/70 block truncate">
-                                {w.participantInstitution} • No: {w.participantRegNum}
-                              </span>
-                            </div>
-
-                            {/* Baris Bawah: Badge Hadiah (Kiri) + Jam Pengundian (Kanan) */}
-                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/5">
-                              <span
-                                className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 font-semibold text-[11px] border border-amber-500/30 truncate max-w-[75%]"
-                                title={w.doorprizeName}
-                              >
-                                🎁 {w.doorprizeName}
-                              </span>
-                              {timeStr && (
-                                <span className="text-[10px] font-mono text-white/40 shrink-0">
-                                  {timeStr}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
+              ) : isSpinning ? (
+                <div className="space-y-0.5 animate-pulse">
+                  <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
+                    ✦ PENGUNDIAN SEREMONIAL SEDANG BERLANGSUNG ✦
+                  </span>
+                  <span className="font-heading text-sm sm:text-base font-black text-white truncate block">
+                    Menyeleksi pemenang di bawah sorotan panggung...
+                  </span>
+                </div>
+              ) : showWinnerCard && winner ? (
+                <span className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  <span>Pemenang Sah Terkunci: <strong>{winner.fullName}</strong></span>
+                </span>
+              ) : (
+                <div className="flex items-center gap-2 text-white/60 text-xs font-semibold">
+                  <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
+                  <span>Panggung Siap • Menunggu Perintah Putar dari Panitia</span>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -730,6 +677,113 @@ export function MonitorDoorprizeClient({
                 className="px-8 sm:px-12 py-3.5 sm:py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-heading text-sm sm:text-base font-black uppercase tracking-wider shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:shadow-[0_0_45px_rgba(245,158,11,0.6)] active:scale-95 transition-all cursor-pointer"
               >
                 Lanjutkan Undian Berikutnya
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. DRAWER SLIDE-OVER: DAFTAR PEMENANG DOORPRIZE SEBELUMNYA (GAYA MENU HAMBURGER) */}
+      {showHistoryDrawer && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop gelap transparan (klik di luar untuk menutup) */}
+          <div
+            onClick={() => setShowHistoryDrawer(false)}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
+          />
+
+          {/* Panel Slide-over Drawer dari Kanan */}
+          <div className="relative w-full max-w-md bg-gradient-to-b from-slate-900/98 via-slate-950/98 to-slate-900/98 border-l border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.85)] h-full flex flex-col z-10 animate-in slide-in-from-right duration-300 ease-out">
+            {/* Header Drawer */}
+            <div className="p-5 sm:p-6 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                  <Trophy className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-white text-base tracking-wide">
+                    Pemenang Sebelumnya
+                  </h3>
+                  <p className="text-xs text-white/50 font-mono">
+                    {history.filter((w) => w.status !== "dibatalkan").length} Pemenang Doorprize Sah
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowHistoryDrawer(false)}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors cursor-pointer"
+                title="Tutup Panel"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* List Riwayat Pemenang */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+              {history.filter((w) => w.status !== "dibatalkan").length === 0 ? (
+                <div className="py-20 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto text-white/30">
+                    <Trophy className="h-6 w-6" />
+                  </div>
+                  <p className="text-white/40 text-xs italic">
+                    Belum ada pemenang yang tercatat. Putaran perdana akan segera dimulai!
+                  </p>
+                </div>
+              ) : (
+                history
+                  .filter((w) => w.status !== "dibatalkan")
+                  .map((w, i) => {
+                    const timeStr = w.drawnAt
+                      ? new Date(w.drawnAt).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }) + " WIB"
+                      : "";
+
+                    return (
+                      <div
+                        key={w.id || i}
+                        className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-400/30 transition-all text-xs space-y-2.5 group"
+                      >
+                        {/* Baris Atas: Nama Pemenang & Asal Sekolah */}
+                        <div className="min-w-0 space-y-0.5">
+                          <span className="font-heading font-black text-white text-sm sm:text-base block truncate tracking-wide group-hover:text-amber-200 transition-colors">
+                            {w.participantName}
+                          </span>
+                          <span className="text-[11px] sm:text-xs text-white/70 block truncate">
+                            {w.participantInstitution} • No: {w.participantRegNum}
+                          </span>
+                        </div>
+
+                        {/* Baris Bawah: Badge Hadiah & Jam Pengundian */}
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5">
+                          <span
+                            className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 font-semibold text-[11px] border border-amber-500/30 truncate max-w-[70%]"
+                            title={w.doorprizeName}
+                          >
+                            🎁 {w.doorprizeName}
+                          </span>
+                          {timeStr && (
+                            <span className="text-[10px] font-mono text-white/40 shrink-0">
+                              {timeStr}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            {/* Footer Drawer */}
+            <div className="p-4 border-t border-white/10 bg-white/[0.02] flex items-center justify-between text-xs text-white/40 font-mono">
+              <span>Gebyar Bulan Bahasa</span>
+              <button
+                onClick={() => setShowHistoryDrawer(false)}
+                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer text-xs font-sans font-semibold"
+              >
+                Tutup
               </button>
             </div>
           </div>
