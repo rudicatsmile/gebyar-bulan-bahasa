@@ -148,7 +148,7 @@ export function DashboardLayout({
   const [standCount, setStandCount] = React.useState<number | null>(null);
   const [currentUserRole, setCurrentUserRole] = React.useState<string | null>(null);
 
-  // Ambil data role spesifik pengguna yang sedang login (membedakan super_admin dari seksi_acara)
+  // Ambil data role spesifik pengguna yang sedang login & total_points jika peserta (1x request auth)
   React.useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -163,11 +163,27 @@ export function DashboardLayout({
             setCurrentUserRole(data.role);
           }
         });
+
+      if (role === "peserta" && participantPoints === undefined) {
+        supabase
+          .from("participants")
+          .select("total_points")
+          .eq("user_id", user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.total_points !== undefined && data?.total_points !== null) {
+              setInternalPoints(data.total_points);
+            }
+          });
+      }
     });
-  }, []);
+  }, [role, participantPoints]);
 
   // ---------- Realtime badge counts from Supabase database ----------
   const fetchBadgeCounts = React.useCallback(() => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
     const supabase = createClient();
 
     if (role === "seksi_acara") {
@@ -233,6 +249,8 @@ export function DashboardLayout({
     // Initial fetch
     fetchBadgeCounts();
 
+    let pollId: ReturnType<typeof setInterval> | null = null;
+
     // Subscribe to realtime changes on relevant tables
     const supabase = createClient();
     const channel = supabase
@@ -259,35 +277,23 @@ export function DashboardLayout({
       )
       .subscribe((status: string) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          // Fallback: poll every 15 seconds if realtime fails
-          const pollId = setInterval(fetchBadgeCounts, 15_000);
-          return () => clearInterval(pollId);
+          // Fallback: poll every 45 seconds if realtime fails
+          if (!pollId) {
+            pollId = setInterval(fetchBadgeCounts, 45_000);
+          }
+        } else if (status === "SUBSCRIBED") {
+          if (pollId) {
+            clearInterval(pollId);
+            pollId = null;
+          }
         }
       });
 
     return () => {
+      if (pollId) clearInterval(pollId);
       supabase.removeChannel(channel);
     };
   }, [role, fetchBadgeCounts]);
-
-  React.useEffect(() => {
-    if (role === "peserta" && participantPoints === undefined) {
-      const supabase = createClient();
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (!user) return;
-        supabase
-          .from("participants")
-          .select("total_points")
-          .eq("user_id", user.id)
-          .maybeSingle()
-          .then(({ data }) => {
-            if (data?.total_points !== undefined && data?.total_points !== null) {
-              setInternalPoints(data.total_points);
-            }
-          });
-      });
-    }
-  }, [role, participantPoints]);
 
   const displayPoints =
     participantPoints !== undefined

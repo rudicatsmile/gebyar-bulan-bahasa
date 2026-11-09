@@ -531,8 +531,8 @@ export async function getParticipantJigsawStatus(
           },
         };
       }
-    } catch (ptErr) {
-      console.warn("getParticipantJigsawStatus point_transactions notice:", ptErr);
+    } catch {
+      // ignore
     }
 
     // 4. Memory fallback
@@ -544,8 +544,7 @@ export async function getParticipantJigsawStatus(
     }
 
     return { hasCompleted: false };
-  } catch (err: unknown) {
-    console.warn("getParticipantJigsawStatus error:", err);
+  } catch {
     const memoryMatch = fallbackAttempts.find(
       (a) => a.participantId === participantId && a.puzzleId === puzzleId
     );

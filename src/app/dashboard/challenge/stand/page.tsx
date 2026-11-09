@@ -240,12 +240,12 @@ export default function DashboardKelolaStandPage() {
         }
       });
 
-    // 2. Polling cadangan (setiap 4 detik) saat tab browser aktif untuk ketahanan koneksi
+    // 2. Polling cadangan hemat (setiap 30 detik) saat tab browser aktif sebagai jaring pengaman realtime
     const pollInterval = setInterval(() => {
       if (isMounted && typeof document !== "undefined" && document.visibilityState === "visible") {
         handleRealtimeUpdate();
       }
-    }, 4000);
+    }, 30000);
 
     return () => {
       isMounted = false;

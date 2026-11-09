@@ -1242,8 +1242,7 @@ export async function checkParticipantQrHurufStatus(
     }
 
     return { hasCompleted: false };
-  } catch (err) {
-    console.warn("checkParticipantQrHurufStatus error:", err);
+  } catch {
     return { hasCompleted: false };
   }
 }

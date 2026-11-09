@@ -43,7 +43,7 @@ interface UseRealtimeMonitoringReturn extends MonitoringData {
   refresh: () => Promise<void>;
 }
 
-const POLL_INTERVAL_MS = 8_000;
+const POLL_INTERVAL_MS = 20_000;
 
 export function useRealtimeMonitoring(slug: string): UseRealtimeMonitoringReturn {
   const [loading, setLoading] = React.useState(true);
@@ -207,7 +207,7 @@ export function useRealtimeMonitoring(slug: string): UseRealtimeMonitoringReturn
       if (pollingRef.current) return; // Sudah polling
       usingPolling = true;
       pollingRef.current = setInterval(() => {
-        if (mountedRef.current) {
+        if (mountedRef.current && typeof document !== "undefined" && document.visibilityState === "visible") {
           fetchFullData(false);
         }
       }, POLL_INTERVAL_MS);

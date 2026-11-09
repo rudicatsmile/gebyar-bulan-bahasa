@@ -157,12 +157,12 @@ export default function DashboardKelolaRewardPage() {
         }
       });
 
-    // 2. Polling cadangan (setiap 5 detik) saat tab browser aktif untuk ketahanan koneksi
+    // 2. Polling cadangan hemat (setiap 30 detik) saat tab browser aktif sebagai jaring pengaman realtime
     const pollInterval = setInterval(() => {
       if (isMounted && typeof document !== "undefined" && document.visibilityState === "visible") {
         loadData(false);
       }
-    }, 5000);
+    }, 30000);
 
     return () => {
       isMounted = false;

@@ -8,6 +8,24 @@ export async function middleware(request: NextRequest) {
     },
   });
 
+  const pathname = request.nextUrl.pathname;
+
+  // Protect internal routes if user is not authenticated
+  const isProtectedRoute =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/juri") ||
+    pathname.startsWith("/media") ||
+    pathname.startsWith("/peserta");
+
+  const isAuthRoute = pathname === "/masuk" || pathname === "/daftar";
+
+  // OPTIMASI LOG INGESTION: Jika bukan protected route dan bukan auth route
+  // (misal rute publik: /monitor, /api/*, /lomba, /pemenang, /jadwal, dsb.),
+  // lewati inisialisasi dan verifikasi Supabase Auth untuk mencegah lonjakan log request tak perlu.
+  if (!isProtectedRoute && !isAuthRoute) {
+    return response;
+  }
+
   const FALLBACK_URL = "https://lumrqtxmdcrjxjxzrqau.supabase.co";
   const FALLBACK_ANON_KEY =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1bXJxdHhtZGNyanhqeHpycWF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0NjU0MDcsImV4cCI6MjEwNjA0MTQwN30.icWubZZEdIk1aX_TvcYn8xuS4_WabCSDvokDVvfXz0E";
@@ -39,15 +57,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
-
-  // Protect internal routes if user is not authenticated
-  const isProtectedRoute =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/juri") ||
-    pathname.startsWith("/media") ||
-    pathname.startsWith("/peserta");
 
   if (!user && isProtectedRoute) {
     // If not logged in, redirect to /masuk

@@ -20,8 +20,11 @@ export default function DashboardBroadcastPage() {
   const [sendError, setSendError] = React.useState<string | null>(null);
   const [activeEmergency, setActiveEmergency] = React.useState<string | null>(null);
 
-  // Pantau status siaran darurat aktif pada monitor (polling ringan).
+  // Pantau status siaran darurat aktif pada monitor (polling santai).
   const refreshActiveEmergency = React.useCallback(async () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
     try {
       const res = await fetch("/api/monitor", { cache: "no-store" });
       if (res.ok) {
@@ -35,7 +38,7 @@ export default function DashboardBroadcastPage() {
 
   React.useEffect(() => {
     refreshActiveEmergency();
-    const id = setInterval(refreshActiveEmergency, 5000);
+    const id = setInterval(refreshActiveEmergency, 30000);
     return () => clearInterval(id);
   }, [refreshActiveEmergency]);
 

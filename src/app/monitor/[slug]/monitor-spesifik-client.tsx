@@ -30,9 +30,12 @@ export function MonitorSpesifikClient({ slug: rawSlug, initialData }: MonitorSpe
   const [data, setData] = React.useState<MonitorDisplayData>(initialData);
   const slug = rawSlug.toLowerCase();
 
-  // Polling every 10 seconds for real-time updates
+  // Polling hemat (30s) untuk pembaruan data layar
   React.useEffect(() => {
     const fetchLatest = async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
       try {
         const res = await fetch("/api/monitor", { cache: "no-store" });
         if (res.ok) {
@@ -44,7 +47,7 @@ export function MonitorSpesifikClient({ slug: rawSlug, initialData }: MonitorSpe
       }
     };
 
-    const pollInterval = setInterval(fetchLatest, 10000);
+    const pollInterval = setInterval(fetchLatest, 30000);
     return () => clearInterval(pollInterval);
   }, []);
 

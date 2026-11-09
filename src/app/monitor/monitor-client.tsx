@@ -72,6 +72,9 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
 
   // Ambil data monitor terbaru (dipakai polling & realtime bersama-sama)
   const fetchLatest = React.useCallback(async () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
     try {
       const res = await fetch("/api/monitor", { cache: "no-store" });
       if (res.ok) {
@@ -83,9 +86,9 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
     }
   }, []);
 
-  // Polling cepat + subscribe realtime monitor_displays & event_settings
+  // Polling santai (30s) sebagai fallback + subscribe realtime monitor_displays & event_settings
   React.useEffect(() => {
-    const pollInterval = setInterval(fetchLatest, 5000);
+    const pollInterval = setInterval(fetchLatest, 30000);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let channel: any = null;

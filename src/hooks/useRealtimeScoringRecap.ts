@@ -38,7 +38,7 @@ export interface UseRealtimeScoringRecapReturn {
   refresh: () => Promise<void>;
 }
 
-const POLL_INTERVAL_MS = 8_000;
+const POLL_INTERVAL_MS = 30_000;
 
 export function useRealtimeScoringRecap(competitionIdOrSlug: string): UseRealtimeScoringRecapReturn {
   const [loading, setLoading] = React.useState(true);
