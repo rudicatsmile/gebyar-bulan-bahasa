@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   getParticipantGradingSheet,
   saveAssessment,
   GradingCriterionItem,
@@ -20,12 +27,16 @@ import {
   CheckCircle2,
   Sliders,
   AlertCircle,
+  AlertTriangle,
   Loader2,
   User,
   UserCheck,
   Lock,
   Layers,
   ShieldAlert,
+  Trophy,
+  School,
+  FileText,
 } from "lucide-react";
 
 export default function FormPenilaianDigitalPage() {
@@ -81,6 +92,11 @@ export default function FormPenilaianDigitalPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // Modern Modal Dialog States
+  const [confirmModalOpen, setConfirmModalOpen] = React.useState(false);
+  const [incompleteModalOpen, setIncompleteModalOpen] = React.useState(false);
+  const [unfilledCriteria, setUnfilledCriteria] = React.useState<GradingCriterionItem[]>([]);
 
   const loadSheet = React.useCallback(async () => {
     if (!regId) return;
@@ -223,7 +239,7 @@ export default function FormPenilaianDigitalPage() {
     }
   };
 
-  const handleSubmitFinal = async () => {
+  const handleOpenFinalConfirmation = () => {
     if (!competition || !participant) return;
     if (!isVerified) {
       setFeedbackNotice({
@@ -233,19 +249,23 @@ export default function FormPenilaianDigitalPage() {
       return;
     }
 
-    // Validasi kelengkapan kriteria
-    const allFilled = criteria.every(
-      (c) => scores[c.id] !== undefined && Number(scores[c.id]) > 0
+    // Validasi kelengkapan nilai seluruh kriteria
+    const emptyOrZero = criteria.filter(
+      (c) => scores[c.id] === undefined || Number(scores[c.id]) <= 0
     );
-    if (!allFilled) {
-      alert("Harap lengkapi nilai untuk seluruh kriteria penilaian sebelum mengirimkan nilai final.");
+
+    if (emptyOrZero.length > 0) {
+      setUnfilledCriteria(emptyOrZero);
+      setIncompleteModalOpen(true);
       return;
     }
 
-    const confirmSubmit = window.confirm(
-      `Kirim nilai final sebesar ${weightedTotal.toFixed(2)} pts untuk peserta ${participant.fullName}? Nilai akan langsung masuk ke rekapitulasi kejuaraan.`
-    );
-    if (!confirmSubmit) return;
+    // Seluruh kriteria terisi lengkap -> Buka modal konfirmasi modern
+    setConfirmModalOpen(true);
+  };
+
+  const handleExecuteSubmitFinal = async () => {
+    if (!competition || !participant) return;
 
     setIsSaving(true);
     setFeedbackNotice(null);
@@ -272,8 +292,10 @@ export default function FormPenilaianDigitalPage() {
           message: res.error || "Gagal mengirim penilaian final.",
         });
         setIsSaving(false);
+        setConfirmModalOpen(false);
       } else {
         setStatus("terkirim");
+        setConfirmModalOpen(false);
         setFeedbackNotice({
           type: "success",
           message: "Penilaian final berhasil dikirimkan ke database dan diagregasikan ke rekapitulasi lomba!",
@@ -288,6 +310,7 @@ export default function FormPenilaianDigitalPage() {
         message: err instanceof Error ? err.message : "Terjadi kesalahan saat mengirim nilai final.",
       });
       setIsSaving(false);
+      setConfirmModalOpen(false);
     }
   };
 
@@ -613,7 +636,7 @@ export default function FormPenilaianDigitalPage() {
             <Button
               type="button"
               disabled={isSaving || isLocked}
-              onClick={handleSubmitFinal}
+              onClick={handleOpenFinalConfirmation}
               size="lg"
               className="text-xs font-semibold gap-1.5 cursor-pointer shadow-xs disabled:cursor-not-allowed"
               title={!isVerified ? "Penilaian dikunci karena peserta belum diverifikasi" : undefined}
@@ -627,6 +650,204 @@ export default function FormPenilaianDigitalPage() {
             </Button>
           </div>
         </div>
+
+        {/* ====================================================================== */}
+        {/* MODAL 1: KONFIRMASI MODERN PENGIRIMAN NILAI FINAL                      */}
+        {/* ====================================================================== */}
+        <Dialog open={confirmModalOpen} onOpenChange={setConfirmModalOpen} className="max-w-xl p-0 overflow-hidden">
+          <div className="p-5 sm:p-6 space-y-4">
+            {/* Header */}
+            <div className="flex items-start gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-500 flex items-center justify-center shrink-0">
+                <Trophy className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-base sm:text-lg font-bold text-foreground">
+                  Konfirmasi Kirim Nilai Final
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Pastikan seluruh evaluasi telah sesuai sebelum nilai resmi dimasukkan ke rekapitulasi kejuaraan.
+                </DialogDescription>
+              </div>
+            </div>
+
+            {/* Profil Singkat Peserta */}
+            <div className="p-3.5 rounded-xl border border-border bg-muted/40 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[11px] font-mono font-bold text-accent px-2 py-0.5 rounded bg-accent/10 border border-accent/20">
+                  {participant.registrationNumber}
+                </span>
+                <span className="text-[11px] font-medium text-muted-foreground truncate">
+                  {competition.name} {competition.stageName ? `• ${competition.stageName}` : ""}
+                </span>
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-foreground truncate">
+                  {competition.category?.toLowerCase() === "kelompok" ||
+                  competition.type === "kelompok" ||
+                  Boolean(participant.teamName)
+                    ? (participant.teamName || participant.fullName)
+                    : participant.fullName}
+                </h4>
+                <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
+                  <School className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span>{participant.institution}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Banner Skor Terbobot Utama */}
+            <div className="p-4 rounded-xl border border-accent/40 bg-gradient-to-br from-accent/15 via-accent/5 to-transparent flex items-center justify-between gap-4">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-accent font-bold block">
+                  Total Skor Terbobot
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  Kalkulasi otomatis dari {criteria.length} kriteria
+                </span>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-mono text-3xl font-black text-accent leading-none">
+                  {weightedTotal.toFixed(2)}
+                </div>
+                <span className="text-[10px] text-muted-foreground block mt-1">
+                  dari skor maks 100.00 pts
+                </span>
+              </div>
+            </div>
+
+            {/* Rincian Aspek Penilaian */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-semibold text-foreground px-0.5">
+                <span>Rincian Nilai per Kriteria</span>
+                <span className="text-[11px] text-muted-foreground font-normal">
+                  Skor (Bobot) → Kontribusi
+                </span>
+              </div>
+              <div className="border border-border rounded-lg overflow-hidden divide-y divide-border text-xs max-h-40 overflow-y-auto bg-card">
+                {criteria.map((c) => {
+                  const score = scores[c.id] || 0;
+                  const contribution = (score * c.weight) / 100;
+                  return (
+                    <div key={c.id} className="p-2.5 flex items-center justify-between gap-2 hover:bg-muted/30 transition-colors">
+                      <div className="min-w-0 pr-2">
+                        <p className="font-medium text-foreground truncate">{c.name}</p>
+                        <span className="text-[10px] text-muted-foreground">Bobot aspek: {c.weight}%</span>
+                      </div>
+                      <div className="text-right shrink-0 font-mono">
+                        <span className="font-bold text-foreground">{score}</span>
+                        <span className="text-[10px] text-accent block">
+                          +{contribution.toFixed(2)} pts
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Catatan Juri jika ada */}
+            {notes.trim() && (
+              <div className="p-3 rounded-lg border border-border bg-muted/20 space-y-1">
+                <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                  <FileText className="h-3 w-3 text-muted-foreground" />
+                  Catatan Evaluasi Dewan Juri:
+                </span>
+                <p className="text-xs text-muted-foreground italic line-clamp-2">
+                  &ldquo;{notes.trim()}&rdquo;
+                </p>
+              </div>
+            )}
+
+            {/* Peringatan Informatif */}
+            <div className="p-3 rounded-xl border border-blue-500/30 bg-blue-500/5 text-blue-900 dark:text-blue-200 text-xs flex items-start gap-2.5">
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
+              <span className="leading-relaxed text-[11px]">
+                Setelah dikirim, nilai ini akan langsung diagregasikan ke papan skor panitia untuk penentuan pemenang. Anda tetap dapat memperbarui nilai selama lomba belum dikunci oleh panitia.
+              </span>
+            </div>
+          </div>
+
+          {/* Action Buttons Footer */}
+          <div className="p-4 bg-muted/40 border-t border-border flex items-center justify-end gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSaving}
+              onClick={() => setConfirmModalOpen(false)}
+              className="text-xs cursor-pointer"
+            >
+              Periksa Kembali
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSaving}
+              onClick={handleExecuteSubmitFinal}
+              className="text-xs font-semibold gap-1.5 cursor-pointer bg-accent text-accent-foreground hover:bg-accent/90 shadow-xs"
+            >
+              {isSaving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
+              <span>Ya, Kirimkan Nilai Final</span>
+            </Button>
+          </div>
+        </Dialog>
+
+        {/* ====================================================================== */}
+        {/* MODAL 2: PERINGATAN MODERN KRITERIA BELUM LENGKAP                       */}
+        {/* ====================================================================== */}
+        <Dialog open={incompleteModalOpen} onOpenChange={setIncompleteModalOpen} className="max-w-md p-0 overflow-hidden">
+          <div className="p-5 sm:p-6 space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-base sm:text-lg font-bold text-foreground">
+                  Kriteria Nilai Belum Lengkap
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Terdapat {unfilledCriteria.length} kriteria yang belum diberi nilai (&gt; 0).
+                </DialogDescription>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs leading-relaxed">
+              Seluruh kriteria penilaian wajib diisi dengan skor minimal 1 sebelum Anda dapat mengirimkan nilai final peserta ini.
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                Kriteria yang Perlu Dilengkapi:
+              </span>
+              <div className="border border-border rounded-lg overflow-hidden divide-y divide-border text-xs max-h-44 overflow-y-auto bg-card">
+                {unfilledCriteria.map((c) => (
+                  <div key={c.id} className="p-2.5 flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground truncate">{c.name}</span>
+                    <Badge variant="warning" className="text-[10px] shrink-0 border border-amber-500/40">
+                      Bobot {c.weight}%
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-muted/40 border-t border-border flex items-center justify-end">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setIncompleteModalOpen(false)}
+              className="text-xs font-semibold cursor-pointer"
+            >
+              Lengkapi Nilai Sekarang
+            </Button>
+          </div>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
