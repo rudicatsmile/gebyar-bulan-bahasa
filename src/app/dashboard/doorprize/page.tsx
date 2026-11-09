@@ -59,14 +59,18 @@ import {
   getBuzzerRoundState,
   switchDoorprizeMode,
   getDoorprizeStageMode,
+  saveDoorprizeAnimationStyle,
+  getDoorprizeAnimationStyle,
   type DoorprizeItem,
   type DoorprizeWinnerRecord,
   type DoorprizeFilter,
   type EligibleParticipantItem,
   type BuzzerLeaderboardEntry,
   type BuzzerRoundState,
+  type DoorprizeAnimationStyle,
 } from "@/app/actions/doorprize";
 import { VipCardCarousel } from "@/components/doorprize/VipCardCarousel";
+import { MatrixRainDraw } from "@/components/doorprize/MatrixRainDraw";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
 import { F1StartLights } from "@/components/doorprize/F1StartLights";
 import { BuzzerLeaderboardPodium } from "@/components/doorprize/BuzzerLeaderboardPodium";
@@ -116,6 +120,8 @@ export default function DashboardDoorprizePage() {
 
   // Mode State: "vip_carousel" (Undian Sinematik VIP) vs "buzzer" (Buzzer Kilat F1 Reflex)
   const [activeMode, setActiveMode] = React.useState<"vip_carousel" | "buzzer">("vip_carousel");
+  const [animationStyle, setAnimationStyle] = React.useState<DoorprizeAnimationStyle>("matrix");
+  const [savingStyle, setSavingStyle] = React.useState(false);
 
   // Buzzer Kilat F1 States
   const [buzzerRound, setBuzzerRound] = React.useState<BuzzerRoundState | null>(null);
@@ -159,12 +165,13 @@ export default function DashboardDoorprizePage() {
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const [prizesRes, historyRes, poolRes, buzzerRes, modeRes] = await Promise.all([
+      const [prizesRes, historyRes, poolRes, buzzerRes, modeRes, styleRes] = await Promise.all([
         getDoorprizePrizes(),
         getDoorprizeHistory(),
         getDoorprizeEligibleParticipants(filters),
         getBuzzerRoundState(),
         getDoorprizeStageMode(),
+        getDoorprizeAnimationStyle(),
       ]);
 
       if (prizesRes.success && prizesRes.prizes) {
@@ -193,6 +200,10 @@ export default function DashboardDoorprizePage() {
 
       if (modeRes.success && modeRes.mode) {
         setActiveMode(modeRes.mode);
+      }
+
+      if (styleRes.success && styleRes.style) {
+        setAnimationStyle(styleRes.style);
       }
     } catch (err) {
       console.error("Gagal load data doorprize:", err);
@@ -251,6 +262,33 @@ export default function DashboardDoorprizePage() {
     return () => clearInterval(interval);
   }, [isSpinning, sampleParticipants]);
 
+  // Ganti Gaya Animasi Undian Monitor Panggung (Matrix vs VIP Card)
+  const handleStyleChange = async (newStyle: DoorprizeAnimationStyle) => {
+    setAnimationStyle(newStyle);
+    setSavingStyle(true);
+    try {
+      const res = await saveDoorprizeAnimationStyle(newStyle);
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          message: `Gaya animasi monitor panggung berhasil diubah ke: ${
+            newStyle === "matrix" ? "Matrix Digital Stream" : "VIP Card Sinematik"
+          }`,
+        });
+        setTimeout(() => setFeedback(null), 3000);
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal menyimpan gaya animasi.",
+        });
+      }
+    } catch {
+      setFeedback({ type: "error", message: "Gagal menyimpan gaya animasi." });
+    } finally {
+      setSavingStyle(false);
+    }
+  };
+
   // Handle Action: Spin Doorprize
   const handleSpin = async () => {
     if (isSpinning || isWarmingUp) return;
@@ -275,6 +313,7 @@ export default function DashboardDoorprizePage() {
     sendLiveBroadcast("doorprize_spin_initiating", {
       prizeName: selectedPrizeName,
       eligibleCount,
+      animationStyle,
     });
 
     try {
@@ -283,6 +322,7 @@ export default function DashboardDoorprizePage() {
         prizeName: selectedPrizeName,
         prizeId: selectedPrizeId,
         filters,
+        animationStyle,
       });
 
       if (!res.success || !res.winner) {
@@ -312,6 +352,7 @@ export default function DashboardDoorprizePage() {
         prizeName: selectedPrizeName,
         targetSegmentIndex: res.targetSegmentIndex ?? 0,
         spinDurationMs: 5500,
+        animationStyle,
       });
     } catch (err) {
       setIsWarmingUp(false);
@@ -880,24 +921,53 @@ export default function DashboardDoorprizePage() {
           <div className="lg:col-span-7 flex flex-col items-center space-y-5">
             {activeMode === "vip_carousel" ? (
               <Card className="p-4 sm:p-6 lg:p-8 rounded-3xl border-2 border-accent/40 bg-gradient-to-b from-card via-card to-background shadow-xl w-full flex flex-col items-center relative overflow-hidden">
-                {/* Stage Lights Banner */}
-                <div className="w-full flex items-center justify-between pb-3 sm:pb-4 border-b border-border/80 gap-2">
+                {/* Stage Lights Banner & Animation Style Dropdown */}
+                <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between pb-3 sm:pb-4 border-b border-border/80 gap-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
                     <span className="font-heading text-xs sm:text-sm font-bold tracking-wider text-foreground uppercase truncate">
-                      PANGGUNG SINEMATIK VIP CARD
+                      {animationStyle === "matrix"
+                        ? "PANGGUNG DIGITAL MATRIX STREAM"
+                        : "PANGGUNG SINEMATIK VIP CARD"}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    {/* Dropdown Pilihan Gaya Animasi Monitor Publik */}
+                    <div className="flex items-center gap-1.5 bg-muted/60 px-2 py-1 rounded-xl border border-border">
+                      <label className="text-[10px] font-mono font-bold text-muted-foreground uppercase">
+                        Animasi:
+                      </label>
+                      <select
+                        value={animationStyle}
+                        onChange={(e) =>
+                          handleStyleChange(e.target.value as DoorprizeAnimationStyle)
+                        }
+                        disabled={isSpinning || isWarmingUp || savingStyle}
+                        className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer"
+                        title="Tentukan gaya animasi pengundian yang tampil di layar monitor panggung"
+                      >
+                        <option value="matrix" className="bg-background text-foreground">
+                          Matrix
+                        </option>
+                        <option value="vip_card" className="bg-background text-foreground">
+                          VIP Card
+                        </option>
+                      </select>
+                    </div>
+
                     <button
                       onClick={() => setSoundEnabled(!soundEnabled)}
                       className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
                       title={soundEnabled ? "Nonaktifkan Suara" : "Aktifkan Suara"}
                     >
-                      {soundEnabled ? <Volume2 className="h-4 w-4 text-accent" /> : <VolumeX className="h-4 w-4" />}
+                      {soundEnabled ? (
+                        <Volume2 className="h-4 w-4 text-accent" />
+                      ) : (
+                        <VolumeX className="h-4 w-4" />
+                      )}
                     </button>
-                    <Badge variant="default" className="text-[10px] font-mono">
+                    <Badge variant="default" className="text-[10px] font-mono shrink-0">
                       Pool: {eligibleCount} Peserta
                     </Badge>
                   </div>
@@ -913,19 +983,33 @@ export default function DashboardDoorprizePage() {
                   </h3>
                 </div>
 
-                {/* Sinematik VIP Card Carousel Stage */}
+                {/* Stage Animasi (Matrix vs VIP Card) */}
                 <div className="w-full py-1">
-                  <VipCardCarousel
-                    isSpinning={isSpinning}
-                    isWarmingUp={isWarmingUp}
-                    winnerName={currentWinner?.fullName}
-                    winnerDetails={currentWinner}
-                    sampleParticipants={sampleParticipants}
-                    spinDurationMs={5500}
-                    onSpinComplete={handleSpinComplete}
-                    soundEnabled={soundEnabled}
-                    size="default"
-                  />
+                  {animationStyle === "matrix" ? (
+                    <MatrixRainDraw
+                      isSpinning={isSpinning}
+                      isWarmingUp={isWarmingUp}
+                      winnerName={currentWinner?.fullName}
+                      winnerDetails={currentWinner}
+                      allParticipants={sampleParticipants}
+                      spinDurationMs={5500}
+                      onSpinComplete={handleSpinComplete}
+                      soundEnabled={soundEnabled}
+                      size="default"
+                    />
+                  ) : (
+                    <VipCardCarousel
+                      isSpinning={isSpinning}
+                      isWarmingUp={isWarmingUp}
+                      winnerName={currentWinner?.fullName}
+                      winnerDetails={currentWinner}
+                      sampleParticipants={sampleParticipants}
+                      spinDurationMs={5500}
+                      onSpinComplete={handleSpinComplete}
+                      soundEnabled={soundEnabled}
+                      size="default"
+                    />
+                  )}
                 </div>
 
                 {/* Status Bar Panggung Carousel */}
@@ -942,10 +1026,15 @@ export default function DashboardDoorprizePage() {
                   ) : isSpinning ? (
                     <div className="space-y-0.5 animate-pulse">
                       <span className="text-[10px] font-mono text-accent uppercase tracking-wider block font-bold">
-                        ⚡ MEMUTAR PANGGUNG VIP SINEMATIK...
+                        {animationStyle === "matrix"
+                          ? "⚡ MENGACAK CYBER MATRIX STREAM..."
+                          : "⚡ MEMUTAR PANGGUNG VIP SINEMATIK..."}
                       </span>
                       <span className="font-heading text-xs sm:text-sm font-bold text-foreground truncate block">
-                        {shufflingName || "Menggeser barisan kartu peserta resmi..."}
+                        {shufflingName ||
+                          (animationStyle === "matrix"
+                            ? "Mengalirkan seluruh data peserta terdaftar..."
+                            : "Menggeser barisan kartu peserta resmi...")}
                       </span>
                     </div>
                   ) : currentWinner ? (
@@ -974,7 +1063,11 @@ export default function DashboardDoorprizePage() {
                     ) : isSpinning ? (
                       <div className="flex items-center justify-center gap-2">
                         <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 animate-spin shrink-0 fill-slate-950 text-slate-950" />
-                        <span className="truncate">MEMUTAR PANGGUNG VIP...</span>
+                        <span className="truncate">
+                          {animationStyle === "matrix"
+                            ? "MENGACAK MATRIX STREAM..."
+                            : "MEMUTAR PANGGUNG VIP..."}
+                        </span>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-2">

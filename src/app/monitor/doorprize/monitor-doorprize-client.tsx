@@ -20,6 +20,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { soundEffects } from "@/components/doorprize/sound-effects";
 import { VipCardCarousel } from "@/components/doorprize/VipCardCarousel";
+import { MatrixRainDraw } from "@/components/doorprize/MatrixRainDraw";
 import { ConfettiCanvas } from "@/components/doorprize/ConfettiCanvas";
 import { F1StartLights } from "@/components/doorprize/F1StartLights";
 import { BuzzerLeaderboardPodium } from "@/components/doorprize/BuzzerLeaderboardPodium";
@@ -29,10 +30,12 @@ import {
   getDoorprizePrizes,
   getDoorprizeHistory,
   getDoorprizeStageMode,
+  getDoorprizeAnimationStyle,
   type DoorprizeItem,
   type DoorprizeWinnerRecord,
   type EligibleParticipantItem,
   type BuzzerLeaderboardEntry,
+  type DoorprizeAnimationStyle,
 } from "@/app/actions/doorprize";
 
 function maskPhoneNumber(phone?: string | null): string {
@@ -86,6 +89,7 @@ export function MonitorDoorprizeClient({
 
   // Game mode & Buzzer states: "vip_carousel" vs "buzzer"
   const [activeMode, setActiveMode] = React.useState<"vip_carousel" | "buzzer">("vip_carousel");
+  const [animationStyle, setAnimationStyle] = React.useState<DoorprizeAnimationStyle>("matrix");
   const [buzzerStatus, setBuzzerStatus] = React.useState<"idle" | "countdown" | "green" | "finished">("idle");
   const [buzzerDelayMs, setBuzzerDelayMs] = React.useState(2800);
   const [buzzerLeaderboard, setBuzzerLeaderboard] = React.useState<BuzzerLeaderboardEntry[]>([]);
@@ -114,11 +118,16 @@ export function MonitorDoorprizeClient({
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
-  // Initial Stage Mode Fetch
+  // Initial Stage Mode & Animation Style Fetch
   React.useEffect(() => {
     getDoorprizeStageMode().then((res) => {
       if (res.success && res.mode) {
         setActiveMode(res.mode);
+      }
+    });
+    getDoorprizeAnimationStyle().then((res) => {
+      if (res.success && res.style) {
+        setAnimationStyle(res.style);
       }
     });
   }, []);
@@ -141,6 +150,9 @@ export function MonitorDoorprizeClient({
       .on("broadcast", { event: "doorprize_spin_started" }, ({ payload }) => {
         setIsWarmingUp(false);
         setSuspensePhase("idle");
+        if (payload?.animationStyle) {
+          setAnimationStyle(payload.animationStyle);
+        }
         if (payload?.winner) {
           setActiveMode("vip_carousel");
           setShowWinnerCard(false);
@@ -213,6 +225,11 @@ export function MonitorDoorprizeClient({
         if (payload?.mode) {
           const nextMode = payload.mode === "buzzer" ? "buzzer" : "vip_carousel";
           setActiveMode(nextMode);
+        }
+      })
+      .on("broadcast", { event: "doorprize_animation_style_changed" }, ({ payload }) => {
+        if (payload?.style) {
+          setAnimationStyle(payload.style);
         }
       })
       .subscribe((status) => {
@@ -373,17 +390,31 @@ export function MonitorDoorprizeClient({
             {/* Kolom Kiri: Panggung Sinematik VIP Card Carousel */}
             <div className="lg:col-span-8 flex flex-col items-center justify-center space-y-4">
               <div className="w-full">
-                <VipCardCarousel
-                  isSpinning={isSpinning}
-                  isWarmingUp={isWarmingUp}
-                  winnerName={winner?.fullName}
-                  winnerDetails={winner}
-                  sampleParticipants={participants}
-                  spinDurationMs={5500}
-                  onSpinComplete={handleSpinComplete}
-                  soundEnabled={soundEnabled}
-                  size="large"
-                />
+                {animationStyle === "matrix" ? (
+                  <MatrixRainDraw
+                    isSpinning={isSpinning}
+                    isWarmingUp={isWarmingUp}
+                    winnerName={winner?.fullName}
+                    winnerDetails={winner}
+                    allParticipants={participants}
+                    spinDurationMs={5500}
+                    onSpinComplete={handleSpinComplete}
+                    soundEnabled={soundEnabled}
+                    size="large"
+                  />
+                ) : (
+                  <VipCardCarousel
+                    isSpinning={isSpinning}
+                    isWarmingUp={isWarmingUp}
+                    winnerName={winner?.fullName}
+                    winnerDetails={winner}
+                    sampleParticipants={participants}
+                    spinDurationMs={5500}
+                    onSpinComplete={handleSpinComplete}
+                    soundEnabled={soundEnabled}
+                    size="large"
+                  />
+                )}
               </div>
 
               {/* Status Bar Panggung Seremonial */}

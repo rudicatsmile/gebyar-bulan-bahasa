@@ -487,6 +487,7 @@ export async function spinDoorprize(payload: {
   prizeId?: string | null;
   rewardId?: string | null;
   filters: DoorprizeFilter;
+  animationStyle?: "vip_card" | "matrix";
 }): Promise<{
   success: boolean;
   winner?: EligibleParticipantItem;
@@ -620,6 +621,7 @@ export async function spinDoorprize(payload: {
       poolCount,
       drawnAt,
       spinDurationMs: 5500,
+      animationStyle: payload.animationStyle || "matrix",
     });
 
     revalidatePath("/dashboard/doorprize");
@@ -1153,3 +1155,61 @@ export async function getDoorprizeStageMode(): Promise<{
     return { success: true, mode: "vip_carousel" };
   }
 }
+
+export type DoorprizeAnimationStyle = "vip_card" | "matrix";
+
+/**
+ * 14. Ganti Gaya Animasi Undian Doorprize (VIP Card vs Matrix)
+ */
+export async function saveDoorprizeAnimationStyle(
+  style: DoorprizeAnimationStyle
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+    await admin.from("event_settings").upsert({
+      key: "doorprize_animation_style",
+      value: { style },
+      description: "Gaya animasi pra-pemenang undian doorprize (VIP Card vs Matrix)",
+      updated_at: new Date().toISOString(),
+    });
+
+    await broadcastDoorprize("doorprize_animation_style_changed", { style });
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal menyimpan gaya animasi doorprize.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 15. Ambil Gaya Animasi Undian Doorprize Terkini
+ */
+export async function getDoorprizeAnimationStyle(): Promise<{
+  success: boolean;
+  style: DoorprizeAnimationStyle;
+}> {
+  try {
+    const admin = createAdminClient();
+    const { data: settingRow } = await admin
+      .from("event_settings")
+      .select("value")
+      .eq("key", "doorprize_animation_style")
+      .maybeSingle();
+
+    if (
+      settingRow?.value &&
+      typeof settingRow.value === "object" &&
+      "style" in settingRow.value
+    ) {
+      const style = (settingRow.value as any).style;
+      if (style === "vip_card" || style === "matrix") {
+        return { success: true, style };
+      }
+    }
+
+    return { success: true, style: "matrix" };
+  } catch {
+    return { success: true, style: "matrix" };
+  }
+}
+
