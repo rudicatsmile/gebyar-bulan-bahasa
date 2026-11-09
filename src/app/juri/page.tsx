@@ -191,30 +191,14 @@ export default function DashboardJuriPage() {
                         </span>
                       </div>
 
-                      {/* Poster / Thumbnail Lomba & Deskripsi */}
-                      <div className="flex flex-col sm:flex-row gap-4 items-start">
-                        <div className="w-full sm:w-24 sm:h-24 h-44 rounded-xl overflow-hidden bg-card border border-border shrink-0 relative shadow-xs">
-                          <img
-                            src={comp.posterUrl || DEFAULT_IMAGE}
-                            alt={comp.name}
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              if (!target.src.endsWith(DEFAULT_IMAGE)) {
-                                target.src = DEFAULT_IMAGE;
-                              }
-                            }}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5 flex-1 min-w-0">
-                          <h3 className="font-heading text-xl font-bold text-foreground leading-snug">
-                            {comp.name}
-                          </h3>
-                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
-                            {comp.description}
-                          </p>
-                        </div>
+                      {/* Judul & Deskripsi Cabang Lomba */}
+                      <div className="space-y-1.5">
+                        <h3 className="font-heading text-xl font-bold text-foreground leading-snug">
+                          {comp.name}
+                        </h3>
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+                          {comp.description}
+                        </p>
                       </div>
 
                       <div className="p-3 rounded-lg bg-card border border-border text-xs text-muted-foreground space-y-1.5">
