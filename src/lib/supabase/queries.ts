@@ -22,7 +22,7 @@ import {
   type TwibbonItem,
 } from "@/lib/dummy-data";
 
-export type { Competition };
+export type { Competition, TwibbonItem };
 
 type DbCompetition = Database["public"]["Tables"]["competitions"]["Row"];
 type DbCriterion = Database["public"]["Tables"]["competition_criteria"]["Row"];

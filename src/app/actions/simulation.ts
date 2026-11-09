@@ -685,23 +685,32 @@ export async function clearSimulationWinners(payload?: {
     let clearedWinnersCount = 0;
 
     // 1. Hapus entri pemenang terkait
-    if (regIds.length > 0) {
+    if (payload?.competitionId) {
       const { data: deletedWin, error: wErr } = await admin
         .from("winners")
         .delete()
-        .in("registration_id", regIds)
+        .eq("competition_id", payload.competitionId)
         .select("id");
 
       if (wErr) throw wErr;
       clearedWinnersCount = deletedWin?.length || 0;
-    } else if (!payload?.competitionId) {
-      // Jika global dan tidak ada regIds spesifik, bersihkan tabel winners
-      const { data: allDeletedWin } = await admin
+    } else {
+      // Jika global (semua lomba), bersihkan tabel winners
+      const { data: allDeletedWin, error: wErr } = await admin
         .from("winners")
         .delete()
         .neq("id", "00000000-0000-0000-0000-000000000000")
         .select("id");
+
+      if (wErr) throw wErr;
       clearedWinnersCount = allDeletedWin?.length || 0;
+
+      // Bersihkan juga pengumuman publikasi pemenang
+      try {
+        await admin.from("announcements").delete().eq("category", "pemenang");
+      } catch {
+        // Non-fatal
+      }
     }
 
     // 2. Kembalikan status lomba dari 'selesai' ke 'pendaftaran' (membuka kembali kunci nilai)
@@ -821,7 +830,11 @@ async function cleanSimulationForCompetition(admin: any, competitionId?: string)
     }
 
     // 3. Hapus pemenang terkait
-    await admin.from("winners").delete().in("registration_id", regIds);
+    if (competitionId) {
+      await admin.from("winners").delete().eq("competition_id", competitionId);
+    } else {
+      await admin.from("winners").delete().in("registration_id", regIds);
+    }
 
     // 4. Hapus anggota tim
     await admin.from("registration_members").delete().in("registration_id", regIds);
@@ -924,6 +937,19 @@ export async function clearSimulationData(payload?: {
       compResetQuery = compResetQuery.neq("id", "00000000-0000-0000-0000-000000000000");
     }
     await compResetQuery;
+
+    // Bersihkan sisa winners & pengumuman pemenang jika reset total global
+    if (!payload?.competitionId) {
+      try {
+        await admin
+          .from("winners")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+        await admin.from("announcements").delete().eq("category", "pemenang");
+      } catch {
+        // Non-fatal
+      }
+    }
 
     // Reset status tahapan Duta Bahasa ke kondisi awal jika semua dibersihkan
     if (!payload?.competitionId) {

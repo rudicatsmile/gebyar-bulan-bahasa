@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Siren,
 } from "lucide-react";
+import { MonitorTwibbonShowcase } from "@/components/monitor/MonitorTwibbonShowcase";
 
 const ALL_MODULES = [
   { key: "jadwal", title: "Jadwal & Agenda Panggung Hari Ini" },
@@ -535,55 +536,10 @@ export function MonitorClient({ initialData }: MonitorClientProps) {
         )}
 
         {/* ============================================================= */}
-        {/* MODUL 5: TWIBBON UNGGULAN */}
+        {/* MODUL 5: TWIBBON UNGGULAN & LIVE SHOWCASE                    */}
         {/* ============================================================= */}
         {activeModule.key === "twibbon" && (
-          <div>
-            {featuredTwibbons.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-in fade-in-50 duration-300">
-                {featuredTwibbons.map((twb) => (
-                  <div
-                    key={twb.id}
-                    className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden flex flex-col justify-between"
-                  >
-                    <div className="aspect-square w-full overflow-hidden bg-black/40 relative">
-                      <img
-                        src={twb.imageUrl}
-                        alt={twb.uploaderName}
-                        className="h-full w-full object-cover"
-                      />
-                      {twb.isFeatured && (
-                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold bg-accent text-black font-mono uppercase">
-                          ★ Unggulan
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-4 space-y-1">
-                      <h4 className="font-heading text-base font-bold text-white truncate">
-                        {twb.uploaderName}
-                      </h4>
-                      <p className="text-xs text-white/60 truncate">{twb.institution}</p>
-                      {twb.caption && (
-                        <p className="text-xs text-white/80 line-clamp-2 italic pt-1">
-                          &ldquo;{twb.caption}&rdquo;
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center p-12 rounded-2xl border border-white/10 bg-white/5 max-w-xl mx-auto space-y-4 animate-in fade-in-50 duration-300">
-                <Camera className="h-12 w-12 text-accent mx-auto" />
-                <h3 className="text-2xl font-bold text-white font-heading">
-                  Galeri Semarak Twibbon
-                </h3>
-                <p className="text-white/60 text-sm">
-                  Belum ada foto twibbon yang disetujui. Unggah foto keseruan Anda melalui menu Galeri Twibbon!
-                </p>
-              </div>
-            )}
-          </div>
+          <MonitorTwibbonShowcase twibbons={data.twibbons || []} />
         )}
 
         {/* ============================================================= */}
