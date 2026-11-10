@@ -29,7 +29,13 @@ export default function PesertaRewardPage() {
       setLoadingRewards(true);
       const data = await getRewards();
       if (data && data.length > 0) {
-        setRewards(data);
+        // Sembunyikan reward khusus misi stand 'Aksara Ceria - QR Stand Lomba' dari katalog penukaran peserta
+        const filtered = data.filter(
+          (rew) =>
+            !rew.isExclusiveStandReward &&
+            !rew.name.toLowerCase().includes("aksara ceria")
+        );
+        setRewards(filtered);
       } else {
         setRewards(REWARDS);
       }
@@ -108,6 +114,14 @@ export default function PesertaRewardPage() {
     }
   };
 
+  const visibleRewards = React.useMemo(() => {
+    return rewards.filter(
+      (rew) =>
+        !rew.isExclusiveStandReward &&
+        !rew.name.toLowerCase().includes("aksara ceria")
+    );
+  }, [rewards]);
+
   return (
     <DashboardLayout role="peserta" participantPoints={balance}>
       <div className="space-y-6">
@@ -168,9 +182,9 @@ export default function PesertaRewardPage() {
         )}
 
         {/* Katalog Grid */}
-        {rewards.length > 0 ? (
+        {visibleRewards.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {rewards.map((rew) => {
+            {visibleRewards.map((rew) => {
               const isAffordable = balance >= rew.pointsRequired;
               const remaining = rew.quota - rew.claimedCount;
 

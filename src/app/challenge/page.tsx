@@ -13,10 +13,16 @@ import {
 export const revalidate = 60;
 
 export default async function ChallengeInfoPage() {
-  const [stands, rewards] = await Promise.all([
+  const [stands, rawRewards] = await Promise.all([
     getStands(),
     getRewards(),
   ]);
+
+  const rewards = rawRewards.filter(
+    (rew) =>
+      !rew.isExclusiveStandReward &&
+      !rew.name.toLowerCase().includes("aksara ceria")
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
