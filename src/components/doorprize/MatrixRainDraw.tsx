@@ -143,10 +143,9 @@ export function MatrixRainDraw({
     window.addEventListener("resize", handleResize);
 
     const render = () => {
-      // Background fade trail Matrix (meninggalkan bayangan pendaran neon)
-      ctx.fillStyle = isSpinning
-        ? "rgba(2, 6, 23, 0.22)"
-        : "rgba(2, 6, 23, 0.35)";
+      // Background: bersihkan penuh setiap frame agar TIDAK ada trail/smear
+      // Nama peserta tampil 100% tajam dan terbaca tanpa sisa frame sebelumnya
+      ctx.fillStyle = "rgb(2, 6, 23)";
       ctx.fillRect(0, 0, width, height);
 
       ctx.font = `bold ${fontSize}px "Courier New", monospace`;
@@ -156,32 +155,25 @@ export function MatrixRainDraw({
       for (let i = 0; i < drops.length; i++) {
         const drop = drops[i];
 
-        // Gambar Nama Peserta yang Mengalir Turun
+        // Gambar Nama Peserta yang Mengalir Turun — TANPA blur, TANPA shadow
         if (drop.y > -20 && drop.y < height + 30) {
           if (drop.isHead) {
-            // Nama kepala aliran: putih menyala / emas neon
-            if (isSpinning && Math.random() > 0.85) {
+            // Nama kepala aliran: putih terang / aksen emas — 0 blur
+            if ((isSpinning || isWarmingUp) && Math.random() > 0.82) {
               ctx.fillStyle = "#fbbf24"; // Aksen Emas
-              ctx.shadowColor = "#fbbf24";
-              ctx.shadowBlur = 12;
             } else {
-              ctx.fillStyle = "#ffffff"; // Putih Neon
-              ctx.shadowColor = "#34d399";
-              ctx.shadowBlur = 10;
+              ctx.fillStyle = "#ffffff"; // Putih Terang
             }
           } else {
-            // Nama aliran biasa: Hijau Matrix Emerald
-            ctx.fillStyle = "#10b981";
-            ctx.shadowColor = "#059669";
-            ctx.shadowBlur = 4;
+            // Nama aliran biasa: Hijau Matrix Emerald terang — 0 blur
+            ctx.fillStyle = "#34d399";
           }
 
-          // Format teks nama yang jatuh vertikal: "> NAMA PESERTA [REG]"
+          // Format teks: "> NAMA PESERTA [REG]"
           const displayText = `> ${drop.name} ${
             drop.regNum ? `[${drop.regNum}]` : ""
           }`;
           ctx.fillText(displayText, drop.x, drop.y);
-          ctx.shadowBlur = 0;
         }
 
         // Geser ke bawah

@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 
 export default function DashboardKelolaRewardPage() {
+  const [mounted, setMounted] = React.useState(false);
   const [rewards, setRewards] = React.useState<DbRewardItem[]>([]);
   const [queue, setQueue] = React.useState<RedemptionQueueItem[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -114,6 +115,7 @@ export default function DashboardKelolaRewardPage() {
 
   // Initial load
   React.useEffect(() => {
+    setMounted(true);
     loadData(true);
   }, [loadData]);
 
@@ -371,7 +373,8 @@ export default function DashboardKelolaRewardPage() {
                 variant="outline"
                 onClick={() => setResetModal({ isOpen: true, isAll: true })}
                 className="text-xs font-semibold gap-2 border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-                disabled={loading || rewards.length === 0}
+                disabled={mounted ? (loading || rewards.length === 0) : false}
+                suppressHydrationWarning
                 title="Kembalikan klaim terpakai semua hadiah ke 0"
               >
                 <RotateCcw className="h-4 w-4" />
@@ -392,11 +395,10 @@ export default function DashboardKelolaRewardPage() {
         {/* Feedback Alert */}
         {feedback && (
           <div
-            className={`p-4 rounded-xl border text-xs flex items-center justify-between gap-3 ${
-              feedback.type === "success"
+            className={`p-4 rounded-xl border text-xs flex items-center justify-between gap-3 ${feedback.type === "success"
                 ? "bg-success/10 border-success/30 text-success"
                 : "bg-danger/10 border-danger/30 text-danger"
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               {feedback.type === "success" ? (
@@ -424,20 +426,18 @@ export default function DashboardKelolaRewardPage() {
             </h2>
             <div className="flex items-center gap-2">
               <div
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${
-                  isRealtimeConnected
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${isRealtimeConnected
                     ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
                     : "bg-amber-500/10 text-amber-500 border-amber-500/30"
-                }`}
+                  }`}
               >
                 <span className="relative flex h-2 w-2">
                   {isRealtimeConnected && (
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   )}
                   <span
-                    className={`relative inline-flex rounded-full h-2 w-2 ${
-                      isRealtimeConnected ? "bg-emerald-500" : "bg-amber-500"
-                    }`}
+                    className={`relative inline-flex rounded-full h-2 w-2 ${isRealtimeConnected ? "bg-emerald-500" : "bg-amber-500"
+                      }`}
                   ></span>
                 </span>
                 <span>{isRealtimeConnected ? "Realtime Aktif" : "Sinkronisasi Aktif"}</span>
@@ -514,8 +514,8 @@ export default function DashboardKelolaRewardPage() {
                             item.status === "diserahkan"
                               ? "success"
                               : item.status === "ditolak"
-                              ? "default"
-                              : "warning"
+                                ? "default"
+                                : "warning"
                           }
                           className="text-[10px]"
                         >
@@ -645,13 +645,12 @@ export default function DashboardKelolaRewardPage() {
                       {/* Progress Bar Kuota */}
                       <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
                         <div
-                          className={`h-full transition-all ${
-                            isOutOfStock
+                          className={`h-full transition-all ${isOutOfStock
                               ? "bg-danger"
                               : remaining <= 10
-                              ? "bg-amber-500"
-                              : "bg-accent"
-                          }`}
+                                ? "bg-amber-500"
+                                : "bg-accent"
+                            }`}
                           style={{
                             width: `${rew.quota > 0 ? Math.min(100, ((rew.quota - rew.claimedCount) / rew.quota) * 100) : 0}%`,
                           }}
