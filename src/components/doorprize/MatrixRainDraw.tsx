@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Terminal, Users } from "lucide-react";
+import { Terminal, Users, Database, Sparkles, CheckCircle2, Cpu } from "lucide-react";
 import { soundEffects } from "./sound-effects";
 import type { EligibleParticipantItem } from "@/app/actions/doorprize";
 
@@ -16,6 +16,7 @@ interface MatrixRainDrawProps {
   soundEnabled?: boolean;
   size?: "default" | "large";
   className?: string;
+  drawProgress?: number;
 }
 
 interface NameDropItem {
@@ -37,6 +38,7 @@ export function MatrixRainDraw({
   soundEnabled = true,
   size = "default",
   className = "",
+  drawProgress,
 }: MatrixRainDrawProps) {
   const isLarge = size === "large";
   const stageHeight = isLarge ? 620 : 440;
@@ -44,6 +46,34 @@ export function MatrixRainDraw({
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const onSpinCompleteRef = React.useRef(onSpinComplete);
   const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Fallback progress lokal jika tidak disediakan dari parent
+  const [internalProgress, setInternalProgress] = React.useState(0);
+  const activeProgress = drawProgress !== undefined ? drawProgress : internalProgress;
+
+  React.useEffect(() => {
+    if (drawProgress !== undefined) return;
+    if (isWarmingUp) {
+      const start = Date.now();
+      setInternalProgress(8);
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - start;
+        setInternalProgress(Math.min(28, Math.round(8 + (elapsed / 1200) * 20)));
+      }, 40);
+      return () => clearInterval(interval);
+    } else if (isSpinning) {
+      const start = Date.now();
+      const base = 28;
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - start;
+        const fraction = Math.min(1, elapsed / spinDurationMs);
+        setInternalProgress(Math.min(100, Math.round(base + fraction * (100 - base))));
+      }, 35);
+      return () => clearInterval(interval);
+    } else {
+      setInternalProgress(0);
+    }
+  }, [isWarmingUp, isSpinning, spinDurationMs, drawProgress]);
 
   React.useEffect(() => {
     onSpinCompleteRef.current = onSpinComplete;
@@ -221,13 +251,15 @@ export function MatrixRainDraw({
       }
     }, 45);
 
-    // Kunci durasi putaran dan panggil onSpinComplete
-    timerRef.current = setTimeout(() => {
-      clearInterval(tickInterval);
-      if (onSpinCompleteRef.current) {
-        onSpinCompleteRef.current();
-      }
-    }, spinDurationMs);
+    // Kunci durasi putaran dan panggil onSpinComplete HANYA saat isSpinning
+    if (isSpinning) {
+      timerRef.current = setTimeout(() => {
+        clearInterval(tickInterval);
+        if (onSpinCompleteRef.current) {
+          onSpinCompleteRef.current();
+        }
+      }, spinDurationMs);
+    }
 
     return () => {
       clearInterval(tickInterval);
@@ -271,14 +303,94 @@ export function MatrixRainDraw({
         </div>
       </div>
 
-      {/* 3. Center Area Kosong & Bebas: Nama pemenang tidak ditampilkan di tengah card ini (di-reveal via Winner Overlay Pop-up) */}
-      <div className="relative z-5 flex-1 w-full pointer-events-none" />
+      {/* 3. Center Area: Indikator Progress Cyber Matrix (Tampil saat Pengacakan Nama Berlangsung) */}
+      <div className="relative z-10 flex-1 w-full flex items-center justify-center p-3 pointer-events-none">
+        {(isWarmingUp || isSpinning) && (
+          <div className="w-full max-w-lg rounded-2xl bg-slate-950/85 border-2 border-emerald-500/50 p-4 sm:p-5 backdrop-blur-md shadow-[0_0_45px_rgba(16,185,129,0.3)] flex flex-col items-center gap-3 animate-in fade-in zoom-in-95 duration-200">
+            {/* Cyber Header with Live Pulse */}
+            <div className="w-full flex items-center justify-between text-[11px] font-mono border-b border-emerald-500/30 pb-2">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="tracking-wider uppercase">
+                  {isWarmingUp ? "⚡ TAHAP 1/2: SINKRONISASI DATABASE" : "✦ TAHAP 2/2: PENGUNDIAN PEMENANG"}
+                </span>
+              </div>
+              <div className="text-amber-400 font-black font-mono tracking-widest text-xs px-2.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30">
+                {activeProgress}%
+              </div>
+            </div>
+
+            {/* Stepper Status: 2 Fase Berjalan */}
+            <div className="w-full grid grid-cols-2 gap-2 text-[10px] sm:text-xs font-mono">
+              <div
+                className={`p-2 rounded-xl border flex items-center gap-2 transition-all ${
+                  isWarmingUp
+                    ? "bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-[0_0_15px_rgba(251,191,36,0.25)]"
+                    : "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 font-semibold"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    isWarmingUp ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
+                  }`}
+                />
+                <span className="truncate">
+                  {isSpinning ? "✓ 1. Database Siap" : "1. Filter Database"}
+                </span>
+              </div>
+
+              <div
+                className={`p-2 rounded-xl border flex items-center gap-2 transition-all ${
+                  isSpinning
+                    ? "bg-emerald-500/20 border-emerald-400 text-emerald-200 font-bold shadow-[0_0_20px_rgba(16,185,129,0.35)] animate-pulse"
+                    : "bg-white/5 border-white/10 text-white/40"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    isSpinning ? "bg-emerald-400 animate-ping" : "bg-white/20"
+                  }`}
+                />
+                <span className="truncate">2. Kocok Pemenang</span>
+              </div>
+            </div>
+
+            {/* Progress Bar Utama Neon */}
+            <div className="w-full space-y-1">
+              <div className="w-full h-3.5 bg-slate-900/90 rounded-full border border-emerald-500/40 p-0.5 overflow-hidden shadow-inner relative">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 transition-all duration-75 ease-out shadow-[0_0_15px_rgba(52,211,153,0.8)] relative overflow-hidden"
+                  style={{ width: `${Math.max(6, activeProgress)}%` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+                </div>
+              </div>
+            </div>
+
+            {/* Teks Deskripsi Pengacakan */}
+            <div className="text-center space-y-0.5">
+              <p className="text-xs sm:text-sm font-heading font-black text-white tracking-wide">
+                {isWarmingUp
+                  ? "Mengacak database dari ratusan peserta festival..."
+                  : "Menyeleksi pemenang di bawah sorotan panggung..."}
+              </p>
+              <p className="text-[10px] sm:text-[11px] font-mono text-emerald-400/90 font-semibold">
+                {isWarmingUp
+                  ? "⚡ Menyiapkan token acak aman (CSRNG)..."
+                  : `🎯 Mengundi dari ${allParticipants.length || "100+"} peserta terverifikasi`}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* 4. Bottom Status Strip */}
       <div className="relative z-10 w-full flex items-center justify-between text-[10px] font-mono text-emerald-400/70 border-t border-emerald-500/20 pt-2.5 bg-slate-950/40 backdrop-blur-xs px-2 rounded-b-xl">
         <span>SECURITY: CSRNG VERIFIED</span>
         <span className="hidden sm:inline">ALIRAN VERTIKAL NAMA PESERTA RESMI</span>
-        <span>STATUS: {isSpinning ? "MENGACAK NAMA..." : "STANDBY"}</span>
+        <span className="font-bold text-emerald-300">
+          STATUS: {isWarmingUp ? "SINKRONISASI DATABASE [1/2]" : isSpinning ? `MENGACAK NAMA [${activeProgress}%]` : "STANDBY"}
+        </span>
       </div>
     </div>
   );

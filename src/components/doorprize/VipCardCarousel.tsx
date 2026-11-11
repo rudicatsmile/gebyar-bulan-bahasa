@@ -23,6 +23,7 @@ interface VipCardCarouselProps {
   soundEnabled?: boolean;
   size?: "default" | "large"; // "default" untuk admin, "large" untuk monitor panggung
   className?: string;
+  drawProgress?: number;
 }
 
 const MYSTERY_TEASER_CARDS: VipCardItem[] = [
@@ -53,6 +54,7 @@ export function VipCardCarousel({
   soundEnabled = true,
   size = "default",
   className = "",
+  drawProgress,
 }: VipCardCarouselProps) {
   const isLarge = size === "large";
 
@@ -416,6 +418,29 @@ export function VipCardCarousel({
           })}
         </div>
       </div>
+
+      {/* Floating Progress Indicator saat Carousel Berputar */}
+      {(isWarmingUp || isSpinning) && drawProgress !== undefined && (
+        <div className="absolute bottom-6 z-30 w-full max-w-md px-4 pointer-events-none animate-in fade-in zoom-in-95 duration-200">
+          <div className="rounded-2xl bg-slate-950/90 border border-amber-400/40 p-3 shadow-[0_0_30px_rgba(245,158,11,0.25)] backdrop-blur-md space-y-2">
+            <div className="flex items-center justify-between text-[11px] font-mono">
+              <span className="text-amber-400 font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                {isWarmingUp ? "⚡ SINKRONISASI DATABASE" : "✦ MEMILIH JUARA PANGGUNG"}
+              </span>
+              <span className="text-amber-300 font-bold">{drawProgress}%</span>
+            </div>
+            <div className="w-full h-2 bg-slate-900 rounded-full border border-amber-500/30 overflow-hidden relative">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300 transition-all duration-75 relative overflow-hidden"
+                style={{ width: `${Math.max(6, drawProgress)}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -68,6 +68,7 @@ export function MonitorDoorprizeClient({
   // Spin states
   const [isWarmingUp, setIsWarmingUp] = React.useState(false);
   const [isSpinning, setIsSpinning] = React.useState(false);
+  const [drawProgress, setDrawProgress] = React.useState(0);
   const [suspensePhase, setSuspensePhase] = React.useState<"idle" | "suspense" | "flash" | "revealed">("idle");
   const [targetSegment, setTargetSegment] = React.useState(0);
   // Inisialisasi pemenang dari pemenang sah terakhir jika ada, atau null (menampilkan kartu teaser misteri)
@@ -178,6 +179,7 @@ export function MonitorDoorprizeClient({
       .on("broadcast", { event: "doorprize_spin_cancelled" }, () => {
         setIsWarmingUp(false);
         setIsSpinning(false);
+        setDrawProgress(0);
         setSuspensePhase("idle");
       })
       .on("broadcast", { event: "doorprize_call_winner" }, ({ payload }) => {
@@ -190,6 +192,7 @@ export function MonitorDoorprizeClient({
         setShowConfetti(false);
         setSuspensePhase("idle");
         setCallCount(0);
+        setDrawProgress(0);
         getDoorprizeHistory().then((res) => {
           if (res.success && res.winners) setHistory(res.winners);
         });
@@ -199,12 +202,14 @@ export function MonitorDoorprizeClient({
         setShowConfetti(false);
         setSuspensePhase("idle");
         setCallCount(0);
+        setDrawProgress(0);
       })
       .on("broadcast", { event: "doorprize_close_winner_popup" }, () => {
         setShowWinnerCard(false);
         setShowConfetti(false);
         setSuspensePhase("idle");
         setCallCount(0);
+        setDrawProgress(0);
       })
       .on("broadcast", { event: "doorprize_history_reset" }, () => {
         setHistory([]);
@@ -214,6 +219,7 @@ export function MonitorDoorprizeClient({
         setShowConfetti(false);
         setIsWarmingUp(false);
         setIsSpinning(false);
+        setDrawProgress(0);
         setCallCount(0);
         setBuzzerStatus("idle");
         setBuzzerLeaderboard([]);
@@ -281,8 +287,37 @@ export function MonitorDoorprizeClient({
     return () => clearInterval(interval);
   }, [isSpinning, participants]);
 
+  // Perhitungan progress dinamis dan mulus untuk Fase 1 (Warming Up) dan Fase 2 (Spinning)
+  React.useEffect(() => {
+    if (isWarmingUp) {
+      const start = Date.now();
+      setDrawProgress(8);
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - start;
+        // Fase 1: Menanjak bertahap dari 8% menuju 28% selama server menyiapkan data
+        const nextP = Math.min(28, Math.round(8 + (elapsed / 1200) * 20));
+        setDrawProgress(nextP);
+      }, 40);
+      return () => clearInterval(interval);
+    } else if (isSpinning) {
+      const start = Date.now();
+      const baseProgress = Math.max(28, drawProgress);
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - start;
+        const fraction = Math.min(1, elapsed / 5500);
+        // Fase 2: Menanjak presisi dari 28% menuju 100% tepat selama 5500ms durasi putaran
+        const current = Math.min(100, Math.round(baseProgress + fraction * (100 - baseProgress)));
+        setDrawProgress(current);
+      }, 35);
+      return () => clearInterval(interval);
+    } else if (!isWarmingUp && !isSpinning && suspensePhase === "idle") {
+      setDrawProgress(0);
+    }
+  }, [isWarmingUp, isSpinning, suspensePhase]);
+
   const handleSpinComplete = React.useCallback(() => {
     setIsSpinning(false);
+    setDrawProgress(100);
 
     // 1. Fase Suspense (500ms): Panggung hening sejenak membangun ketegangan & antisipasi
     setSuspensePhase("suspense");
@@ -449,6 +484,7 @@ export function MonitorDoorprizeClient({
                   onSpinComplete={handleSpinComplete}
                   soundEnabled={soundEnabled}
                   size="large"
+                  drawProgress={drawProgress}
                 />
               ) : (
                 <VipCardCarousel
@@ -461,37 +497,80 @@ export function MonitorDoorprizeClient({
                   onSpinComplete={handleSpinComplete}
                   soundEnabled={soundEnabled}
                   size="large"
+                  drawProgress={drawProgress}
                 />
               )}
             </div>
 
-            {/* Status Bar Panggung Seremonial */}
-            <div className="w-full max-w-2xl h-14 rounded-2xl bg-white/5 border border-amber-500/20 flex items-center justify-center px-6 text-center backdrop-blur-md shadow-lg">
+            {/* Status Bar Panggung Seremonial dengan Indikator Progress */}
+            <div
+              className={`w-full max-w-2xl rounded-2xl bg-slate-900/80 border transition-all duration-300 px-6 py-3.5 text-center backdrop-blur-md shadow-xl relative overflow-hidden ${
+                isWarmingUp
+                  ? "border-amber-400/50 shadow-[0_0_25px_rgba(251,191,36,0.2)]"
+                  : isSpinning
+                  ? "border-emerald-400/50 shadow-[0_0_30px_rgba(16,185,129,0.25)]"
+                  : "border-amber-500/20"
+              }`}
+            >
               {isWarmingUp ? (
-                <div className="space-y-0.5 animate-pulse">
-                  <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
-                    ⚡ MENGHUBUNGI SERVER & MENGACAK 100+ PESERTA ⚡
-                  </span>
+                <div className="w-full space-y-2">
+                  <div className="flex items-center justify-between text-[10px] sm:text-xs font-mono font-bold">
+                    <span className="text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+                      ⚡ TAHAP 1/2: MENGHUBUNGI SERVER & FILTER PESERTA
+                    </span>
+                    <span className="text-amber-300 font-mono bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
+                      {drawProgress}%
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full h-2.5 bg-slate-950/80 rounded-full border border-amber-400/30 overflow-hidden relative">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300 transition-all duration-75 relative overflow-hidden"
+                      style={{ width: `${Math.max(6, drawProgress)}%` }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+                    </div>
+                  </div>
+
                   <span className="font-heading text-sm sm:text-base font-black text-amber-300 truncate block">
                     Mengacak database dari ratusan peserta festival...
                   </span>
                 </div>
               ) : isSpinning ? (
-                <div className="space-y-0.5 animate-pulse">
-                  <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block font-bold">
-                    ✦ PENGUNDIAN SEREMONIAL SEDANG BERLANGSUNG ✦
-                  </span>
+                <div className="w-full space-y-2">
+                  <div className="flex items-center justify-between text-[10px] sm:text-xs font-mono font-bold">
+                    <span className="text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                      ✦ TAHAP 2/2: PENGUNDIAN SEREMONIAL SEDANG BERLANGSUNG
+                    </span>
+                    <span className="text-emerald-300 font-mono bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30">
+                      {drawProgress}%
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full h-2.5 bg-slate-950/80 rounded-full border border-emerald-400/30 overflow-hidden relative">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 transition-all duration-75 relative overflow-hidden"
+                      style={{ width: `${Math.max(6, drawProgress)}%` }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+                    </div>
+                  </div>
+
                   <span className="font-heading text-sm sm:text-base font-black text-white truncate block">
                     Menyeleksi pemenang di bawah sorotan panggung...
                   </span>
                 </div>
               ) : showWinnerCard && winner ? (
-                <span className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                <span className="text-sm font-bold text-amber-300 flex items-center justify-center gap-2 py-0.5">
                   <Sparkles className="h-4 w-4 text-amber-400" />
                   <span>Pemenang Sah Terkunci: <strong>{winner.fullName}</strong></span>
                 </span>
               ) : (
-                <div className="flex items-center gap-2 text-white/60 text-xs font-semibold">
+                <div className="flex items-center justify-center gap-2 text-white/60 text-xs font-semibold py-0.5">
                   <Radio className="h-4 w-4 text-amber-400 animate-pulse" />
                   <span>Panggung Siap • Menunggu Perintah Putar dari Panitia</span>
                 </div>
