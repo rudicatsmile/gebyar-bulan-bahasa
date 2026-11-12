@@ -1,0 +1,64 @@
+
+Database Sumber:
+--------------------------
+email 				: rudi.karangloi76@gmail.com
+Database Password 	: vIxUfziFvlbECc4X -> 2Uo2rWBgq57ufeCf
+Project name     	: gebyar-aksara
+Project id 	 		: xdfwxvsgbopapwlrbzwj
+anon public  		: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkZnd4dnNnYm9wYXB3bHJiendqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyNDA1NTYsImV4cCI6MjEwOTgxNjU1Nn0.1yfQRlP_LPYw0AyFSPZ3iafIZs_KzULr250rSxlKo5o
+service role 		: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkZnd4dnNnYm9wYXB3bHJiendqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NDI0MDU1NiwiZXhwIjoyMTA5ODE2NTU2fQ.nv45cugxPxOCu_cEZX5OWPK_nvgrHNhTcdmhgvWfcnQ
+Conn string  		: 
+	Session mode: postgresql://postgres.xdfwxvsgbopapwlrbzwj:vIxUfziFvlbECc4X@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres
+
+Database Tujuan:
+	project name : bbalqis16v-oss's Project
+	password     : vrsiIvKJJoFSdaDQ
+	Project ID   : jcxranezlwqxawnpzxub
+	Anon public  : eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjeHJhbmV6bHdxeGF3bnB6eHViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzNjgzMDAsImV4cCI6MjEwOTk0NDMwMH0.HXCnpZxqmiQckuLKx6gvBkr57yJRSa2eiEflRO3UuKo
+	Service role : eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjeHJhbmV6bHdxeGF3bnB6eHViIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NDM2ODMwMCwiZXhwIjoyMTA5OTQ0MzAwfQ.UySAa8ymcn-W8Wp7kJb_8IQ1dp9efB3dxCaSvJbepDA
+	
+	Session mode : postgresql://postgres.jcxranezlwqxawnpzxub:vrsiIvKJJoFSdaDQ@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres	
+	
+A. Cara menjalankan Backup/Restore DB:
+-------------------------------------
+# Backup lalu restore sekaligus
+powershell -ExecutionPolicy Bypass -File .\supabase-backup-restore.ps1
+
+# Backup saja
+powershell -ExecutionPolicy Bypass -File .\supabase-backup-restore.ps1 -Mode Backup
+
+# Restore dari backup yang sudah ada
+powershell -ExecutionPolicy Bypass -File .\supabase-backup-restore.ps1 -Mode Restore -RestoreFrom .\backups\backup_20261110_101500
+
+
+B. Cara menjalankan Backup/Restore Storage:
+----------------------------------------
+# Backup + restore sekaligus
+powershell -ExecutionPolicy Bypass -File .\supabase-storage-backup-restore.ps1
+
+# Backup saja
+powershell -ExecutionPolicy Bypass -File .\supabase-storage-backup-restore.ps1 -Mode Backup
+
+# Restore dari backup yang ada
+powershell -ExecutionPolicy Bypass -File .\supabase-storage-backup-restore.ps1 -Mode Restore -RestoreFrom .\storage_backups\storage_20261110_101500
+
+# Hanya bucket tertentu
+powershell -ExecutionPolicy Bypass -File .\supabase-storage-backup-restore.ps1 -Buckets avatars,documents
+
+
+
+
+Setelah restore di SUPBASE baru, jalankan ini :
+
+-- 1. Berikan kembali izin akses ke role API Supabase
+GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role;
+
+-- 2. Reload schema cache PostgREST seketika
+NOTIFY pgrst, 'reload schema';
