@@ -21,6 +21,8 @@ export interface EventSettingsMap {
   rotationInterval: string;
   autoApproveTwibbon: boolean;
   participantAccessStartDate: string;
+  isParticipantAccessClosed?: boolean;
+  participantAccessClosedMessage?: string;
   contactLocation: string;
   contactHours: string;
   contactEmail: string;
@@ -43,6 +45,8 @@ const SaveEventSettingsSchema = z.object({
   rotationInterval: z.coerce.number().min(5, "Durasi rotasi monitor minimal 5 detik").max(120, "Durasi rotasi monitor maksimal 120 detik"),
   autoApproveTwibbon: z.boolean().optional().default(false),
   participantAccessStartDate: z.string().optional().default(""),
+  isParticipantAccessClosed: z.boolean().optional().default(false),
+  participantAccessClosedMessage: z.string().optional().default(""),
   allowCompetitionParticipantsInChallenges: z.boolean().optional().default(true),
   contactLocation: z.string().optional().default("Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A."),
   contactHours: z.string().optional().default("07.30 - 21.00 WIB (Selama Acara Berlangsung)"),
@@ -106,6 +110,14 @@ export async function getEventSettings(): Promise<{
       participantAccessStartDate:
         (typeof registration.participantAccessStartDate === "string" ? registration.participantAccessStartDate : "") ||
         (typeof map["participant_access_start_date"] === "string" ? map["participant_access_start_date"] : ""),
+      isParticipantAccessClosed:
+        map["participant_access_closed"] === true ||
+        map["participant_access_closed"] === "true" ||
+        map["participant_access_closed"] === 1 ||
+        Boolean(registration.isParticipantAccessClosed),
+      participantAccessClosedMessage:
+        (typeof map["participant_access_closed_message"] === "string" ? map["participant_access_closed_message"] : "") ||
+        (typeof registration.participantAccessClosedMessage === "string" ? registration.participantAccessClosedMessage : ""),
       contactLocation: contact.location || "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A.",
       contactHours: contact.hours || "07.30 - 21.00 WIB (Selama Acara Berlangsung)",
       contactEmail: contact.email || "panitia@gebyarbulanbahasa.id",
@@ -151,6 +163,8 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
     rotationInterval,
     autoApproveTwibbon,
     participantAccessStartDate,
+    isParticipantAccessClosed,
+    participantAccessClosedMessage,
     allowCompetitionParticipantsInChallenges,
     contactLocation,
     contactHours,
@@ -236,6 +250,8 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
       maxCompetitions,
       maxTeamsPerSchool: maxCompetitions,
       participantAccessStartDate: (participantAccessStartDate || "").trim(),
+      isParticipantAccessClosed: Boolean(isParticipantAccessClosed),
+      participantAccessClosedMessage: (participantAccessClosedMessage || "").trim(),
       allowCompetitionParticipantsInChallenges: Boolean(allowCompetitionParticipantsInChallenges),
     };
 
@@ -262,6 +278,27 @@ export async function saveEventSettings(formData: SaveEventSettingsInput): Promi
         key: "participant_access_start_date",
         value: (participantAccessStartDate || "").trim(),
         description: "Tanggal dan waktu buka akses pendaftaran serta login untuk peserta",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
+    // Update key 'participant_access_closed' & 'participant_access_closed_message'
+    await supabase.from("event_settings").upsert(
+      {
+        key: "participant_access_closed",
+        value: Boolean(isParticipantAccessClosed),
+        description: "Status apakah pendaftaran dan akses login peserta ditutup total secara manual",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
+    await supabase.from("event_settings").upsert(
+      {
+        key: "participant_access_closed_message",
+        value: (participantAccessClosedMessage || "").trim(),
+        description: "Pesan khusus penutupan akses pendaftaran dan login peserta",
         updated_at: now,
       },
       { onConflict: "key" }
@@ -684,22 +721,146 @@ export async function updateMonitorScoreboardSettings(input: {
 
 export interface ParticipantAccessStatus {
   isOpen: boolean;
+  isClosed: boolean;
+  closedMessage: string;
   startDate: string | null;
   formattedStartDate: string | null;
   message: string;
 }
 
+/**
+ * Mengubah status penutupan akses peserta secara langsung (instant quick-action)
+ */
+export async function toggleParticipantAccessClosed(
+  isClosed: boolean,
+  customMessage?: string
+): Promise<{ success: boolean; isClosed?: boolean; error?: string }> {
+  try {
+    const supabase = createAdminClient();
+    const now = new Date().toISOString();
 
+    // 1. Update/upsert key 'participant_access_closed'
+    const { error: errClosed } = await supabase.from("event_settings").upsert(
+      {
+        key: "participant_access_closed",
+        value: Boolean(isClosed),
+        description: "Status apakah pendaftaran dan akses login peserta ditutup total secara manual",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
+    if (errClosed) throw errClosed;
+
+    // 2. Update/upsert key 'participant_access_closed_message' jika disediakan
+    if (customMessage !== undefined) {
+      await supabase.from("event_settings").upsert(
+        {
+          key: "participant_access_closed_message",
+          value: customMessage.trim(),
+          description: "Pesan khusus penutupan akses pendaftaran dan login peserta",
+          updated_at: now,
+        },
+        { onConflict: "key" }
+      );
+    }
+
+    // 3. Sinkronkan juga ke dalam JSON object 'registration'
+    const { data: regRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "registration")
+      .maybeSingle();
+
+    const regValue = (regRow?.value as any) || {};
+    await supabase.from("event_settings").upsert(
+      {
+        key: "registration",
+        value: {
+          ...regValue,
+          isParticipantAccessClosed: Boolean(isClosed),
+          ...(customMessage !== undefined ? { participantAccessClosedMessage: customMessage.trim() } : {}),
+        },
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
+    revalidatePath("/dashboard/pengaturan");
+    revalidatePath("/daftar");
+    revalidatePath("/masuk");
+    revalidatePath("/peserta");
+
+    return { success: true, isClosed: Boolean(isClosed) };
+  } catch (err: unknown) {
+    console.error("Error toggleParticipantAccessClosed:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal memperbarui status penutupan aplikasi.",
+    };
+  }
+}
 
 /**
  * Mengecek apakah akses pendaftaran (/daftar) dan login (/masuk) untuk peserta sudah dibuka
- * berdasarkan tanggal yang ditentukan oleh administrator.
+ * berdasarkan status penutupan manual dan tanggal yang ditentukan oleh administrator.
  */
 export async function getParticipantAccessStatus(): Promise<ParticipantAccessStatus> {
   try {
     const supabase = createAdminClient();
 
-    // 1. Cek key khusus 'participant_access_start_date'
+    // 1. Cek apakah admin menutup akses peserta secara manual / total
+    const { data: closedRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "participant_access_closed")
+      .maybeSingle();
+
+    const { data: msgRow } = await supabase
+      .from("event_settings")
+      .select("value")
+      .eq("key", "participant_access_closed_message")
+      .maybeSingle();
+
+    let isClosed = false;
+    if (closedRow?.value === true || closedRow?.value === "true" || closedRow?.value === 1) {
+      isClosed = true;
+    }
+
+    let closedMessage = typeof msgRow?.value === "string" ? msgRow.value.trim() : "";
+
+    // Fallback cek di registration json
+    if (!isClosed || !closedMessage) {
+      const { data: regRow } = await supabase
+        .from("event_settings")
+        .select("value")
+        .eq("key", "registration")
+        .maybeSingle();
+      if (regRow?.value) {
+        if (!isClosed && (regRow.value as any).isParticipantAccessClosed === true) {
+          isClosed = true;
+        }
+        if (!closedMessage && typeof (regRow.value as any).participantAccessClosedMessage === "string") {
+          closedMessage = ((regRow.value as any).participantAccessClosedMessage || "").trim();
+        }
+      }
+    }
+
+    const defaultClosedMsg = "Akses pendaftaran dan login peserta telah resmi ditutup oleh panitia.";
+    const activeClosedMsg = closedMessage || defaultClosedMsg;
+
+    if (isClosed) {
+      return {
+        isOpen: false,
+        isClosed: true,
+        closedMessage: activeClosedMsg,
+        startDate: null,
+        formattedStartDate: null,
+        message: activeClosedMsg,
+      };
+    }
+
+    // 2. Cek key khusus 'participant_access_start_date'
     const { data: row } = await supabase
       .from("event_settings")
       .select("value")
@@ -708,7 +869,7 @@ export async function getParticipantAccessStatus(): Promise<ParticipantAccessSta
 
     let rawDate = typeof row?.value === "string" ? row.value.trim() : "";
 
-    // 2. Fallback cek key 'registration'
+    // 3. Fallback cek key 'registration'
     if (!rawDate) {
       const { data: regRow } = await supabase
         .from("event_settings")
@@ -724,6 +885,8 @@ export async function getParticipantAccessStatus(): Promise<ParticipantAccessSta
     if (!rawDate) {
       return {
         isOpen: true,
+        isClosed: false,
+        closedMessage: "",
         startDate: null,
         formattedStartDate: null,
         message: "Akses peserta terbuka normal.",
@@ -734,6 +897,8 @@ export async function getParticipantAccessStatus(): Promise<ParticipantAccessSta
     if (isNaN(targetDate.getTime())) {
       return {
         isOpen: true,
+        isClosed: false,
+        closedMessage: "",
         startDate: null,
         formattedStartDate: null,
         message: "Akses peserta terbuka normal.",
@@ -764,6 +929,8 @@ export async function getParticipantAccessStatus(): Promise<ParticipantAccessSta
 
     return {
       isOpen,
+      isClosed: false,
+      closedMessage: "",
       startDate: rawDate,
       formattedStartDate,
       message: isOpen
@@ -775,6 +942,8 @@ export async function getParticipantAccessStatus(): Promise<ParticipantAccessSta
     // Jika terjadi kendala database, default buka agar tidak lockout sistem
     return {
       isOpen: true,
+      isClosed: false,
+      closedMessage: "",
       startDate: null,
       formattedStartDate: null,
       message: "Akses peserta terbuka normal.",

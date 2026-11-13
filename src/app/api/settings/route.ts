@@ -59,6 +59,14 @@ export async function GET() {
       participantAccessStartDate:
         (typeof registration.participantAccessStartDate === "string" ? registration.participantAccessStartDate : "") ||
         (typeof map["participant_access_start_date"] === "string" ? map["participant_access_start_date"] : ""),
+      isParticipantAccessClosed:
+        map["participant_access_closed"] === true ||
+        map["participant_access_closed"] === "true" ||
+        map["participant_access_closed"] === 1 ||
+        Boolean(registration.isParticipantAccessClosed),
+      participantAccessClosedMessage:
+        (typeof map["participant_access_closed_message"] === "string" ? map["participant_access_closed_message"] : "") ||
+        (typeof registration.participantAccessClosedMessage === "string" ? registration.participantAccessClosedMessage : ""),
       contactLocation: contact.location || "Gedung Kesenian & Pusat Kebudayaan Lt. 1, Ruang Panitia A.",
       contactHours: contact.hours || "07.30 - 21.00 WIB (Selama Acara Berlangsung)",
       contactEmail: contact.email || "panitia@gebyarbulanbahasa.id",
@@ -95,6 +103,8 @@ export async function POST(request: Request) {
       rotationInterval,
       autoApproveTwibbon,
       participantAccessStartDate,
+      isParticipantAccessClosed,
+      participantAccessClosedMessage,
       allowCompetitionParticipantsInChallenges,
       contactLocation,
       contactHours,
@@ -187,6 +197,8 @@ export async function POST(request: Request) {
       maxCompetitions: Number(maxCompetitions) || 3,
       maxTeamsPerSchool: Number(maxCompetitions) || 3,
       participantAccessStartDate: String(participantAccessStartDate || "").trim(),
+      isParticipantAccessClosed: Boolean(isParticipantAccessClosed),
+      participantAccessClosedMessage: String(participantAccessClosedMessage || "").trim(),
       allowCompetitionParticipantsInChallenges: Boolean(allowCompetitionParticipantsInChallenges ?? true),
     };
 
@@ -214,6 +226,27 @@ export async function POST(request: Request) {
         key: "participant_access_start_date",
         value: String(participantAccessStartDate || "").trim(),
         description: "Tanggal dan waktu buka akses pendaftaran serta login untuk peserta",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
+    // Simpan key 'participant_access_closed' & 'participant_access_closed_message'
+    await supabase.from("event_settings").upsert(
+      {
+        key: "participant_access_closed",
+        value: Boolean(isParticipantAccessClosed),
+        description: "Status apakah pendaftaran dan akses login peserta ditutup total secara manual",
+        updated_at: now,
+      },
+      { onConflict: "key" }
+    );
+
+    await supabase.from("event_settings").upsert(
+      {
+        key: "participant_access_closed_message",
+        value: String(participantAccessClosedMessage || "").trim(),
+        description: "Pesan khusus penutupan akses pendaftaran dan login peserta",
         updated_at: now,
       },
       { onConflict: "key" }

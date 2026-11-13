@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   getEventSettings,
   saveEventSettings,
+  toggleParticipantAccessClosed,
   uploadHeroImageAction,
   uploadLogoImageAction,
   getMonitorScoreboardSettings,
@@ -18,6 +19,13 @@ import {
   getWelcomeModalSettings,
   saveWelcomeModalSettings,
 } from "@/app/actions/settings";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   getChallengeParticipationSettings,
   saveChallengeParticipationSettings,
@@ -40,6 +48,8 @@ import {
   CheckSquare,
   Square,
   Lock,
+  Unlock,
+  AlertTriangle,
   ShieldCheck,
   MessageSquareText,
   Sparkles,
@@ -71,6 +81,11 @@ export default function DashboardPengaturanPage() {
   const [rotationInterval, setRotationInterval] = React.useState("15");
   const [autoApproveTwibbon, setAutoApproveTwibbon] = React.useState(false);
   const [participantAccessStartDate, setParticipantAccessStartDate] = React.useState("");
+  const [isParticipantAccessClosed, setIsParticipantAccessClosed] = React.useState(false);
+  const [participantAccessClosedMessage, setParticipantAccessClosedMessage] = React.useState("");
+  const [isTogglingAccess, setIsTogglingAccess] = React.useState(false);
+  const [showCloseConfirmModal, setShowCloseConfirmModal] = React.useState(false);
+  const [showOpenConfirmModal, setShowOpenConfirmModal] = React.useState(false);
 
   // Pengaturan Partisipasi Challenge untuk Peserta Lomba (ON = Boleh, OFF = Ditolak)
   const [allowCompetitionChallenges, setAllowCompetitionChallenges] = React.useState(true);
@@ -172,6 +187,8 @@ export default function DashboardPengaturanPage() {
           setRotationInterval(String(data.settings.rotationInterval));
           if (data.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(data.settings.autoApproveTwibbon));
           if (data.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(data.settings.participantAccessStartDate || "");
+          if (data.settings.isParticipantAccessClosed !== undefined) setIsParticipantAccessClosed(Boolean(data.settings.isParticipantAccessClosed));
+          if (data.settings.participantAccessClosedMessage !== undefined) setParticipantAccessClosedMessage(data.settings.participantAccessClosedMessage || "");
           if (data.settings.allowCompetitionParticipantsInChallenges !== undefined) {
             setAllowCompetitionChallenges(Boolean(data.settings.allowCompetitionParticipantsInChallenges));
           }
@@ -201,6 +218,8 @@ export default function DashboardPengaturanPage() {
         setRotationInterval(String(actionRes.settings.rotationInterval));
         if (actionRes.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(actionRes.settings.autoApproveTwibbon));
         if (actionRes.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(actionRes.settings.participantAccessStartDate || "");
+        if (actionRes.settings.isParticipantAccessClosed !== undefined) setIsParticipantAccessClosed(Boolean(actionRes.settings.isParticipantAccessClosed));
+        if (actionRes.settings.participantAccessClosedMessage !== undefined) setParticipantAccessClosedMessage(actionRes.settings.participantAccessClosedMessage || "");
         if (actionRes.settings.allowCompetitionParticipantsInChallenges !== undefined) {
           setAllowCompetitionChallenges(Boolean(actionRes.settings.allowCompetitionParticipantsInChallenges));
         }
@@ -228,6 +247,8 @@ export default function DashboardPengaturanPage() {
           setRotationInterval(String(actionRes.settings.rotationInterval));
           if (actionRes.settings.autoApproveTwibbon !== undefined) setAutoApproveTwibbon(Boolean(actionRes.settings.autoApproveTwibbon));
           if (actionRes.settings.participantAccessStartDate !== undefined) setParticipantAccessStartDate(actionRes.settings.participantAccessStartDate || "");
+          if (actionRes.settings.isParticipantAccessClosed !== undefined) setIsParticipantAccessClosed(Boolean(actionRes.settings.isParticipantAccessClosed));
+          if (actionRes.settings.participantAccessClosedMessage !== undefined) setParticipantAccessClosedMessage(actionRes.settings.participantAccessClosedMessage || "");
           if (actionRes.settings.allowCompetitionParticipantsInChallenges !== undefined) {
             setAllowCompetitionChallenges(Boolean(actionRes.settings.allowCompetitionParticipantsInChallenges));
           }
@@ -353,6 +374,39 @@ export default function DashboardPengaturanPage() {
     }
   };
 
+  // Handler untuk menutup / membuka kembali akses aplikasi secara instan
+  const handleToggleAccess = async (close: boolean) => {
+    setIsTogglingAccess(true);
+    setFeedback(null);
+    try {
+      const res = await toggleParticipantAccessClosed(close, participantAccessClosedMessage);
+      if (res.success) {
+        setIsParticipantAccessClosed(close);
+        setShowCloseConfirmModal(false);
+        setShowOpenConfirmModal(false);
+        setFeedback({
+          type: "success",
+          message: close
+            ? "Aplikasi berhasil DITUTUP. Akses pendaftaran (/daftar) dan login peserta (/masuk) telah dinonaktifkan."
+            : "Akses peserta berhasil DIBUKA KEMBALI. Pendaftaran dan login peserta kini aktif sesuai jadwal.",
+        });
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.error || "Gagal mengubah status penutupan aplikasi.",
+        });
+      }
+    } catch (err: unknown) {
+      console.error("Gagal toggle access:", err);
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Terjadi kesalahan saat mengubah status aplikasi.",
+      });
+    } finally {
+      setIsTogglingAccess(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!eventName.trim() || !eventTheme.trim() || !eventDate.trim()) {
       setFeedback({
@@ -379,6 +433,8 @@ export default function DashboardPengaturanPage() {
       rotationInterval: Number(rotationInterval) || 15,
       autoApproveTwibbon: Boolean(autoApproveTwibbon),
       participantAccessStartDate: participantAccessStartDate.trim(),
+      isParticipantAccessClosed: Boolean(isParticipantAccessClosed),
+      participantAccessClosedMessage: participantAccessClosedMessage.trim(),
       allowCompetitionParticipantsInChallenges: Boolean(allowCompetitionChallenges),
       contactLocation: contactLocation.trim(),
       contactHours: contactHours.trim(),
@@ -848,14 +904,16 @@ export default function DashboardPengaturanPage() {
                 <div className="p-4 sm:p-5 rounded-xl border border-border bg-card/60 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="space-y-1 max-w-xl">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Lock className="h-4 w-4 text-accent" />
                         <span className="font-heading text-sm sm:text-base font-bold text-foreground">
                           Jadwal Buka Akses Register &amp; Login Peserta
                         </span>
                         <Badge
                           variant={
-                            !participantAccessStartDate
+                            isParticipantAccessClosed
+                              ? "danger"
+                              : !participantAccessStartDate
                               ? "success"
                               : new Date().getTime() >= parseDateInWib(participantAccessStartDate).getTime()
                               ? "success"
@@ -863,7 +921,9 @@ export default function DashboardPengaturanPage() {
                           }
                           className="text-[10px]"
                         >
-                          {!participantAccessStartDate
+                          {isParticipantAccessClosed
+                            ? "DITUTUP TOTAL (Aplikasi Ditutup)"
+                            : !participantAccessStartDate
                             ? "BEBAS AKSES (Tanpa Batasan)"
                             : new Date().getTime() >= parseDateInWib(participantAccessStartDate).getTime()
                             ? "SUDAH DIBUKA (Normal)"
@@ -879,7 +939,7 @@ export default function DashboardPengaturanPage() {
                           <span>Pengecualian Penting Role Non-Peserta:</span>
                         </p>
                         <p>
-                          User dengan role selain peserta (<strong>Superadmin</strong>, <strong>Seksi Acara</strong>, <strong>Juri</strong>, <strong>Media Center</strong>) <strong>selalu bebas login kapan saja</strong> untuk keperluan persiapan operasional dan penjurian, meskipun tanggal mulai belum tiba.
+                          User dengan role selain peserta (<strong>Superadmin</strong>, <strong>Seksi Acara</strong>, <strong>Juri</strong>, <strong>Media Center</strong>) <strong>selalu bebas login kapan saja</strong> untuk keperluan persiapan operasional dan penjurian, meskipun tanggal mulai belum tiba atau aplikasi sedang ditutup.
                         </p>
                       </div>
                     </div>
@@ -892,15 +952,50 @@ export default function DashboardPengaturanPage() {
                       type="datetime-local"
                       value={participantAccessStartDate}
                       onChange={(e) => setParticipantAccessStartDate(e.target.value)}
-                      helperText="Sebelum waktu ini, register & login peserta diblokir. Kosongkan jika ingin membuka akses tanpa batas tanggal."
+                      disabled={isParticipantAccessClosed}
+                      helperText={
+                        isParticipantAccessClosed
+                          ? "Aplikasi saat ini berstatus DITUTUP. Buka kembali akses untuk mengaktifkan jadwal."
+                          : "Sebelum waktu ini, register & login peserta diblokir. Kosongkan jika ingin membuka akses tanpa batas tanggal."
+                      }
                     />
 
                     <div className="flex flex-wrap items-center gap-2 pb-1">
+                      {/* Tombol Aksi Tutup / Buka Kembali Akses */}
+                      {isParticipantAccessClosed ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowOpenConfirmModal(true)}
+                          disabled={isTogglingAccess}
+                          className="text-xs gap-1.5 cursor-pointer border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 font-semibold"
+                          title="Buka kembali akses registrasi & login peserta"
+                        >
+                          <Unlock className="h-3.5 w-3.5" />
+                          <span>Buka Kembali Akses</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowCloseConfirmModal(true)}
+                          disabled={isTogglingAccess}
+                          className="text-xs gap-1.5 cursor-pointer border-destructive/40 text-destructive hover:bg-destructive/10 font-semibold"
+                          title="Tutup registrasi & login peserta sekarang"
+                        >
+                          <Lock className="h-3.5 w-3.5" />
+                          <span>Tutup Aplikasi</span>
+                        </Button>
+                      )}
+
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => setParticipantAccessStartDate("")}
+                        disabled={isParticipantAccessClosed}
                         className="text-xs gap-1 cursor-pointer"
                         title="Buka akses tanpa batasan tanggal"
                       >
@@ -916,6 +1011,7 @@ export default function DashboardPengaturanPage() {
                           const currentFormatted = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
                           setParticipantAccessStartDate(currentFormatted);
                         }}
+                        disabled={isParticipantAccessClosed}
                         className="text-xs gap-1 cursor-pointer"
                         title="Setel buka akses mulai jam sekarang"
                       >
@@ -926,12 +1022,30 @@ export default function DashboardPengaturanPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => setParticipantAccessStartDate("2026-11-11T00:00")}
+                        disabled={isParticipantAccessClosed}
                         className="text-xs gap-1 cursor-pointer"
                         title="Kunci hingga hari H acara (11 Nov 2026 00:00 WIB)"
                       >
                         <span>Kunci s.d. 11 Nov 2026</span>
                       </Button>
                     </div>
+                  </div>
+
+                  {/* Input Pesan Khusus Penutupan (Opsional) */}
+                  <div className="pt-3 border-t border-border/60 space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <span>Pesan Khusus Penutupan Aplikasi untuk Peserta (Opsional):</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={participantAccessClosedMessage}
+                      onChange={(e) => setParticipantAccessClosedMessage(e.target.value)}
+                      placeholder="Contoh: Pendaftaran dan login peserta Gebyar Bulan Bahasa 2026 telah resmi ditutup. Terima kasih atas partisipasi Anda!"
+                      className="w-full text-xs p-2.5 rounded-lg border border-border bg-background focus:outline-hidden focus:ring-2 focus:ring-accent/40 leading-relaxed"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Pesan ini akan ditampilkan kepada peserta di halaman <code className="font-mono">/masuk</code> dan <code className="font-mono">/daftar</code> saat aplikasi berstatus ditutup.
+                    </p>
                   </div>
                 </div>
 
@@ -1528,6 +1642,136 @@ export default function DashboardPengaturanPage() {
           )}
         </Card>
       </div>
+
+      {/* Modal Konfirmasi Tutup Aplikasi */}
+      <Dialog open={showCloseConfirmModal} onOpenChange={setShowCloseConfirmModal}>
+        <DialogHeader>
+          <div className="flex items-center gap-2 text-destructive mb-1">
+            <AlertTriangle className="h-5 w-5" />
+            <DialogTitle>Konfirmasi Penutupan Aplikasi</DialogTitle>
+          </div>
+          <DialogDescription>
+            Apakah Anda yakin ingin <strong>MENUTUP</strong> akses aplikasi untuk peserta sekarang?
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2 text-xs text-muted-foreground leading-relaxed">
+          <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-foreground space-y-1.5">
+            <p className="font-semibold text-destructive flex items-center gap-1.5">
+              <Lock className="h-4 w-4 shrink-0" />
+              <span>Dampak Penutupan Aplikasi:</span>
+            </p>
+            <ul className="list-disc pl-4 space-y-1 text-[11px]">
+              <li>Pendaftaran akun peserta baru (<code className="font-mono">/daftar</code>) akan diblokir total.</li>
+              <li>Akses login akun peserta (<code className="font-mono">/masuk</code>) akan ditolak.</li>
+              <li>Sesi peserta yang sedang aktif akan otomatis dialihkan keluar.</li>
+              <li><strong>Pengecualian:</strong> Panitia, Juri, Media Center, dan Superadmin tetap bebas login seperti biasa.</li>
+            </ul>
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
+              Pesan Penutupan yang Ditampilkan ke Peserta:
+            </label>
+            <textarea
+              rows={2}
+              value={participantAccessClosedMessage}
+              onChange={(e) => setParticipantAccessClosedMessage(e.target.value)}
+              placeholder="Contoh: Pendaftaran dan login peserta Gebyar Bulan Bahasa 2026 telah resmi ditutup."
+              className="w-full text-xs p-2.5 rounded-lg border border-border bg-background focus:outline-hidden focus:ring-2 focus:ring-destructive/40"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCloseConfirmModal(false)}
+            disabled={isTogglingAccess}
+            className="text-xs cursor-pointer"
+          >
+            Batal
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={() => handleToggleAccess(true)}
+            disabled={isTogglingAccess}
+            className="text-xs gap-1.5 cursor-pointer font-semibold"
+          >
+            {isTogglingAccess ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Menutup Aplikasi...</span>
+              </>
+            ) : (
+              <>
+                <Lock className="h-3.5 w-3.5" />
+                <span>Ya, Tutup Aplikasi Sekarang</span>
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Modal Konfirmasi Buka Kembali Akses */}
+      <Dialog open={showOpenConfirmModal} onOpenChange={setShowOpenConfirmModal}>
+        <DialogHeader>
+          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 mb-1">
+            <Unlock className="h-5 w-5" />
+            <DialogTitle>Konfirmasi Pembukaan Kembali Akses</DialogTitle>
+          </div>
+          <DialogDescription>
+            Apakah Anda yakin ingin <strong>MEMBUKA KEMBALI</strong> akses pendaftaran dan login peserta?
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-2 text-xs text-muted-foreground leading-relaxed">
+          <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-foreground space-y-1">
+            <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+              Akses Peserta Akan Kembali Normal:
+            </p>
+            <p className="text-[11px]">
+              Peserta akan dapat mendaftar akun baru dan login kembali sesuai konfigurasi jadwal buka yang terpasang.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowOpenConfirmModal(false)}
+            disabled={isTogglingAccess}
+            className="text-xs cursor-pointer"
+          >
+            Batal
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => handleToggleAccess(false)}
+            disabled={isTogglingAccess}
+            className="text-xs gap-1.5 cursor-pointer font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {isTogglingAccess ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Membuka Akses...</span>
+              </>
+            ) : (
+              <>
+                <Unlock className="h-3.5 w-3.5" />
+                <span>Ya, Buka Kembali Akses</span>
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </DashboardLayout>
   );
 }

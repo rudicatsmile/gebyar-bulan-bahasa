@@ -54,6 +54,13 @@ function DaftarForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (accessStatus?.isClosed) {
+      setErrorMsg(
+        accessStatus.closedMessage || "Mohon maaf, pendaftaran akun peserta telah resmi ditutup oleh panitia."
+      );
+      return;
+    }
+
     if (isAccessLocked) {
       setErrorMsg(
         `Pendaftaran peserta belum dibuka. Akses akan dibuka pada ${accessStatus?.formattedStartDate || "jadwal yang ditentukan"}.`
@@ -119,8 +126,24 @@ function DaftarForm() {
       subtitle="Buat akun peserta resmi untuk mengikuti challenge festival, scan QR booth stand budaya, dan menukar poin reward."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Banner Penutupan Permanen / Total */}
+        {accessStatus?.isClosed && (
+          <div className="p-4 rounded-xl border border-destructive/40 bg-destructive/10 space-y-2.5 animate-in fade-in">
+            <div className="flex items-center gap-2 text-destructive font-bold text-xs uppercase tracking-wider">
+              <Lock className="h-4 w-4" />
+              <span>Pendaftaran Telah Resmi Ditutup</span>
+            </div>
+            <p className="text-xs text-foreground leading-relaxed font-medium">
+              {accessStatus.closedMessage || "Akses pendaftaran dan login peserta telah resmi ditutup oleh panitia."}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Terima kasih atas antusiasme seluruh peserta pada Gebyar Bulan Bahasa. Pendaftaran akun baru sudah tidak menerima submisi lagi.
+            </p>
+          </div>
+        )}
+
         {/* Banner Kunci Pendaftaran Berdasarkan Tanggal Admin */}
-        {isAccessLocked && (
+        {isAccessLocked && !accessStatus?.isClosed && (
           <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2.5 animate-in fade-in">
             <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider">
               <Lock className="h-4 w-4" />
@@ -213,7 +236,17 @@ function DaftarForm() {
           required
         />
 
-        {isAccessLocked ? (
+        {accessStatus?.isClosed ? (
+          <Button
+            type="button"
+            size="lg"
+            disabled
+            className="w-full text-xs font-semibold gap-2 opacity-70 cursor-not-allowed bg-destructive/80 text-white"
+          >
+            <Lock className="h-4 w-4" />
+            <span>Pendaftaran Telah Resmi Ditutup</span>
+          </Button>
+        ) : isAccessLocked ? (
           <Button
             type="button"
             size="lg"

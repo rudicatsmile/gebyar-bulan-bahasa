@@ -130,8 +130,27 @@ const user = userResult?.data?.user;
           return NextResponse.redirect(url);
         }
 
-        // Khusus role peserta: Cek tanggal buka akses
+        // Khusus role peserta: Cek apakah akses ditutup atau belum dibuka
         if (pathname.startsWith("/peserta") && role === "peserta") {
+          // 1. Cek flag penutupan manual/total
+          const closedPromise = supabase
+            .from("event_settings")
+            .select("value")
+            .eq("key", "participant_access_closed")
+            .maybeSingle();
+
+          const closedResult = await withTimeout(closedPromise, 1500, { data: null, error: null } as any);
+          const isClosed = closedResult?.data?.value === true || closedResult?.data?.value === "true";
+
+          if (isClosed) {
+            await withTimeout(supabase.auth.signOut(), 1000, null as any);
+            const url = request.nextUrl.clone();
+            url.pathname = "/masuk";
+            url.searchParams.set("error", "ditutup");
+            return NextResponse.redirect(url);
+          }
+
+          // 2. Cek tanggal buka akses
           const accessSettingPromise = supabase
             .from("event_settings")
             .select("value")
@@ -175,6 +194,20 @@ const user = userResult?.data?.user;
 
               const profileResult = await withTimeout(profilePromise, 1500, { data: null, error: null } as any);
               const role = profileResult?.data?.role || "peserta";
+
+              // Jika role peserta dan akses ditutup, sign out
+              if (role === "peserta") {
+                const closedPromise = supabase
+                  .from("event_settings")
+                  .select("value")
+                  .eq("key", "participant_access_closed")
+                  .maybeSingle();
+                const closedResult = await withTimeout(closedPromise, 1000, { data: null, error: null } as any);
+                if (closedResult?.data?.value === true || closedResult?.data?.value === "true") {
+                  await withTimeout(supabase.auth.signOut(), 1000, null as any);
+                  return response;
+                }
+              }
 
               const url = request.nextUrl.clone();
               url.pathname =

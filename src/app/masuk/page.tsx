@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Loader2, Clock } from "lucide-react";
+import { ArrowRight, Loader2, Clock, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getParticipantAccessStatus, type ParticipantAccessStatus } from "@/app/actions/settings";
 
@@ -21,12 +21,16 @@ function LoginForm() {
     return null; // diisi oleh useEffect setelah mount
   });
 
-  // Tampilkan pesan error dari middleware (misal: akun nonaktif atau belum dibuka)
+  // Tampilkan pesan error dari middleware (misal: akun nonaktif, akses ditutup, atau belum dibuka)
   React.useEffect(() => {
     const errorParam = searchParams.get("error");
     if (errorParam === "nonaktif") {
       setErrorMsg(
         "Akun Anda telah dinonaktifkan oleh administrator. Silakan hubungi panitia untuk informasi lebih lanjut."
+      );
+    } else if (errorParam === "ditutup") {
+      setErrorMsg(
+        "Akses masuk panel peserta telah resmi ditutup oleh panitia."
       );
     } else if (errorParam === "belum_dibuka") {
       setErrorMsg(
@@ -72,9 +76,17 @@ function LoginForm() {
           return;
         }
 
-        // KHUSUS ROLE PESERTA: Cek apakah tanggal buka akses sudah tercapai
+        // KHUSUS ROLE PESERTA: Cek apakah aplikasi ditutup atau belum dibuka
         if (userRole === "peserta") {
           const access = await getParticipantAccessStatus();
+          if (access.isClosed) {
+            await supabase.auth.signOut();
+            setErrorMsg(
+              access.closedMessage || "Mohon maaf, akses pendaftaran dan login peserta telah resmi ditutup oleh panitia."
+            );
+            setIsLoading(false);
+            return;
+          }
           if (!access.isOpen) {
             await supabase.auth.signOut();
             setErrorMsg(
@@ -120,8 +132,24 @@ function LoginForm() {
       subtitle="Gunakan akun terdaftar untuk mengakses dashboard operasional atau panel peserta."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Banner informasi jika aplikasi ditutup total */}
+        {accessStatus?.isClosed && (
+          <div className="p-3.5 rounded-xl border border-destructive/40 bg-destructive/10 text-foreground text-xs flex items-start gap-2.5 animate-in fade-in">
+            <Lock className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-semibold block text-destructive">
+                Akses Peserta Telah Resmi Ditutup:
+              </span>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {accessStatus.closedMessage || "Akses pendaftaran dan login peserta telah resmi ditutup oleh panitia."}
+                {" "}Panitia dan dewan juri tetap dapat masuk menggunakan akun masing-masing untuk keperluan rekapitulasi.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Banner informasi jika akses peserta belum dibuka */}
-        {accessStatus && !accessStatus.isOpen && (
+        {accessStatus && !accessStatus.isOpen && !accessStatus.isClosed && (
           <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-foreground text-xs flex items-start gap-2.5 animate-in fade-in">
             <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div className="space-y-1">
